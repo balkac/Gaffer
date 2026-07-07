@@ -20,10 +20,10 @@ namespace Gaffer.Editor.Harness
         private int _seasons = 500;
         private long _seed = 20260707L;
         private int _teamCount = 20;
-        private float _baseChances = 7.0f;
-        private float _meanQuality = 0.20f;
-        private float _homeAdvantage = 1.15f;
-        private float _maxRatio = 2.0f;
+        private float _baseChances = (float)MatchSimulationSettings.Default.BaseChancesPerTeam;
+        private float _meanQuality = (float)MatchSimulationSettings.Default.MeanChanceQuality;
+        private float _homeAdvantage = (float)MatchSimulationSettings.Default.HomeAdvantage;
+        private float _maxRatio = (float)MatchSimulationSettings.Default.MaxStrengthRatio;
 
         private VisualElement _resultsRoot;
         private Button _exportButton;
