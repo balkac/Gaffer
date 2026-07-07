@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.svg" alt="GAFFER — roguelike football management" width="100%">
+  <img src="Docs/banner.svg" alt="GAFFER — roguelike football management" width="100%">
 </p>
 
 <p align="center">
