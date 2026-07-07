@@ -117,3 +117,10 @@ InitTestScene*.unity*
 !/tests/Gaffer.Tests.csproj
 /tests/[Bb]in/
 /tests/[Oo]bj/
+
+# ── Tools/SeasonHarness (headless believability harness, outside Assets/) ──
+# Keep the hand-written project; ignore build output and generated reports.
+!/Tools/SeasonHarness/SeasonHarness.csproj
+/Tools/**/[Bb]in/
+/Tools/**/[Oo]bj/
+/Tools/SeasonHarness/out/
