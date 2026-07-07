@@ -1,0 +1,113 @@
+root = true
+
+# All files — baseline whitespace/encoding.
+[*]
+indent_style = space
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# C# source — project-wide engineering conventions (see CONVENTIONS.md next to this file).
+# Rider and `dotnet format` both read this file, so the rules are tool-enforced, not just documented.
+[*.cs]
+indent_style = space
+indent_size = 4
+tab_width = 4
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# Braces: always required, even for single-statement bodies (IDE0011).
+csharp_prefer_braces = true:warning
+
+# Allman braces: the opening brace goes on its own next line.
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+
+# var policy: use 'var' when the type is already apparent from the right-hand side (new/cast);
+# keep the explicit type otherwise (e.g. a method result), and for built-in types, for readability.
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:warning
+csharp_style_var_elsewhere = false:suggestion
+
+# Modern C# expression styles Rider also suggests.
+csharp_style_expression_bodied_methods = false:silent
+csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
+csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_prefer_conditional_expression_over_assignment = true:silent
+dotnet_sort_system_directives_first = true
+
+# No 'this.' qualification: the leading underscore on fields already distinguishes them (CONVENTIONS §2),
+# so the qualifier is redundant.
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+dotnet_style_readonly_field = true:suggestion
+
+# ── Naming (CONVENTIONS §2) ────────────────────────────────────────────────
+# Rules are matched in file order, so the more specific field rules (const,
+# static readonly) MUST come before the general private-field rule — otherwise
+# a private const would be asked to use _camelCase.
+
+# Symbols
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.applicable_accessibilities = *
+dotnet_naming_symbols.constants.required_modifiers = const
+
+dotnet_naming_symbols.static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.static_readonly_fields.applicable_accessibilities = *
+dotnet_naming_symbols.static_readonly_fields.required_modifiers = static, readonly
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private, protected, private_protected
+
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+
+dotnet_naming_symbols.type_parameters.applicable_kinds = type_parameter
+
+dotnet_naming_symbols.types_and_members.applicable_kinds = class, struct, enum, delegate, property, method, event, namespace
+
+# Styles
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+dotnet_naming_style.underscore_camel.required_prefix = _
+
+dotnet_naming_style.i_prefixed_pascal.capitalization = pascal_case
+dotnet_naming_style.i_prefixed_pascal.required_prefix = I
+
+dotnet_naming_style.t_prefixed_pascal.capitalization = pascal_case
+dotnet_naming_style.t_prefixed_pascal.required_prefix = T
+
+# Rules (order matters — see note above)
+dotnet_naming_rule.constants_are_pascal_case.severity = warning
+dotnet_naming_rule.constants_are_pascal_case.symbols = constants
+dotnet_naming_rule.constants_are_pascal_case.style = pascal_case
+
+dotnet_naming_rule.static_readonly_are_pascal_case.severity = suggestion
+dotnet_naming_rule.static_readonly_are_pascal_case.symbols = static_readonly_fields
+dotnet_naming_rule.static_readonly_are_pascal_case.style = pascal_case
+
+dotnet_naming_rule.private_fields_are_underscore_camel.severity = warning
+dotnet_naming_rule.private_fields_are_underscore_camel.symbols = private_fields
+dotnet_naming_rule.private_fields_are_underscore_camel.style = underscore_camel
+
+dotnet_naming_rule.interfaces_are_i_prefixed.severity = warning
+dotnet_naming_rule.interfaces_are_i_prefixed.symbols = interfaces
+dotnet_naming_rule.interfaces_are_i_prefixed.style = i_prefixed_pascal
+
+dotnet_naming_rule.type_parameters_are_t_prefixed.severity = suggestion
+dotnet_naming_rule.type_parameters_are_t_prefixed.symbols = type_parameters
+dotnet_naming_rule.type_parameters_are_t_prefixed.style = t_prefixed_pascal
+
+dotnet_naming_rule.types_and_members_are_pascal_case.severity = suggestion
+dotnet_naming_rule.types_and_members_are_pascal_case.symbols = types_and_members
+dotnet_naming_rule.types_and_members_are_pascal_case.style = pascal_case
