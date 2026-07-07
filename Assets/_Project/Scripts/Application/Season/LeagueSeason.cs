@@ -88,7 +88,7 @@ namespace Gaffer.Application.Season
                 MatchOutcome outcome = simulator.Simulate(command, rng);
 
                 _table.RecordMatch(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals);
-                matches.Add(new MatchResult(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals));
+                matches.Add(new MatchResult(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals, outcome.Events));
             }
 
             _playedResults.AddRange(matches);

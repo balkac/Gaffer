@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using Gaffer.Application.Season;
+using Gaffer.Application.Simulation;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
 
@@ -62,7 +64,9 @@ namespace Gaffer.Application.Serialization
             var results = new List<MatchResult>(data.Results.Count);
             foreach (MatchResultSaveData result in data.Results)
             {
-                results.Add(new MatchResult(new ClubId(result.Home), new ClubId(result.Away), result.HomeGoals, result.AwayGoals));
+                // Per-goal events are not persisted (score is enough to rebuild the table); the
+                // narrative layer (Faz 5) will decide what match detail a save must keep.
+                results.Add(new MatchResult(new ClubId(result.Home), new ClubId(result.Away), result.HomeGoals, result.AwayGoals, Array.Empty<MatchEvent>()));
             }
 
             LeagueSeason season = LeagueSeason.Restore(league, data.PlayedRounds, results);
