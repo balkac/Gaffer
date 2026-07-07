@@ -24,6 +24,6 @@ namespace Gaffer.Application.Simulation
 
         public double MaxStrengthRatio { get; }
 
-        public static MatchSimulationSettings Default => new MatchSimulationSettings(7.0, 0.20, 1.15, 2.0);
+        public static MatchSimulationSettings Default => new MatchSimulationSettings(7.0, 0.17, 1.15, 2.0);
     }
 }
