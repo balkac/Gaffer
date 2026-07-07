@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GAFFER — Art Style Bible</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+
+:root{
+  /* ——— GAFFER token sistemi (bağlayıcı) ——— */
+  --pitch:        #0C1B1A;   /* taban: gece-sahası teal-siyah */
+  --pitch-raised: #122624;   /* kart / yüzey */
+  --pitch-line:   #1E3733;   /* çizgi / kenarlık */
+  --chalk:        #EAF2EE;   /* birincil metin / tebeşir çizgisi */
+  --muted:        #7C938C;   /* ikincil metin */
+  --accent:       #FF2E7E;   /* İMZA — yayın grafiği magentası (tek accent) */
+  --accent-deep:  #C4185C;
+  /* semantik (yalnız sonuç bağlamlarında) */
+  --win:  #2FD48A;
+  --loss: #FF5A4D;
+  --draw: #E7B84B;
+
+  --r: 10px;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--pitch);
+  color:var(--chalk);
+  font-family:'Inter',system-ui,sans-serif;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px 96px}
+
+/* pitch dokusu: ince yatay çizgiler (saha çizgisi hissi) */
+.masthead{
+  position:relative;
+  padding:64px 24px 40px;
+  border-bottom:1px solid var(--pitch-line);
+  overflow:hidden;
+}
+.masthead::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(90deg,transparent 0 46px,rgba(255,255,255,.015) 46px 47px);
+}
+.eyebrow{
+  font-family:'Archivo';font-weight:800;letter-spacing:.28em;text-transform:uppercase;
+  font-size:12px;color:var(--accent);margin:0 0 14px;
+}
+.masthead h1{
+  font-family:'Archivo';font-weight:900;letter-spacing:-.01em;
+  font-size:clamp(44px,9vw,104px);line-height:.9;margin:0;text-transform:uppercase;
+}
+.masthead h1 .thin{-webkit-text-stroke:1.5px var(--chalk);color:transparent;}
+.thesis{max-width:620px;margin:22px 0 0;color:var(--muted);font-size:17px}
+.thesis b{color:var(--chalk);font-weight:600}
+
+section{padding-top:64px}
+.sec-label{
+  display:flex;align-items:baseline;gap:14px;margin:0 0 28px;
+  border-top:1px solid var(--pitch-line);padding-top:18px;
+}
+.sec-num{font-family:'Archivo';font-weight:800;color:var(--accent);font-size:14px;letter-spacing:.1em}
+.sec-label h2{font-family:'Archivo';font-weight:800;text-transform:uppercase;letter-spacing:.04em;font-size:22px;margin:0}
+.sec-note{margin-left:auto;color:var(--muted);font-size:13px;max-width:280px;text-align:right}
+
+/* ——— palet ——— */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.sw{border:1px solid var(--pitch-line);border-radius:var(--r);overflow:hidden;background:var(--pitch-raised)}
+.sw .chip{height:88px}
+.sw .meta{padding:10px 12px}
+.sw .name{font-weight:600;font-size:13px}
+.sw .hex{font-family:'Archivo';font-weight:700;color:var(--muted);font-size:12px;letter-spacing:.05em;text-transform:uppercase}
+.sw .role{color:var(--muted);font-size:11px;margin-top:2px}
+
+/* ——— tipografi ——— */
+.type-block{background:var(--pitch-raised);border:1px solid var(--pitch-line);border-radius:var(--r);padding:26px 28px;margin-bottom:14px}
+.type-tag{font-family:'Archivo';font-weight:700;color:var(--accent);font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:12px}
+.disp-xl{font-family:'Archivo';font-weight:900;text-transform:uppercase;font-size:clamp(40px,7vw,72px);line-height:.92;letter-spacing:-.01em;margin:0}
+.disp-cap{font-family:'Archivo';font-weight:800;text-transform:uppercase;letter-spacing:.16em;font-size:15px;color:var(--muted)}
+.num-row{font-family:'Archivo';font-weight:800;font-variant-numeric:tabular-nums;font-size:34px;letter-spacing:.02em}
+.body-samp{font-size:15px;color:var(--chalk);max-width:560px;margin:6px 0 0}
+
+/* ——— ikon & rozet ——— */
+.icon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:12px}
+.icell{background:var(--pitch-raised);border:1px solid var(--pitch-line);border-radius:var(--r);padding:16px 8px 10px;text-align:center}
+.icell svg{width:28px;height:28px;stroke:var(--chalk);stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.icell .lbl{font-size:11px;color:var(--muted);margin-top:8px}
+.badge-row{display:flex;flex-wrap:wrap;gap:10px}
+.badge{display:inline-flex;align-items:center;gap:9px;background:var(--pitch-raised);border:1px solid var(--pitch-line);border-radius:100px;padding:8px 15px 8px 10px;font-size:13px;font-weight:500}
+.badge .bi{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(255,46,126,.14)}
+.badge .bi svg{width:15px;height:15px;stroke:var(--accent);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+/* ——— arma ——— */
+.crest-formula{font-family:'Archivo';font-weight:700;background:var(--pitch-raised);border:1px dashed var(--pitch-line);border-radius:var(--r);padding:16px 18px;color:var(--muted);font-size:13px;letter-spacing:.02em;margin-bottom:20px}
+.crest-formula b{color:var(--accent)}
+.crest-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:16px}
+.crest{background:var(--pitch-raised);border:1px solid var(--pitch-line);border-radius:var(--r);padding:18px 10px 12px;text-align:center}
+.crest svg{width:72px;height:82px}
+.crest .cn{font-family:'Archivo';font-weight:800;text-transform:uppercase;font-size:11px;letter-spacing:.06em;margin-top:8px}
+
+/* ——— oyuncu token ——— */
+.token-row{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.ptoken{width:56px;height:56px;border-radius:14px;display:grid;place-items:center;font-family:'Archivo';font-weight:800;font-size:20px;color:#fff;position:relative}
+.ptoken small{position:absolute;bottom:-20px;left:0;right:0;text-align:center;color:var(--muted);font-family:'Inter';font-weight:500;font-size:11px}
+.sil{width:56px;height:56px;border-radius:14px;background:var(--pitch-raised);border:1px solid var(--pitch-line);display:grid;place-items:center}
+.sil svg{width:34px;height:34px;fill:var(--muted)}
+
+/* ——— imza: broadcast mockup ——— */
+.showcase{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:22px}
+@media(max-width:760px){.showcase{grid-template-columns:1fr}}
+.phone{background:var(--pitch-raised);border:1px solid var(--pitch-line);border-radius:22px;padding:14px;box-shadow:0 30px 60px -30px #000}
+
+/* score bug */
+.bug{display:flex;align-items:stretch;border-radius:8px;overflow:hidden;font-family:'Archivo';font-weight:800;border:1px solid var(--pitch-line)}
+.bug .side{flex:1;padding:11px 12px;display:flex;align-items:center;gap:9px;background:var(--pitch);letter-spacing:.04em;font-size:15px}
+.bug .side.away{justify-content:flex-end;text-align:right}
+.bug .sc{background:var(--accent);color:#fff;display:flex;align-items:center;padding:0 14px;font-size:20px;letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.bug .cd{width:14px;height:14px;border-radius:50%;flex:none}
+.bug .clock{background:var(--pitch);border-left:1px solid var(--pitch-line);display:flex;align-items:center;padding:0 12px;color:var(--accent);font-size:13px}
+.clock .pulse{width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:7px;animation:p 1.4s ease-in-out infinite}
+@keyframes p{0%,100%{opacity:.3}50%{opacity:1}}
+
+.trait-live{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--accent);font-weight:600;margin:14px 2px 8px}
+.trait-live .bolt{width:16px;height:16px}
+
+/* commentary feed */
+.feed{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.beat{display:flex;gap:12px;padding-left:2px}
+.beat .min{font-family:'Archivo';font-weight:800;font-variant-numeric:tabular-nums;color:var(--muted);width:34px;flex:none;padding-top:2px;font-size:14px}
+.beat .card{background:var(--pitch);border:1px solid var(--pitch-line);border-left:3px solid var(--pitch-line);border-radius:8px;padding:10px 13px;flex:1}
+.beat.goal .card{border-left-color:var(--accent)}
+.beat .head{font-family:'Archivo';font-weight:800;text-transform:uppercase;letter-spacing:.03em;font-size:13px;display:flex;align-items:center;gap:8px}
+.beat.goal .head .g{color:var(--accent)}
+.beat .sub{color:var(--muted);font-size:12.5px;margin-top:3px}
+.tag{font-family:'Archivo';font-weight:700;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:2px 7px;border-radius:100px;border:1px solid var(--pitch-line);color:var(--muted)}
+
+/* tactics pitch */
+.pitch-card{background:var(--pitch-raised);border:1px solid var(--pitch-line);border-radius:22px;padding:16px}
+.pitch-card h3{font-family:'Archivo';font-weight:800;text-transform:uppercase;letter-spacing:.08em;font-size:13px;margin:0 0 4px}
+.pitch-card .fm{color:var(--muted);font-size:12px;margin-bottom:12px}
+.pitchviz{background:
+  radial-gradient(circle at 50% 0,rgba(255,46,126,.06),transparent 60%),
+  var(--pitch);
+  border:1px solid var(--pitch-line);border-radius:12px;position:relative;aspect-ratio:3/4;overflow:hidden}
+.pitchviz .line{position:absolute;border:1px solid var(--pitch-line)}
+.puck{position:absolute;width:34px;height:34px;border-radius:50%;transform:translate(-50%,-50%);
+  display:grid;place-items:center;font-family:'Archivo';font-weight:800;font-size:12px;color:#fff;
+  background:var(--pitch-line);border:2px solid var(--muted)}
+.puck.star{background:var(--accent);border-color:#fff;box-shadow:0 0 0 4px rgba(255,46,126,.2)}
+
+/* do / dont */
+.rules{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:640px){.rules{grid-template-columns:1fr}}
+.rule{background:var(--pitch-raised);border:1px solid var(--pitch-line);border-radius:var(--r);padding:18px 20px}
+.rule h4{font-family:'Archivo';font-weight:800;text-transform:uppercase;letter-spacing:.06em;font-size:13px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.rule.do h4{color:var(--win)} .rule.dont h4{color:var(--loss)}
+.rule ul{margin:0;padding-left:18px;color:var(--chalk);font-size:14px}
+.rule li{margin:6px 0}
+.rule li::marker{color:var(--muted)}
+.foot{margin-top:64px;border-top:1px solid var(--pitch-line);padding-top:20px;color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <div class="wrap" style="padding-bottom:0">
+    <p class="eyebrow">Art Style Bible · v0.1</p>
+    <h1>GAF<span class="thin">FER</span></h1>
+    <p class="thesis"><b>Tez:</b> GAFFER'ın arayüzü, yönettiğin ama asla izlemediğin bir maçın <b>yayın grafikleri paketidir.</b> Score bug, dizilim lower-third'ü, taktik tahtası — hepsi bir broadcast'in görsel dili. "Görsel maç motoru yok" bir kısıt değil, kimliğin ta kendisi.</p>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- PALET -->
+  <section>
+    <div class="sec-label"><span class="sec-num">01</span><h2>Palet</h2>
+      <span class="sec-note">Tek accent (magenta). İkinci parlak renk eklenmez — semantikler hariç.</span></div>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#0C1B1A"></div><div class="meta"><div class="name">Pitch</div><div class="hex">#0C1B1A</div><div class="role">taban zemin</div></div></div>
+      <div class="sw"><div class="chip" style="background:#122624"></div><div class="meta"><div class="name">Pitch Raised</div><div class="hex">#122624</div><div class="role">kart / yüzey</div></div></div>
+      <div class="sw"><div class="chip" style="background:#1E3733"></div><div class="meta"><div class="name">Pitch Line</div><div class="hex">#1E3733</div><div class="role">çizgi / kenarlık</div></div></div>
+      <div class="sw"><div class="chip" style="background:#EAF2EE"></div><div class="meta"><div class="name">Chalk</div><div class="hex">#EAF2EE</div><div class="role">birincil metin</div></div></div>
+      <div class="sw"><div class="chip" style="background:#7C938C"></div><div class="meta"><div class="name">Muted</div><div class="hex">#7C938C</div><div class="role">ikincil metin</div></div></div>
+      <div class="sw"><div class="chip" style="background:#FF2E7E"></div><div class="meta"><div class="name">Accent ★</div><div class="hex">#FF2E7E</div><div class="role">imza — yayın magentası</div></div></div>
+      <div class="sw"><div class="chip" style="background:#2FD48A"></div><div class="meta"><div class="name">Win</div><div class="hex">#2FD48A</div><div class="role">semantik</div></div></div>
+      <div class="sw"><div class="chip" style="background:#FF5A4D"></div><div class="meta"><div class="name">Loss</div><div class="hex">#FF5A4D</div><div class="role">semantik</div></div></div>
+      <div class="sw"><div class="chip" style="background:#E7B84B"></div><div class="meta"><div class="name">Draw</div><div class="hex">#E7B84B</div><div class="role">semantik</div></div></div>
+    </div>
+  </section>
+
+  <!-- TİPOGRAFİ -->
+  <section>
+    <div class="sec-label"><span class="sec-num">02</span><h2>Tipografi</h2>
+      <span class="sec-note">Archivo (display, sıkı & büyük harf) + Inter (gövde). Sayılar tabular.</span></div>
+    <div class="type-block">
+      <div class="type-tag">Display · Archivo Black</div>
+      <p class="disp-xl">Derbi Gecesi</p>
+      <p class="disp-cap" style="margin-top:10px">Küme Düşme Maçı · 90+3'</p>
+    </div>
+    <div class="type-block">
+      <div class="type-tag">Data · tabular numerals</div>
+      <div class="num-row">01 &nbsp; 24 &nbsp; 3.2 &nbsp; 40M &nbsp; 82</div>
+    </div>
+    <div class="type-block">
+      <div class="type-tag">Gövde · Inter</div>
+      <p class="body-samp">18 yaşındaki Ali Yılmaz'ı kimse tanımıyordu. Onu sen buldun, beş sezon oynattın, Manchester'a sattın. İnsanlar sistemi değil hikayeyi hatırlar — arayüz de bunu anlatmak için var.</p>
+    </div>
+  </section>
+
+  <!-- İKON & ROZET -->
+  <section>
+    <div class="sec-label"><span class="sec-num">03</span><h2>İkon & Trait Rozeti</h2>
+      <span class="sec-note">Tek çizgi ağırlığı (1.6), 24px grid, yuvarlatılmış uç. Trait'ler rozet olur.</span></div>
+    <div class="icon-grid">
+      <div class="icell"><svg viewBox="0 0 24 24"><path d="M3 12h6l2-4 3 8 2-4h5"/></svg><div class="lbl">Hız</div></div>
+      <div class="icell"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><div class="lbl">Bitiricilik</div></div>
+      <div class="icell"><svg viewBox="0 0 24 24"><path d="M4 8h11l-3-3M20 16H9l3 3"/></svg><div class="lbl">Pas</div></div>
+      <div class="icell"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg><div class="lbl">Top Kapma</div></div>
+      <div class="icell"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 109 9"/><path d="M12 8v4l3 2"/></svg><div class="lbl">Dayanıklılık</div></div>
+      <div class="icell"><svg viewBox="0 0 24 24"><path d="M12 4l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 9.7l5.4-.8z"/></svg><div class="lbl">Potansiyel</div></div>
+    </div>
+    <div style="height:16px"></div>
+    <div class="badge-row">
+      <span class="badge"><span class="bi"><svg viewBox="0 0 24 24"><path d="M12 3c1 3-1 4-1 6a3 3 0 006 0c0 4-2 7-5 9-3-1-5-4-5-8 0-2 2-3 3-5 1 1 2 1 2 3"/></svg></span>Derbi Canavarı</span>
+      <span class="badge"><span class="bi"><svg viewBox="0 0 24 24"><path d="M7 8a5 5 0 0110 0M5 20v-2a4 4 0 014-4h6a4 4 0 014 4v2"/><path d="M15 8l2 1"/></svg></span>Soyunma Odası Lideri</span>
+      <span class="badge"><span class="bi"><svg viewBox="0 0 24 24"><path d="M6 3h12M6 21h12M8 3c0 6 8 6 8 12s-8 6-8 6"/><path d="M9 9l4 3"/></svg></span>Cam Adam</span>
+      <span class="badge"><span class="bi"><svg viewBox="0 0 24 24"><path d="M4 7h9M4 12h6M4 17h11"/><path d="M17 6l4 4-4 4"/></svg></span>Antrenman Kaçkını</span>
+      <span class="badge"><span class="bi"><svg viewBox="0 0 24 24"><path d="M4 5h16v10H8l-4 4z"/><path d="M8 10h8"/></svg></span>Basın Adamı</span>
+    </div>
+  </section>
+
+  <!-- ARMA -->
+  <section>
+    <div class="sec-label"><span class="sec-num">04</span><h2>Parametrik Arma Sistemi</h2>
+      <span class="sec-note">Yüzlerce kurgusal kulüp tutarlı çıksın diye kombinatoryal SVG.</span></div>
+    <div class="crest-formula">Arma = <b>KalkanŞekli</b> (5–6) × <b>RenkÇifti</b> (kulüp paleti) × <b>MerkezMotif</b> (~20) × <b>[opsiyonel Bant/Yıldız]</b></div>
+    <div class="crest-row">
+      <div class="crest">
+        <svg viewBox="0 0 72 82"><path d="M6 6h60v40c0 20-30 30-30 30S6 66 6 46z" fill="#123B2E" stroke="#2FD48A" stroke-width="2"/><path d="M36 22l4 8 8 1-6 6 1.5 8-7.5-4-7.5 4 1.5-8-6-6 8-1z" fill="#2FD48A"/></svg>
+        <div class="cn">Yıldız · Kalkan</div>
+      </div>
+      <div class="crest">
+        <svg viewBox="0 0 72 82"><circle cx="36" cy="38" r="30" fill="#1B2A55" stroke="#FF2E7E" stroke-width="2"/><path d="M36 20a18 18 0 100 36 18 18 0 000-36zM36 24l4 8h-8zM24 36l8 4-8 4zM48 36l-8 4 8 4zM36 52l-4-8h8z" fill="#FF2E7E"/></svg>
+        <div class="cn">Roundel · Top</div>
+      </div>
+      <div class="crest">
+        <svg viewBox="0 0 72 82"><path d="M8 8h56v34c0 22-28 32-28 32S8 64 8 42z" fill="#3A1120" stroke="#E7B84B" stroke-width="2"/><path d="M20 30h32v6H44v14h-6V36h-6v14h-6V36h-6z" fill="#E7B84B"/></svg>
+        <div class="cn">Kale · Kalkan</div>
+      </div>
+      <div class="crest">
+        <svg viewBox="0 0 72 82"><path d="M10 10h52v30c0 20-26 30-26 30S10 60 10 40z" fill="#0E332F" stroke="#EAF2EE" stroke-width="2"/><path d="M22 24l14 14 14-14M22 44l14-14 14 14" fill="none" stroke="#EAF2EE" stroke-width="4"/></svg>
+        <div class="cn">Çift Şevron</div>
+      </div>
+      <div class="crest">
+        <svg viewBox="0 0 72 82"><path d="M6 6h60v40c0 20-30 30-30 30S6 66 6 46z" fill="#2A1533" stroke="#B98CFF" stroke-width="2"/><path d="M36 20c-8 8-8 16 0 24 8-8 8-16 0-24z" fill="#B98CFF"/><path d="M36 46v10" stroke="#B98CFF" stroke-width="3"/></svg>
+        <div class="cn">Meşe · Kalkan</div>
+      </div>
+      <div class="crest">
+        <svg viewBox="0 0 72 82"><path d="M8 8h56v34c0 22-28 32-28 32S8 64 8 42z" fill="#123B2E" stroke="#FF2E7E" stroke-width="2"/><rect x="20" y="30" width="32" height="8" fill="#FF2E7E"/><path d="M36 20v34" stroke="#FF2E7E" stroke-width="4"/></svg>
+        <div class="cn">Bant · Kalkan</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OYUNCU TOKEN -->
+  <section>
+    <div class="sec-label"><span class="sec-num">05</span><h2>Oyuncu Temsili</h2>
+      <span class="sec-note">MVP'de AI portresi yok. Kulüp renginde initial-token veya stilize silüet.</span></div>
+    <div class="token-row">
+      <div style="position:relative;padding-bottom:22px"><div class="ptoken" style="background:linear-gradient(135deg,#FF2E7E,#C4185C)">AY<small>Ali Yılmaz</small></div></div>
+      <div style="position:relative;padding-bottom:22px"><div class="ptoken" style="background:linear-gradient(135deg,#1B2A55,#2F4A9E)">MK<small>M. Kaya</small></div></div>
+      <div style="position:relative;padding-bottom:22px"><div class="ptoken" style="background:linear-gradient(135deg,#123B2E,#2FD48A)">SD<small>S. Demir</small></div></div>
+      <div class="sil"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 0114 0z"/></svg></div>
+    </div>
+  </section>
+
+  <!-- İMZA -->
+  <section>
+    <div class="sec-label"><span class="sec-num">06</span><h2>İmza Ekran · Maç Anlatısı</h2>
+      <span class="sec-note">Score bug + karakter-anı feed'i + taktik tahtası. Oyunun akılda kalan yüzü.</span></div>
+    <div class="showcase">
+      <div class="phone">
+        <div class="bug">
+          <div class="side"><span class="cd" style="background:#FF2E7E"></span>BURSA</div>
+          <div class="sc">1&nbsp;–&nbsp;0</div>
+          <div class="side away">KOCAELİ<span class="cd" style="background:#1B2A55"></span></div>
+          <div class="clock"><span class="pulse"></span>68'</div>
+        </div>
+
+        <div class="trait-live">
+          <svg class="bolt" viewBox="0 0 24 24" fill="none" stroke="#FF2E7E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg>
+          Derbi Canavarı aktif — Ali Yılmaz +3 bitiricilik
+        </div>
+
+        <div class="feed">
+          <div class="beat goal">
+            <div class="min">68'</div>
+            <div class="card">
+              <div class="head"><span class="g">⚽ GOL</span> · ALİ YILMAZ (19)</div>
+              <div class="sub">Kariyerinin ilk derbisinde soğukkanlı bitirdi. Sen ona bu sezon ilk şansı vermiştin.</div>
+              <div style="margin-top:8px"><span class="tag">Yolculuk Günlüğü'ne yazıldı</span></div>
+            </div>
+          </div>
+          <div class="beat">
+            <div class="min">61'</div>
+            <div class="card"><div class="head" style="color:var(--draw)">▮ SARI KART · T. Şahin</div>
+            <div class="sub">Sert müdahale. Son 30 dakika riskli.</div></div>
+          </div>
+          <div class="beat">
+            <div class="min">54'</div>
+            <div class="card"><div class="head">↔ DEĞİŞİKLİK</div>
+            <div class="sub">Kaptan sakatlık sonrası çıktı — soyunma odası morali düştü.</div></div>
+          </div>
+          <div class="beat">
+            <div class="min">33'</div>
+            <div class="card"><div class="head">◎ KAÇAN FIRSAT</div>
+            <div class="sub">Kaleci ayakta kaldı. xG 0.4'lük pozisyon.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pitch-card">
+        <h3>Taktik Tahtası</h3>
+        <div class="fm">4–3–3 · Yüksek Pres · Orta Tempo</div>
+        <div class="pitchviz">
+          <div class="line" style="left:8%;right:8%;top:50%;height:0"></div>
+          <div class="line" style="left:32%;right:32%;top:50%;bottom:0;border-bottom:none"></div>
+          <div class="line" style="left:36%;right:36%;top:0;height:14%;border-top:none"></div>
+          <!-- puanlar: 4-3-3 -->
+          <div class="puck" style="left:50%;top:92%">1</div>
+          <div class="puck" style="left:20%;top:74%">2</div>
+          <div class="puck" style="left:40%;top:78%">4</div>
+          <div class="puck" style="left:60%;top:78%">5</div>
+          <div class="puck" style="left:80%;top:74%">3</div>
+          <div class="puck" style="left:30%;top:52%">6</div>
+          <div class="puck" style="left:50%;top:56%">8</div>
+          <div class="puck" style="left:70%;top:52%">7</div>
+          <div class="puck" style="left:24%;top:26%">11</div>
+          <div class="puck star" style="left:50%;top:20%">9</div>
+          <div class="puck" style="left:76%;top:26%">10</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--muted)">
+          <span style="width:12px;height:12px;border-radius:50%;background:var(--accent);display:inline-block"></span>
+          Ali Yılmaz · form yükselişte · derbi trait'i aktif
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- KURALLAR -->
+  <section>
+    <div class="sec-label"><span class="sec-num">07</span><h2>Tutarlılık Protokolü</h2>
+      <span class="sec-note">Her art üretiminde bu levhaya atıf yapılır. SVG + token, illüstrasyon değil.</span></div>
+    <div class="rules">
+      <div class="rule do">
+        <h4>◇ Yap</h4>
+        <ul>
+          <li>Tüm rengi token'dan al (<b>--pitch</b>, <b>--chalk</b>, <b>--accent</b>...). Hard-coded hex yasak.</li>
+          <li>Accent'i cimrice kullan: bir ekranda bir kahraman öğe magenta olsun.</li>
+          <li>Display'i büyük harf + sıkı tut; sayıları tabular hizala.</li>
+          <li>Yeni asset'i SVG üret, 24px ikon grid'ine ve tek çizgi ağırlığına uy.</li>
+          <li>Armaları parametrik sistemden türet, elle özgün çizme.</li>
+        </ul>
+      </div>
+      <div class="rule dont">
+        <h4>◇ Yapma</h4>
+        <ul>
+          <li>İkinci parlak accent ekleme (semantik win/loss/draw hariç).</li>
+          <li>AI oyuncu portresi üretme (MVP'de) — uncanny ve tutarsız.</li>
+          <li>Gradient/gölge şölenine girme; derinlik kenarlık ve boşlukla kurulur.</li>
+          <li>Cream zemin + serif + terracotta klişesine kayma — bu proje broadcast/teal.</li>
+          <li>Emoji'yi kalıcı ikon yerine koyma (mockup'taki ⚽ yalnız yer tutucu).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    GAFFER Art Style Bible · v0.1 · Yön: “Matchday Broadcast Graphics”. Accent alternatifi (istenirse takas): elektrik-lime <b style="color:#E8FF3A">#E8FF3A</b>. Bu levha <b>docs/ART_STYLE</b> referansıdır; her görsel iş buraya atıfla üretilir.
+  </div>
+</div>
+
+</body>
+</html>

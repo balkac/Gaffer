@@ -1,0 +1,44 @@
+<svg viewBox="0 0 1280 470" xmlns="http://www.w3.org/2000/svg" font-family="'Archivo','Arial Black',Helvetica,Arial,sans-serif">
+  <defs>
+    <radialGradient id="glow" cx="82%" cy="8%" r="60%">
+      <stop offset="0%" stop-color="#FF2E7E" stop-opacity="0.16"/>
+      <stop offset="60%" stop-color="#FF2E7E" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="470" fill="#0C1B1A"/>
+  <rect width="1280" height="470" fill="url(#glow)"/>
+
+  <!-- faint pitch lines -->
+  <g stroke="#FFFFFF" stroke-opacity="0.022">
+    <line x1="120" y1="0" x2="120" y2="470"/><line x1="240" y1="0" x2="240" y2="470"/>
+    <line x1="360" y1="0" x2="360" y2="470"/><line x1="480" y1="0" x2="480" y2="470"/>
+    <line x1="600" y1="0" x2="600" y2="470"/><line x1="720" y1="0" x2="720" y2="470"/>
+    <line x1="840" y1="0" x2="840" y2="470"/><line x1="960" y1="0" x2="960" y2="470"/>
+    <line x1="1080" y1="0" x2="1080" y2="470"/><line x1="1200" y1="0" x2="1200" y2="470"/>
+  </g>
+
+  <!-- eyebrow -->
+  <text x="640" y="112" text-anchor="middle" fill="#FF2E7E" font-size="20"
+        font-weight="800" letter-spacing="9">ROGUELIKE FOOTBALL MANAGEMENT &#183; MOBILE</text>
+
+  <!-- wordmark -->
+  <text x="640" y="278" text-anchor="middle" font-size="168" font-weight="900" letter-spacing="-3">
+    <tspan fill="#EAF2EE">GAF</tspan><tspan fill="none" stroke="#EAF2EE" stroke-width="3">FER</tspan>
+  </text>
+
+  <!-- accent bar -->
+  <rect x="580" y="306" width="120" height="6" rx="3" fill="#FF2E7E"/>
+
+  <!-- tagline -->
+  <text x="640" y="362" text-anchor="middle" fill="#EAF2EE" font-size="24"
+        font-weight="700" letter-spacing="2">TAKE A NOBODY CLUB. RISE SEASON BY SEASON. OR GET SACKED.</text>
+
+  <!-- compact score bug -->
+  <text x="566" y="432" text-anchor="end" fill="#EAF2EE" font-size="20" font-weight="800" letter-spacing="1">BURSA</text>
+  <rect x="580" y="410" width="86" height="34" rx="7" fill="#FF2E7E"/>
+  <text x="623" y="433" text-anchor="middle" fill="#FFFFFF" font-size="20" font-weight="900" letter-spacing="1">1 &#8211; 0</text>
+  <text x="680" y="432" text-anchor="start" fill="#EAF2EE" font-size="20" font-weight="800" letter-spacing="1">KOCAEL&#304;</text>
+  <circle cx="806" cy="426" r="5" fill="#FF2E7E"/>
+  <text x="818" y="431" text-anchor="start" fill="#FF2E7E" font-size="17" font-weight="800">68&#39;</text>
+</svg>
