@@ -6,6 +6,12 @@
 
 ---
 
+## 📍 Güncel durum (2026-07-07)
+
+**Faz 0 ✅ · Faz 1 ✅ (★ Gate A geçildi) · Faz 2 🟡** — bir lig sezonu uçtan uca oynanıyor (headless), kaydet/yükle çekirdeği hazır, **40 dotnet testi yeşil**. Ayrıntı + alınan kararlar: **[`PROGRESS.md`](PROGRESS.md)**.
+
+---
+
 ## Rehber ilkeler
 
 1. **İnandırıcılık kapısı önce gelir.** Faz 0–1 geçmeden hiçbir şeyin üstüne bir şey konmaz. Çekirdek inandırıcı değilse UI/art/dram boşa emektir.
@@ -17,17 +23,19 @@
 
 ## Genel görünüm
 
-| Faz | Ad | Katman/feature odağı | Efor | Kapı |
+| Faz | Ad | Durum | Efor | Kapı |
 |---|---|---|---|---|
-| 0 | Kurulum + İnandırıcılık Çekirdeği | Common, Domain, Application/Simulation, Tools/SeasonHarness | **L** | ★ Gate A |
-| 1 | Tuning + Test Ağı | Application/Simulation, Tests (dotnet) | M | ★ Gate A |
-| 2 | Sezon İskeleti | Application/Season, Infrastructure/Persistence | M | |
-| 3 | Yönetim Sistemleri | Infrastructure/Configuration, Application/Generation | **L** | |
-| 4 | Karakter + Dram | Infrastructure/Configuration, Application/Drama | **L** | |
-| 5 | Hafıza + Anlatı | Application/Narrative | M | ★ Gate B |
-| 6 | Meta / Roguelike | Domain (ManagerCareer), Application/Season | M | |
-| 7 | UI + Art + Localization | Presentation, Composition, Art, Infrastructure/Localization | **L** | |
-| 8 | MVP Ship | — | M | ★ Gate C |
+| 0 | Kurulum + İnandırıcılık Çekirdeği | ✅ Tamam | **L** | ★ Gate A |
+| 1 | Tuning + Test Ağı | ✅ Tamam (Gate A geçildi) | M | ★ Gate A |
+| 2 | Sezon İskeleti | 🟡 Çekirdek bitti · JSON adapter kaldı | M | |
+| 3 | Yönetim Sistemleri | ⬜ | **L** | |
+| 4 | Karakter + Dram | ⬜ | **L** | |
+| 5 | Hafıza + Anlatı | ⬜ | M | ★ Gate B |
+| 6 | Meta / Roguelike | ⬜ | M | |
+| 7 | UI + Art + Localization | ⬜ | **L** | |
+| 8 | MVP Ship | ⬜ | M | ★ Gate C |
+
+> Katman/feature detayları her fazın kendi bölümünde. Güncel gerçekleşen + kararlar: [`PROGRESS.md`](PROGRESS.md).
 
 ---
 
@@ -164,7 +172,7 @@ Dar ama kapalı.
 
 ## Karar kapıları (go / no-go)
 
-- **★ Gate A (Faz 1 sonu):** Sim inandırıcı mı? Hayırsa üstüne bir şey koyma. *En ucuz iptal/pivot noktası.*
+- **★ Gate A (Faz 1 sonu):** ✅ **GEÇILDI (2026-07-07)** — gol 2.69/maç, favori %51.6 kazanır, ev > deplasman, şampiyon dağılımı sağlıklı; regresyon testleriyle kilitli. *En ucuz iptal/pivot noktası olmaktan çıktı.*
 - **★ Gate B (Faz 5 sonu):** Hikaye kendiliğinden beliriyor mu? Bu emergent dram bahsinin tutup tutmadığı an.
 - **★ Gate C (Faz 8):** MVP Definition of Done karşılandı mı? Ship kararı.
 
