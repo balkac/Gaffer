@@ -21,6 +21,9 @@ namespace Gaffer.Common
             _state = seed;
         }
 
+        /// <summary>The current internal state — capture it to resume the exact stream after a save/load.</summary>
+        public ulong State => _state;
+
         public ulong NextUInt64()
         {
             unchecked
