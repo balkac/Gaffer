@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Gaffer.Domain.Clubs;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using NUnit.Framework;
