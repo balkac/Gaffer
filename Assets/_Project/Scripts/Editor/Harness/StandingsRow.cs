@@ -1,4 +1,4 @@
-namespace Gaffer.Tools.SeasonHarness
+namespace Gaffer.Editor.Harness
 {
     /// <summary>One team's running record within a single season's table.</summary>
     public sealed class StandingsRow

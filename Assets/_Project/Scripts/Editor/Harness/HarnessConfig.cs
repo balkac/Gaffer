@@ -1,4 +1,4 @@
-namespace Gaffer.Tools.SeasonHarness
+namespace Gaffer.Editor.Harness
 {
     /// <summary>Run parameters for the believability harness. Overridable from the command line.</summary>
     public sealed class HarnessConfig
