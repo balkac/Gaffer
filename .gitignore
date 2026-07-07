@@ -38,6 +38,11 @@
 /[Aa]ssets/Plugins/Editor/JetBrains*
 # Jetbrains Rider personal-layer settings
 *.DotSettings.user
+# Jetbrains Rider / IntelliJ project files
+.idea/
+
+# macOS filesystem noise
+.DS_Store
 
 # Visual Studio cache directory
 .vs/
