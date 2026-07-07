@@ -9,14 +9,16 @@ namespace Gaffer.Application.Season
     /// <summary>
     /// Drives one league season week by week: schedules the double round-robin, and each
     /// <see cref="AdvanceWeek"/> simulates that round's fixtures on the injected core, folds the
-    /// results into the table, and returns them for the presentation to replay. Deterministic — the
-    /// same league and rng stream reproduce the same season.
+    /// results into the table, and returns them for the presentation to replay. Keeps a result
+    /// history so a season can be captured and restored (save/load). Deterministic — the same league
+    /// and rng stream reproduce the same season.
     /// </summary>
     public sealed class LeagueSeason
     {
         private readonly Dictionary<ClubId, Club> _clubsById;
         private readonly Dictionary<int, List<Fixture>> _fixturesByRound;
         private readonly LeagueTable _table;
+        private readonly List<MatchResult> _playedResults;
         private int _currentRound;
 
         public LeagueSeason(League league)
@@ -43,6 +45,7 @@ namespace Gaffer.Application.Season
             }
 
             _table = new LeagueTable(clubIds);
+            _playedResults = new List<MatchResult>();
         }
 
         public int CurrentRound => _currentRound;
@@ -52,6 +55,22 @@ namespace Gaffer.Application.Season
         public bool IsComplete => _currentRound >= RoundCount;
 
         public LeagueTable Table => _table;
+
+        public IReadOnlyList<MatchResult> PlayedResults => _playedResults;
+
+        /// <summary>Rebuilds a season part-way through from its saved result history (save/load).</summary>
+        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults)
+        {
+            var season = new LeagueSeason(league);
+            foreach (MatchResult result in playedResults)
+            {
+                season._table.RecordMatch(result.Home, result.Away, result.HomeGoals, result.AwayGoals);
+                season._playedResults.Add(result);
+            }
+
+            season._currentRound = playedRounds;
+            return season;
+        }
 
         public WeekResult AdvanceWeek(MatchSimulator simulator, MatchContext context, IRandom rng)
         {
@@ -72,6 +91,7 @@ namespace Gaffer.Application.Season
                 matches.Add(new MatchResult(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals));
             }
 
+            _playedResults.AddRange(matches);
             int round = _currentRound;
             _currentRound++;
             return new WeekResult(round, matches);
