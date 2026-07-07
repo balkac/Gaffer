@@ -1,0 +1,26 @@
+{
+    "name": "Gaffer.Tests.Unity",
+    "rootNamespace": "Gaffer.Tests.Unity",
+    "references": [
+        "Gaffer.Domain",
+        "Gaffer.Application",
+        "Gaffer.Common",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,20 @@
+{
+    "name": "Gaffer.Composition",
+    "rootNamespace": "Gaffer.Composition",
+    "references": [
+        "Gaffer.Common",
+        "Gaffer.Domain",
+        "Gaffer.Application",
+        "Gaffer.Infrastructure",
+        "Gaffer.Presentation"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

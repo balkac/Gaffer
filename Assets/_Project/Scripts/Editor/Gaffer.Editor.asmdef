@@ -1,0 +1,21 @@
+{
+    "name": "Gaffer.Editor",
+    "rootNamespace": "Gaffer.Editor",
+    "references": [
+        "Gaffer.Common",
+        "Gaffer.Domain",
+        "Gaffer.Application",
+        "Gaffer.Presentation"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

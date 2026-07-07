@@ -1,0 +1,17 @@
+{
+    "name": "Gaffer.Application",
+    "rootNamespace": "Gaffer.Application",
+    "references": [
+        "Gaffer.Domain",
+        "Gaffer.Common"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
