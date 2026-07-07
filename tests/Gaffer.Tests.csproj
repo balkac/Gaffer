@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Headless bridge: compiles the SAME pure-layer .cs files the Unity Test Runner builds
+    (asmdef Gaffer.Tests), so `dotnet test` and Unity never diverge. Only framework-free
+    production code is included; anything touching UnityEngine (Infrastructure, Presentation,
+    Composition, Editor) stays OUT — which also *enforces* that Common/Domain/Application remain
+    framework-free (they would not compile here otherwise). LangVersion is pinned to Unity 6's
+    C# 9 so the bridge rejects anything Unity's compiler would (e.g. file-scoped namespaces).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../Assets/_Project/Scripts/Common/**/*.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Domain/**/*.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Application/**/*.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Tests/EditMode/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+  </ItemGroup>
+
+</Project>

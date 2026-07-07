@@ -110,3 +110,10 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# ── dotnet test bridge (headless pure-layer tests, lives outside Assets/) ──
+# The hand-written bridge project is source and must be tracked, unlike the
+# *.csproj files Unity auto-generates at the repo root.
+!/tests/Gaffer.Tests.csproj
+/tests/[Bb]in/
+/tests/[Oo]bj/
