@@ -1,4 +1,4 @@
-namespace Gaffer.Application.Simulation
+namespace Gaffer.Domain.Clubs
 {
     /// <summary>
     /// A team's phase-based effective strength for one match — attack, midfield control, and defence

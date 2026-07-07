@@ -1,3 +1,4 @@
+using Gaffer.Domain.Clubs;
 using Gaffer.Application.Simulation;
 
 namespace Gaffer.Editor.Harness

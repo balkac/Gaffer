@@ -1,3 +1,5 @@
+using Gaffer.Domain.Clubs;
+
 namespace Gaffer.Application.Simulation
 {
     /// <summary>
