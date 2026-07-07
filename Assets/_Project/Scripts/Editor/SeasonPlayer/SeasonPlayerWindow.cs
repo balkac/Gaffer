@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
@@ -44,6 +45,7 @@ namespace Gaffer.Editor.SeasonPlayer
         private MatchContext _context;
         private SplitMix64RandomNumberGenerator _rng;
         private SeasonVerdict? _verdict;
+        private WeekResult _lastWeek;
 
         private VisualElement _body;
 
@@ -129,6 +131,7 @@ namespace Gaffer.Editor.SeasonPlayer
             _managedClub = new ClubId(Mathf.Clamp(_managedIndex, 0, count - 1));
             _target = new BoardTarget(_promotionPosition, _survivalPosition);
             _verdict = null;
+            _lastWeek = null;
 
             Refresh();
         }
@@ -152,7 +155,7 @@ namespace Gaffer.Editor.SeasonPlayer
                 return;
             }
 
-            _season.AdvanceWeek(_simulator, _context, _rng);
+            _lastWeek = _season.AdvanceWeek(_simulator, _context, _rng);
             CheckComplete();
             Refresh();
         }
@@ -167,7 +170,12 @@ namespace Gaffer.Editor.SeasonPlayer
             int guard = 0;
             while (!_season.IsComplete && guard < 1000)
             {
-                _season.AdvanceWeek(_simulator, _context, _rng);
+                WeekResult week = _season.AdvanceWeek(_simulator, _context, _rng);
+                if (week.Matches.Count > 0)
+                {
+                    _lastWeek = week;
+                }
+
                 guard++;
             }
 
@@ -234,6 +242,102 @@ namespace Gaffer.Editor.SeasonPlayer
             }
 
             _body.Add(BuildTableCard());
+
+            if (_lastWeek != null)
+            {
+                _body.Add(BuildLastWeekCard());
+            }
+        }
+
+        private VisualElement BuildLastWeekCard()
+        {
+            VisualElement card = MakeCard();
+            card.Add(MakeLabel("LAST WEEK · ROUND " + (_lastWeek.Round + 1), 11, HarnessPalette.Muted, bold: true));
+
+            foreach (MatchResult match in _lastWeek.Matches)
+            {
+                bool involvesManaged = match.Home == _managedClub || match.Away == _managedClub;
+                Color scoreColor = involvesManaged ? HarnessPalette.Accent : HarnessPalette.Chalk;
+
+                var block = new VisualElement();
+                block.style.marginTop = 6;
+
+                string homeName = _league.Clubs[match.Home.Value].Name;
+                string awayName = _league.Clubs[match.Away.Value].Name;
+                block.Add(MakeLabel(
+                    homeName + "  " + match.HomeGoals + " - " + match.AwayGoals + "  " + awayName,
+                    12, scoreColor, involvesManaged));
+
+                string minutes = FormatGoalMinutes(match);
+                if (minutes.Length > 0)
+                {
+                    block.Add(MakeLabel(minutes, 10, HarnessPalette.Muted));
+                }
+
+                card.Add(block);
+            }
+
+            return card;
+        }
+
+        private string FormatGoalMinutes(MatchResult match)
+        {
+            var home = new List<int>();
+            var away = new List<int>();
+            foreach (MatchEvent matchEvent in match.Events)
+            {
+                if (matchEvent.Kind != MatchEventKind.Goal)
+                {
+                    continue;
+                }
+
+                if (matchEvent.Side == TeamSide.Home)
+                {
+                    home.Add(matchEvent.Minute);
+                }
+                else
+                {
+                    away.Add(matchEvent.Minute);
+                }
+            }
+
+            if (home.Count == 0 && away.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            home.Sort();
+            away.Sort();
+
+            var parts = new List<string>();
+            if (home.Count > 0)
+            {
+                parts.Add(_league.Clubs[match.Home.Value].Name + " " + MinutesText(home));
+            }
+
+            if (away.Count > 0)
+            {
+                parts.Add(_league.Clubs[match.Away.Value].Name + " " + MinutesText(away));
+            }
+
+            return string.Join("      ", parts);
+        }
+
+        private static string MinutesText(List<int> minutes)
+        {
+            var builder = new StringBuilder();
+            for (int i = 0; i < minutes.Count; i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append(", ");
+                }
+
+                builder.Append(minutes[i]);
+                builder.Append('\'');
+            }
+
+            return builder.ToString();
         }
 
         private VisualElement BuildVerdictBanner()
