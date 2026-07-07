@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
 
-namespace Gaffer.Tools.SeasonHarness
+namespace Gaffer.Editor.Harness
 {
     /// <summary>Builds a league of teams with a believable quality spread, deterministically from the seed.</summary>
     public sealed class LeagueFactory

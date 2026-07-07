@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Gaffer.Tools.SeasonHarness
+namespace Gaffer.Editor.Harness
 {
     /// <summary>A season's league table: accumulates results by team and orders them by the usual tiebreaks.</summary>
     public sealed class Standings

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace Gaffer.Tools.SeasonHarness
+namespace Gaffer.Editor.Harness
 {
     /// <summary>
     /// Renders the harness report as a self-contained HTML fragment in the ART_STYLE "matchday
