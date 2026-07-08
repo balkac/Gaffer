@@ -42,9 +42,22 @@ namespace Gaffer.Tests
 
                 Assert.That(player.Age, Is.InRange(context.MinAge, context.MaxAge));
                 Assert.That(player.HiddenPotential, Is.InRange(context.MinPotential, context.MaxPotential));
+
+                // Physical attributes are drawn in band for every role.
                 Assert.That(player.Attributes.Pace, Is.InRange(context.MinAbility, context.MaxAbility));
-                Assert.That(player.Attributes.Finishing, Is.InRange(context.MinAbility, context.MaxAbility));
                 Assert.That(player.Attributes.Stamina, Is.InRange(context.MinAbility, context.MaxAbility));
+
+                // Technical vs keeping split: a keeper keeps in band and finishes weakly; an outfielder the reverse.
+                if (player.Position == Position.Goalkeeper)
+                {
+                    Assert.That(player.Attributes.Reflexes, Is.InRange(context.MinAbility, context.MaxAbility));
+                    Assert.That(player.Attributes.Finishing, Is.LessThan(context.MinAbility));
+                }
+                else
+                {
+                    Assert.That(player.Attributes.Finishing, Is.InRange(context.MinAbility, context.MaxAbility));
+                    Assert.That(player.Attributes.Reflexes, Is.LessThan(context.MinAbility));
+                }
             }
         }
 

@@ -38,7 +38,7 @@ namespace Gaffer.Application.Simulation
                 Attributes attributes = player.Attributes;
                 double attack = AttackRating(attributes);
                 double midfield = MidfieldRating(attributes);
-                double defence = DefenceRating(attributes);
+                double defence = DefenceRating(player.Position, attributes);
 
                 squadAttack += attack;
                 squadMidfield += midfield;
@@ -69,19 +69,27 @@ namespace Gaffer.Application.Simulation
             return new TeamStrength(attackAxis, midfieldAxis, defenceAxis);
         }
 
+        // Each rating weights a role's key attributes (see RoleKeyAttributes); weights sum to 1 so the
+        // axis stays on the 0–100 attribute scale. Defence branches on the role: a keeper is rated on the
+        // keeping group, an outfielder on tackling, marking, and heading.
         private static double AttackRating(Attributes a)
         {
-            return (0.5 * a.Finishing) + (0.3 * a.Pace) + (0.2 * a.Positioning);
+            return (0.35 * a.Finishing) + (0.20 * a.Pace) + (0.20 * a.Technique) + (0.15 * a.Positioning) + (0.10 * a.Dribbling);
         }
 
         private static double MidfieldRating(Attributes a)
         {
-            return (0.5 * a.Passing) + (0.3 * a.Positioning) + (0.2 * a.Stamina);
+            return (0.30 * a.Passing) + (0.25 * a.Technique) + (0.15 * a.FirstTouch) + (0.15 * a.Positioning) + (0.15 * a.Stamina);
         }
 
-        private static double DefenceRating(Attributes a)
+        private static double DefenceRating(Position position, Attributes a)
         {
-            return (0.6 * a.Tackling) + (0.4 * a.Positioning);
+            if (position == Position.Goalkeeper)
+            {
+                return (0.30 * a.Reflexes) + (0.20 * a.Handling) + (0.20 * a.OneOnOnes) + (0.15 * a.CommandOfArea) + (0.10 * a.AerialReach) + (0.05 * a.GkPositioning);
+            }
+
+            return (0.30 * a.Tackling) + (0.30 * a.Marking) + (0.15 * a.Heading) + (0.15 * a.Strength) + (0.10 * a.Positioning);
         }
 
         private static double LineAverage(double lineTotal, int lineCount, double squadTotal, int squadCount)

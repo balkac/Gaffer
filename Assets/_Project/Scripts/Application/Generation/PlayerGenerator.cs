@@ -42,26 +42,83 @@ namespace Gaffer.Application.Generation
             return Build(id, context, name, nationality, age, position, rng);
         }
 
+        // Keepers are poor with the ball at their feet; outfielders barely keep goal. These weak/negligible
+        // bands are fixed, not tied to the club tier — a top keeper is still no striker, and vice versa.
+        private const int WeakMin = 8;
+        private const int WeakMax = 30;
+        private const int NegligibleMin = 1;
+        private const int NegligibleMax = 12;
+
         private Player Build(PlayerId id, GenerationContext context, string name, string nationality, int age, Position position, IRandom rng)
         {
-            Attributes attributes = GenerateAttributes(context, rng);
+            Attributes attributes = GenerateAttributes(context, position, rng);
             byte hiddenPotential = (byte)rng.NextInt(context.MinPotential, context.MaxPotential + 1);
 
             return new Player(id, name, nationality, position, age, attributes, hiddenPotential);
         }
 
-        private static Attributes GenerateAttributes(GenerationContext context, IRandom rng)
+        /// <summary>
+        /// Fills all attributes position-appropriately: physical &amp; movement in the club's ability band
+        /// for everyone, technical and set-piece in band for outfielders but weak for keepers, and the
+        /// goalkeeping group in band for keepers but negligible for outfielders. The draw count and order
+        /// are fixed regardless of role, so a given seed and context still reproduce the same player.
+        /// </summary>
+        private static Attributes GenerateAttributes(GenerationContext context, Position position, IRandom rng)
         {
-            return new Attributes(
-                GenerateStat(context, rng),
-                GenerateStat(context, rng),
-                GenerateStat(context, rng),
-                GenerateStat(context, rng),
-                GenerateStat(context, rng),
-                GenerateStat(context, rng));
+            bool isKeeper = position == Position.Goalkeeper;
+
+            return new Attributes
+            {
+                // Technical — in band for outfielders, weak for keepers.
+                Finishing = Technical(context, isKeeper, rng),
+                Technique = Technical(context, isKeeper, rng),
+                FirstTouch = Technical(context, isKeeper, rng),
+                Dribbling = Technical(context, isKeeper, rng),
+                Passing = Technical(context, isKeeper, rng),
+                Crossing = Technical(context, isKeeper, rng),
+                Heading = Technical(context, isKeeper, rng),
+                LongShots = Technical(context, isKeeper, rng),
+                Marking = Technical(context, isKeeper, rng),
+                Tackling = Technical(context, isKeeper, rng),
+
+                // Set-piece — in band for outfielders, weak for keepers.
+                Penalties = Technical(context, isKeeper, rng),
+                FreeKicks = Technical(context, isKeeper, rng),
+                Corners = Technical(context, isKeeper, rng),
+                LongThrows = Technical(context, isKeeper, rng),
+
+                // Physical & movement — in band for everyone.
+                Pace = InBand(context, rng),
+                Acceleration = InBand(context, rng),
+                Stamina = InBand(context, rng),
+                Strength = InBand(context, rng),
+                Agility = InBand(context, rng),
+                Jumping = InBand(context, rng),
+                Balance = InBand(context, rng),
+                Positioning = InBand(context, rng),
+
+                // Goalkeeping — in band for keepers, negligible for outfielders.
+                Reflexes = Keeping(context, isKeeper, rng),
+                Handling = Keeping(context, isKeeper, rng),
+                AerialReach = Keeping(context, isKeeper, rng),
+                CommandOfArea = Keeping(context, isKeeper, rng),
+                OneOnOnes = Keeping(context, isKeeper, rng),
+                Kicking = Keeping(context, isKeeper, rng),
+                GkPositioning = Keeping(context, isKeeper, rng),
+            };
         }
 
-        private static byte GenerateStat(GenerationContext context, IRandom rng)
+        private static byte Technical(GenerationContext context, bool isKeeper, IRandom rng)
+        {
+            return isKeeper ? (byte)rng.NextInt(WeakMin, WeakMax + 1) : InBand(context, rng);
+        }
+
+        private static byte Keeping(GenerationContext context, bool isKeeper, IRandom rng)
+        {
+            return isKeeper ? InBand(context, rng) : (byte)rng.NextInt(NegligibleMin, NegligibleMax + 1);
+        }
+
+        private static byte InBand(GenerationContext context, IRandom rng)
         {
             return (byte)rng.NextInt(context.MinAbility, context.MaxAbility + 1);
         }

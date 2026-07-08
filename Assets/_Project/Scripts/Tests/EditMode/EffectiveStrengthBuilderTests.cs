@@ -10,7 +10,18 @@ namespace Gaffer.Tests
     {
         private static Player PlayerAt(Position position, byte stat)
         {
-            var attributes = new Attributes(stat, stat, stat, stat, stat, stat);
+            // Every attribute set to the same value, so each weighted role rating collapses to that value
+            // whichever axis (or role branch) reads it — the tests can reason about the axes directly.
+            var attributes = new Attributes
+            {
+                Finishing = stat, Technique = stat, FirstTouch = stat, Dribbling = stat, Passing = stat,
+                Crossing = stat, Heading = stat, LongShots = stat, Marking = stat, Tackling = stat,
+                Penalties = stat, FreeKicks = stat, Corners = stat, LongThrows = stat,
+                Pace = stat, Acceleration = stat, Stamina = stat, Strength = stat, Agility = stat,
+                Jumping = stat, Balance = stat, Positioning = stat,
+                Reflexes = stat, Handling = stat, AerialReach = stat, CommandOfArea = stat,
+                OneOnOnes = stat, Kicking = stat, GkPositioning = stat,
+            };
             return new Player(new PlayerId(0), "Test Player", "England", position, 24, attributes, 70);
         }
 

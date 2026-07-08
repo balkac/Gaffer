@@ -333,24 +333,53 @@ namespace Gaffer.Editor.SeasonPlayer
                 var left = MakeLabel(player.Name + "  ·  " + player.Age, 11, HarnessPalette.Chalk);
                 left.style.flexGrow = 1;
                 row.Add(left);
-                row.Add(MakeLabel(KeyStats(player), 10, HarnessPalette.Muted));
+                row.Add(BuildKeyStats(player));
 
                 card.Add(row);
             }
         }
 
-        private static string KeyStats(Player player)
+        // Shows the role's key attributes (RoleKeyAttributes), each coloured by value on the single accent
+        // ramp from ART_STYLE §4.1 — the eye goes to the strong numbers without a second bright colour.
+        private static VisualElement BuildKeyStats(Player player)
         {
-            Attributes a = player.Attributes;
-            switch (player.Position)
+            var wrap = new VisualElement();
+            wrap.style.flexDirection = FlexDirection.Row;
+
+            foreach (AttributeKey key in RoleKeyAttributes.For(player.Position))
             {
-                case Position.Forward:
-                    return "FIN " + a.Finishing + "  PAC " + a.Pace + "  POS " + a.Positioning;
-                case Position.Midfielder:
-                    return "PAS " + a.Passing + "  POS " + a.Positioning + "  STA " + a.Stamina;
-                default:
-                    return "TKL " + a.Tackling + "  POS " + a.Positioning + "  PAC " + a.Pace;
+                byte value = key.Read(player.Attributes);
+                Label chip = MakeLabel(key.Label + " " + value, 10, AttributeColor(value), value >= 85);
+                chip.style.marginLeft = 10;
+                wrap.Add(chip);
             }
+
+            return wrap;
+        }
+
+        private static Color AttributeColor(byte value)
+        {
+            if (value >= 85)
+            {
+                return HarnessPalette.Accent;
+            }
+
+            if (value >= 70)
+            {
+                return HarnessPalette.Chalk;
+            }
+
+            if (value >= 55)
+            {
+                return new Color(0.616f, 0.667f, 0.643f); // #9DAAA4 — soluk
+            }
+
+            if (value >= 40)
+            {
+                return HarnessPalette.Muted;
+            }
+
+            return new Color(0.275f, 0.337f, 0.310f); // #46564F — en sönük
         }
 
         private VisualElement BuildLastWeekCard()

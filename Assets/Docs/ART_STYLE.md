@@ -57,7 +57,7 @@ Oyuncu attribute'ları (0–100) üç *ayrı* görsel kanalla okunur; karışmaz
 2. **Pozisyon önemi = tint, renk değil.** Rol-anahtarı attribute'ların satırı hafif `--accent` yıkaması (~%9 opacity) + sol accent kenar çizgisi alır → "bu pozisyon için önemli". *Önemi* işaretler, *değeri* değil. Rol→key eşlemesi veriden gelir.
 3. **Scout belirsizliği = aralık + bulanık bant.** Az gözlemlenmişken sayı yerine **aralık** ("72–86") ve bar'da soluk accent belirsizlik bandı; potansiyel `? ? ?`. Scout kalitesi arttıkça netleşir.
 
-Sayılar tabular; iki sütun (Teknik | Fiziksel) + gruplar. Referans mockup'lar: `profile_role_setpieces`, `all_role_profiles`, `profile_masked_vs_unmasked`.
+Sayılar tabular; iki sütun (Teknik | Fiziksel) + gruplar. **Attribute'lar grup içinde SABİT konumda durur (alfabetik, FM-tarzı) — asla değere göre sıralanmaz.** Konum öğrenilebilir olsun, oyuncular arası aynı yerde kalsın; değer yalnız *renkle* öne çıkar. Referans mockup'lar: `three_full_profiles`, `profile_role_setpieces`, `all_role_profiles`, `profile_masked_vs_unmasked`.
 
 ---
 

@@ -9,8 +9,8 @@
 ## Güncel durum · 2026-07-08
 
 - **Faz 0** ✅ · **Faz 1** ✅ (★ Gate A geçildi) · **Faz 2** 🟡 (çekirdek bitti, JSON adapter kaldı) · **Faz 3** 🟡 (üreteç + kadro→güç köprüsü + kulüp kadroları hazır)
-- **56 dotnet testi yeşil** — `dotnet test tests/Gaffer.Tests.csproj` (aynı testler Unity Test Runner'da da koşar)
-- Bir lig sezonu **uçtan uca oynanıyor** (headless + **Season Player** editor demosu); **kaydet/yükle çekirdeği** + **deterministik oyuncu üreteci** (garanti wonderkid dâhil) + **kadro→`TeamStrength` köprüsü** (`BuildEffectiveStrength`) hazır. **Season Player artık her kulübe üretilmiş kadro veriyor**, gücü kadrodan türetiyor ve yönettiğin **kadroyu isimli oyuncularla gösteriyor**
+- **58 dotnet testi yeşil** — `dotnet test tests/Gaffer.Tests.csproj` (aynı testler Unity Test Runner'da da koşar)
+- Bir lig sezonu **uçtan uca oynanıyor** (headless + **Season Player** editor demosu); **kaydet/yükle çekirdeği** + **deterministik oyuncu üreteci** (garanti wonderkid dâhil) + **kadro→`TeamStrength` köprüsü** (`BuildEffectiveStrength`) hazır. **Season Player artık her kulübe üretilmiş kadro veriyor**, gücü kadrodan türetiyor ve yönettiğin **kadroyu isimli oyuncular + rol-anahtarı statlarla** (değere göre renklenen, ART_STYLE §4.1) gösteriyor
 
 ---
 
@@ -27,14 +27,14 @@
 ## Tamamlananlar (katman bazında)
 
 - **Common** — `Result`/`Result<T>`, `IRandom` + `SplitMix64RandomNumberGenerator` (golden-locked, `State` getter save için)
-- **Domain** — `Attributes`, `Player`, `PlayerId`, `Position` (Players); `TeamStrength`, `ClubId`, `Club` (opsiyonel `Squad` taşır), `Squad` (Clubs); `League` (Leagues)
-- **Application/Simulation** — `MatchContext`/`MatchImportance`, `MatchCommand → MatchSimulator → MatchOutcome` (Poisson şans üretimi + kalite çözümü, portlar arkasında), `MatchSimulationSettings` (tuned), `EffectiveStrengthBuilder` (`Squad → TeamStrength`: hat-bazlı rol-rating ortalaması; boş hat → kadro geneline düşer)
+- **Domain** — `Attributes` (gruplu ~29 alan: Teknik/Set-piece/Fiziksel&Hareket/Kalecilik), `RoleKeyAttributes` (rol→anahtar-attribute eşlemesi), `Player`, `PlayerId`, `Position` (Players); `TeamStrength`, `ClubId`, `Club` (opsiyonel `Squad` taşır), `Squad` (Clubs); `League` (Leagues)
+- **Application/Simulation** — `MatchContext`/`MatchImportance`, `MatchCommand → MatchSimulator → MatchOutcome` (Poisson şans üretimi + kalite çözümü, portlar arkasında), `MatchSimulationSettings` (tuned), `EffectiveStrengthBuilder` (`Squad → TeamStrength`: rol-anahtarı attribute'lardan ağırlıklı hat-rating ortalaması; defans rating'i pozisyona duyarlı — kaleci kalecilik grubundan; boş hat → kadro geneline düşer)
 - **Application/Season** — `FixtureScheduler` (çift devre, circle method), `LeagueTable`, `LeagueSeason` (hafta ilerlet + sonuç geçmişi + `Restore`), `MatchResult` (skor + dakika-golleri), `BoardTarget` + `SeasonEvaluator` → `SeasonVerdict`
 - **Application/Serialization** — `SeasonSaveData` DTO + `SeasonSaveMapper` + `SaveSchema`/`SaveMigrator` + `ISerializer` port *(JSON impl Infrastructure'da kaldı)*
-- **Application/Generation** — `PlayerGenerator` (deterministik oyuncu; pozisyon-belirli overload dâhil) + `PlayerNameGenerator` (kurgusal isim) + `PlayerPoolGenerator` (garanti wonderkid) + `SquadGenerator` (inandırıcı diziliş: 2 GK / 6 DEF / 7 MID / 5 FWD) + `GenerationContext`
+- **Application/Generation** — `PlayerGenerator` (deterministik, **pozisyona uygun** attribute üretimi: fiziksel herkese in-band, teknik outfield'a in-band/kaleciye zayıf, kalecilik grubu kaleciye in-band/outfield'a ~0) + `PlayerNameGenerator` (kurgusal isim) + `PlayerPoolGenerator` (garanti wonderkid) + `SquadGenerator` (inandırıcı diziliş: 2 GK / 6 DEF / 7 MID / 5 FWD) + `GenerationContext`
 - **Editor (`Gaffer.Editor`)** — `SeasonHarnessWindow` (dağılım/Gate A workbench) + `SeasonPlayerWindow` (bir sezonu izle: tablo + son hafta sonuçları/gol dakikaları + verdict)
 - **Composition** — `MatchSmokeTest` (Play → Console) + sahne
-- **Tests** — 56 test (`Gaffer.Tests`); `Gaffer.Tests.Unity` runtime determinizm kontrolü
+- **Tests** — 58 test (`Gaffer.Tests`); `Gaffer.Tests.Unity` runtime determinizm kontrolü
 - **Altyapı** — `tests/` dotnet köprüsü (net8.0 / LangVersion 9), `.editorconfig` (§1+§2), `.gitignore`
 
 ---
@@ -55,6 +55,7 @@
 12. **Oyuncu isimleri = jenerik insan isimleri (kombinatoryal, gerçekçi).** Kulüp isimleri kurgusal (gerçek-kulüp değil) ama oyuncu isimleri sıradan ad+soyad → marka değil, belirli gerçek oyuncuyu kopyalamadıkça sorun yok. Milliyet-flavor'lı havuzlar sonraya.
 13. **Garanti wonderkid = havuza gem-context tohumlama.** İlk N oyuncu düşük-görünür/yüksek-gizli/genç context'ten üretilip karıştırılır; keşif **nadir** kalır (doğrulama testiyle sınırlı).
 14. **CM 01/02 dersleri dokümanlara işlendi** — keşif garantisi (NON-NEGOTIABLE), düşük-sürtünme transfer + gergin ekonomi, blackbox quirk'leri, "asla eklenmeyecekler" listesi, paylaşılabilir legend card (post-MVP).
+15. **Attribute seti 6 → gruplu ~29 (FM-benzeri).** Teknik/Set-piece/Fiziksel&Hareket/Kalecilik. FM'in "mental" ekseni **bilinçle yok** — trait+kişilik (Katman 2) soğurur, çift-sayım olmasın; teknik/fiziksel granülerlik zengin ama karakter ayrı katmanda. **`Attributes` artık `readonly struct` değil**, public settable auto-property'li value-struct (29 arg'lık ctor yerine object-initializer; struct kopya semantiği dışarıdan yine değişmez tutuyor). **Üretim pozisyona uygun** (kaleci ↔ outfield ayrımı; rol-key *değer* değil vurgu). **Rol→anahtar-attribute eşlemesi `RoleKeyAttributes` (Domain)**; şimdilik kod, sonra `RoleSO`. Gösterim kuralı ART_STYLE §4.1 (değer→parlaklık rampası, tek accent).
 
 ---
 
