@@ -16,6 +16,11 @@ namespace Gaffer.Application.Simulation
     {
         public TeamStrength Build(Squad squad)
         {
+            return Build(squad, Tactics.Balanced);
+        }
+
+        public TeamStrength Build(Squad squad, Tactics tactics)
+        {
             IReadOnlyList<Player> players = squad.Players;
             if (players.Count == 0)
             {
@@ -66,7 +71,23 @@ namespace Gaffer.Application.Simulation
             double midfieldAxis = LineAverage(midfielderMidfield, midfielderCount, squadMidfield, players.Count);
             double defenceAxis = LineAverage(defensiveDefence, defensiveCount, squadDefence, players.Count);
 
-            return new TeamStrength(attackAxis, midfieldAxis, defenceAxis);
+            return ApplyTactics(attackAxis, midfieldAxis, defenceAxis, tactics);
+        }
+
+        // Tactics shift the base axes multiplicatively; a Balanced setup (all scales 0) is the identity.
+        // Attacking mentality trades defence for attack; an intense tempo pushes forward at a defensive
+        // cost; a high press wins the midfield but exposes the line. Weights tune into a BalanceSO later.
+        private static TeamStrength ApplyTactics(double attack, double midfield, double defence, Tactics tactics)
+        {
+            int mentality = tactics.MentalityScale;
+            int tempo = tactics.TempoScale;
+            int pressing = tactics.PressingScale;
+
+            double attackMult = (1.0 + (0.09 * mentality)) * (1.0 + (0.07 * tempo));
+            double midfieldMult = (1.0 + (0.04 * tempo)) * (1.0 + (0.09 * pressing));
+            double defenceMult = (1.0 - (0.07 * mentality)) * (1.0 - (0.05 * tempo)) * (1.0 - (0.04 * pressing));
+
+            return new TeamStrength(attack * attackMult, midfield * midfieldMult, defence * defenceMult);
         }
 
         // Each rating weights a role's key attributes (see RoleKeyAttributes); weights sum to 1 so the

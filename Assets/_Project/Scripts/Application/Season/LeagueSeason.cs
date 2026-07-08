@@ -17,6 +17,8 @@ namespace Gaffer.Application.Season
     {
         private readonly Dictionary<ClubId, Club> _clubsById;
         private readonly Dictionary<int, List<Fixture>> _fixturesByRound;
+        private readonly Dictionary<ClubId, Tactics> _tacticsByClub;
+        private readonly EffectiveStrengthBuilder _strengthBuilder;
         private readonly LeagueTable _table;
         private readonly List<MatchResult> _playedResults;
         private int _currentRound;
@@ -44,8 +46,16 @@ namespace Gaffer.Application.Season
                 roundFixtures.Add(fixture);
             }
 
+            _tacticsByClub = new Dictionary<ClubId, Tactics>();
+            _strengthBuilder = new EffectiveStrengthBuilder();
             _table = new LeagueTable(clubIds);
             _playedResults = new List<MatchResult>();
+        }
+
+        /// <summary>Sets a club's tactics; its match strength is re-derived from its squad each round.</summary>
+        public void SetTactics(ClubId club, Tactics tactics)
+        {
+            _tacticsByClub[club] = tactics;
         }
 
         public int CurrentRound => _currentRound;
@@ -84,7 +94,7 @@ namespace Gaffer.Application.Season
             {
                 Club home = _clubsById[fixture.Home];
                 Club away = _clubsById[fixture.Away];
-                var command = new MatchCommand(home.Strength, away.Strength, home.Squad, away.Squad, context);
+                var command = new MatchCommand(StrengthOf(home), StrengthOf(away), home.Squad, away.Squad, context);
                 MatchOutcome outcome = simulator.Simulate(command, rng);
 
                 _table.RecordMatch(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals);
@@ -95,6 +105,19 @@ namespace Gaffer.Application.Season
             int round = _currentRound;
             _currentRound++;
             return new WeekResult(round, matches);
+        }
+
+        // A club with a squad has its strength derived fresh from squad + tactics each round, so a tactical
+        // change takes effect the next week; a squad-less club (restored, or a strength-only fixture) keeps
+        // its precomputed strength.
+        private TeamStrength StrengthOf(Club club)
+        {
+            return club.Squad != null ? _strengthBuilder.Build(club.Squad, TacticsOf(club.Id)) : club.Strength;
+        }
+
+        private Tactics TacticsOf(ClubId club)
+        {
+            return _tacticsByClub.TryGetValue(club, out Tactics tactics) ? tactics : Tactics.Balanced;
         }
     }
 }

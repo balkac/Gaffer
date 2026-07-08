@@ -37,6 +37,7 @@ namespace Gaffer.Editor.SeasonPlayer
         private int _managedIndex = 15;
         private int _promotionPosition = 3;
         private int _survivalPosition = 17;
+        private Tactics _tactics = Tactics.Balanced;
 
         private League _league;
         private LeagueSeason _season;
@@ -131,6 +132,7 @@ namespace Gaffer.Editor.SeasonPlayer
             _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
             _managedClub = new ClubId(Mathf.Clamp(_managedIndex, 0, count - 1));
             _target = new BoardTarget(_promotionPosition, _survivalPosition);
+            _season.SetTactics(_managedClub, _tactics);
             _verdict = null;
             _lastWeek = null;
 
@@ -263,6 +265,7 @@ namespace Gaffer.Editor.SeasonPlayer
                 _body.Add(BuildVerdictBanner());
             }
 
+            _body.Add(BuildTacticsCard());
             _body.Add(BuildSquadCard());
             _body.Add(BuildTableCard());
 
@@ -272,13 +275,51 @@ namespace Gaffer.Editor.SeasonPlayer
             }
         }
 
+        private VisualElement BuildTacticsCard()
+        {
+            VisualElement card = MakeCard();
+            card.Add(MakeLabel("TACTICS", 11, HarnessPalette.Muted, bold: true));
+            card.Add(MakeLabel("Applies to your club from next week — watch the strength shift.", 10, HarnessPalette.Muted));
+
+            var mentality = new EnumField("Mentality", _tactics.Mentality);
+            mentality.RegisterValueChangedCallback(e =>
+                ChangeTactics(new Tactics((Mentality)e.newValue, _tactics.Tempo, _tactics.Pressing)));
+            card.Add(mentality);
+
+            var tempo = new EnumField("Tempo", _tactics.Tempo);
+            tempo.RegisterValueChangedCallback(e =>
+                ChangeTactics(new Tactics(_tactics.Mentality, (Tempo)e.newValue, _tactics.Pressing)));
+            card.Add(tempo);
+
+            var pressing = new EnumField("Pressing", _tactics.Pressing);
+            pressing.RegisterValueChangedCallback(e =>
+                ChangeTactics(new Tactics(_tactics.Mentality, _tactics.Tempo, (Pressing)e.newValue)));
+            card.Add(pressing);
+
+            return card;
+        }
+
+        private void ChangeTactics(Tactics tactics)
+        {
+            _tactics = tactics;
+            if (_season != null)
+            {
+                _season.SetTactics(_managedClub, _tactics);
+            }
+
+            Refresh();
+        }
+
         private VisualElement BuildSquadCard()
         {
             Club club = _league.Clubs[_managedClub.Value];
             VisualElement card = MakeCard();
             card.Add(MakeLabel("YOUR SQUAD · " + club.Name.ToUpperInvariant(), 11, HarnessPalette.Muted, bold: true));
 
-            TeamStrength strength = club.Strength;
+            // The managed club's axes reflect its live tactics (the same derivation the season runs each week).
+            TeamStrength strength = club.Squad != null
+                ? new EffectiveStrengthBuilder().Build(club.Squad, _tactics)
+                : club.Strength;
             var axes = new VisualElement();
             axes.style.flexDirection = FlexDirection.Row;
             axes.style.marginTop = 6;
