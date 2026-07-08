@@ -409,13 +409,28 @@ namespace Gaffer.Editor.SeasonPlayer
             card.Add(approach);
 
             // Mentality and pressing move the strength axes above; tempo and approach shape the chances.
+            // Shown as a delta from a balanced setup so the trade-off reads at a glance.
             ChanceProfile profile = ChanceProfile.FromTactics(_tactics);
+            int volume = Mathf.RoundToInt((float)(profile.Volume * 100f)) - 100;
+            int quality = Mathf.RoundToInt((float)(profile.Quality * 100f)) - 100;
             card.Add(MakeLabel(
-                "Chances: " + Mathf.RoundToInt((float)(profile.Volume * 100f)) + "% volume · " +
-                Mathf.RoundToInt((float)(profile.Quality * 100f)) + "% quality",
-                10, HarnessPalette.Accent));
+                "Chances vs balanced: " + Signed(volume) + "% shots · " + Signed(quality) + "% quality",
+                10, HarnessPalette.Muted));
+            card.Add(MakeLabel(ChanceSummary(volume, quality), 10, HarnessPalette.Accent));
 
             return card;
+        }
+
+        private static string ChanceSummary(int volume, int quality)
+        {
+            if (volume == 0 && quality == 0)
+            {
+                return "Balanced — an even mix of chances.";
+            }
+
+            string shots = volume > 0 ? "more shots" : volume < 0 ? "fewer shots" : "as many shots";
+            string sharpness = quality > 0 ? "each one sharper" : quality < 0 ? "each one less clinical" : "same quality";
+            return shots + ", " + sharpness + ".";
         }
 
         private void ChangeTactics(Tactics tactics)
