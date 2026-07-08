@@ -94,6 +94,23 @@ namespace Gaffer.Tests
         }
 
         [Test]
+        public void SelectScorer_AmongDefenders_TheAerialThreatScoresMore()
+        {
+            // Same weak finishing; the difference is heading/jumping/strength — the corner-header pathway.
+            var tallCentreBack = new Player(new PlayerId(1), "Tall Back", "England", Position.Defender, 26,
+                new Attributes { Finishing = 40, Positioning = 55, Pace = 50, Heading = 86, Jumping = 82, Strength = 80 }, 70);
+            var smallFullBack = new Player(new PlayerId(2), "Small Back", "England", Position.Defender, 26,
+                new Attributes { Finishing = 40, Positioning = 55, Pace = 50, Heading = 34, Jumping = 40, Strength = 52 }, 70);
+            var squad = new Squad(new List<Player> { tallCentreBack, smallFullBack });
+
+            int aerialPicks = CountPicks(squad, 2000, 5, wantedId: 1);
+            int groundPicks = CountPicks(squad, 2000, 5, wantedId: 2);
+
+            Assert.That(aerialPicks, Is.GreaterThan(groundPicks * 3 / 2),
+                $"The aerial centre-back should score clearly more from set-pieces, but got {aerialPicks} vs {groundPicks}.");
+        }
+
+        [Test]
         public void SelectScorer_Goalkeeper_AlmostNeverScores()
         {
             var squad = new Squad(new List<Player>

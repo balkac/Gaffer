@@ -7,9 +7,12 @@ using Gaffer.Domain.Players;
 namespace Gaffer.Application.Simulation
 {
     /// <summary>
-    /// Credits a goal to a weighted-random player: a striker's finishing and positioning make him far the
-    /// likeliest scorer, a midfielder less so, a defender rarely, a keeper almost never — but a small floor
-    /// keeps the odd centre-back header alive. One rng draw per goal, so the same seed names the same
+    /// Credits a goal to a weighted-random player through two pathways: open play (finishing, positioning,
+    /// pace) where a striker dominates, and the air (heading, jumping, strength) where a target man and a
+    /// tall centre-back both threaten — that second pathway is how a defender scores from a corner. So a
+    /// striker is far the likeliest, a midfielder less so, a defender occasionally (mostly with his head),
+    /// a keeper almost never — but not never: a keeper up for a last-minute corner is a rare, legendary
+    /// beat the game wants to keep possible. One rng draw per goal, so the same seed names the same
     /// scorers. The weights tune into a BalanceSO later.
     /// </summary>
     public sealed class WeightedScorerSelector : IScorerSelector
@@ -48,11 +51,18 @@ namespace Gaffer.Application.Simulation
         private static double Weight(Player player)
         {
             Attributes a = player.Attributes;
-            double scoring = (0.6 * a.Finishing) + (0.2 * a.Positioning) + (0.2 * a.Pace);
-            return Math.Max(MinWeight, scoring * RoleMultiplier(player.Position));
+            double openPlay = ((0.6 * a.Finishing) + (0.2 * a.Positioning) + (0.2 * a.Pace)) * OpenPlayRole(player.Position);
+            double aerial = ((0.6 * a.Heading) + (0.25 * a.Jumping) + (0.15 * a.Strength)) * AerialRole(player.Position);
+            double weight = openPlay + aerial;
+
+            // The floor keeps every outfielder a live threat; a keeper is exempt so his goal stays a
+            // once-in-many-seasons event, not a regular one.
+            return player.Position == Position.Goalkeeper ? weight : Math.Max(MinWeight, weight);
         }
 
-        private static double RoleMultiplier(Position position)
+        // Open play favours strikers heavily; the air gives defenders a real set-piece threat while still
+        // rewarding target men. Defence scores mostly through the aerial pathway (corner headers).
+        private static double OpenPlayRole(Position position)
         {
             switch (position)
             {
@@ -61,11 +71,28 @@ namespace Gaffer.Application.Simulation
                 case Position.Midfielder:
                     return 0.55;
                 case Position.Defender:
-                    return 0.18;
+                    return 0.10;
                 case Position.Goalkeeper:
-                    return 0.01;
+                    return 0.003;
                 default:
                     return 0.3;
+            }
+        }
+
+        private static double AerialRole(Position position)
+        {
+            switch (position)
+            {
+                case Position.Forward:
+                    return 0.45;
+                case Position.Midfielder:
+                    return 0.25;
+                case Position.Defender:
+                    return 0.30;
+                case Position.Goalkeeper:
+                    return 0.004;
+                default:
+                    return 0.2;
             }
         }
     }
