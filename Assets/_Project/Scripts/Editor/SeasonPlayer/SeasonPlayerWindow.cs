@@ -43,7 +43,7 @@ namespace Gaffer.Editor.SeasonPlayer
         private int _dragFromSlot = -1;
         private int _dragFromBenchId = -1;
         private string _lineupStatus;
-        private VisualElement _pitch;
+        private VisualElement _dragGhost;
         private readonly List<VisualElement> _slotTokens = new List<VisualElement>();
 
         private League _league;
@@ -484,7 +484,6 @@ namespace Gaffer.Editor.SeasonPlayer
         private VisualElement BuildPitch()
         {
             var pitch = new VisualElement();
-            _pitch = pitch;
             pitch.style.height = 380;
             pitch.style.marginTop = 8;
             pitch.style.backgroundColor = HarnessPalette.Pitch;
@@ -589,24 +588,16 @@ namespace Gaffer.Editor.SeasonPlayer
                 _dragFromSlot = slot;
                 _dragFromBenchId = slot >= 0 ? -1 : playerId;
                 token.CapturePointer(evt.pointerId);
-                token.BringToFront();
+                BeginGhost(playerId, evt.position);
                 evt.StopPropagation();
             });
 
             token.RegisterCallback<PointerMoveEvent>(evt =>
             {
-                // Only slot tokens (children of the pitch) follow the cursor; a bench chip lives in a
-                // different container, so it just captures the pointer and detects the drop on release.
-                if (slot < 0 || !token.HasPointerCapture(evt.pointerId) || _pitch == null)
+                if (token.HasPointerCapture(evt.pointerId))
                 {
-                    return;
+                    MoveGhost(evt.position);
                 }
-
-                Vector2 local = _pitch.WorldToLocal(evt.position);
-                token.style.position = UnityEngine.UIElements.Position.Absolute;
-                token.style.translate = new Translate(0f, 0f);
-                token.style.left = local.x - (TokenWidth / 2f);
-                token.style.top = local.y - (TokenHeight / 2f);
             });
 
             token.RegisterCallback<PointerUpEvent>(evt =>
@@ -617,8 +608,61 @@ namespace Gaffer.Editor.SeasonPlayer
                 }
 
                 token.ReleasePointer(evt.pointerId);
+                EndGhost();
                 HandleDrop(evt.position);
             });
+
+            token.RegisterCallback<PointerCaptureOutEvent>(evt => EndGhost());
+        }
+
+        // A floating copy on the window root that follows the cursor while dragging, so both a pitch token
+        // and a bench chip read as "picked up" wherever they live in the layout.
+        private void BeginGhost(int playerId, Vector2 position)
+        {
+            EndGhost();
+            Player player = FindInSquad(playerId);
+            if (player == null)
+            {
+                return;
+            }
+
+            _dragGhost = new VisualElement();
+            _dragGhost.pickingMode = PickingMode.Ignore;
+            _dragGhost.style.position = UnityEngine.UIElements.Position.Absolute;
+            _dragGhost.style.width = TokenWidth;
+            _dragGhost.style.height = TokenHeight;
+            _dragGhost.style.alignItems = Align.Center;
+            _dragGhost.style.justifyContent = Justify.Center;
+            _dragGhost.style.opacity = 0.9f;
+            _dragGhost.style.backgroundColor = HarnessPalette.PitchRaised;
+            SetBorder(_dragGhost, HarnessPalette.Accent, 2);
+            SetRadius(_dragGhost, 8);
+            _dragGhost.Add(MakeLabel(PlayerRoles.Abbrev(player.Role), 9, HarnessPalette.Muted, bold: true));
+            _dragGhost.Add(MakeLabel(Surname(player.Name), 10, HarnessPalette.Chalk, bold: true));
+
+            rootVisualElement.Add(_dragGhost);
+            MoveGhost(position);
+        }
+
+        private void MoveGhost(Vector2 position)
+        {
+            if (_dragGhost == null)
+            {
+                return;
+            }
+
+            Vector2 local = rootVisualElement.WorldToLocal(position);
+            _dragGhost.style.left = local.x - (TokenWidth / 2f);
+            _dragGhost.style.top = local.y - (TokenHeight / 2f);
+        }
+
+        private void EndGhost()
+        {
+            if (_dragGhost != null)
+            {
+                _dragGhost.RemoveFromHierarchy();
+                _dragGhost = null;
+            }
         }
 
         private void HandleDrop(Vector2 position)
