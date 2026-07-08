@@ -4,6 +4,8 @@ Roguelike futbol menajerliği · Mobil (iOS/Android) · Unity 6 (`6000.3.16f1`) 
 Bu dosya oturum başında okunur ve davranışı belirler. Ayrıntılar için:
 `docs/GDD.md` (ne yapıyoruz), `docs/TDD.md` (oyuna-özel nasıl), `docs/ART_STYLE` (görsel dil).
 
+**➜ Nerede kaldık? `docs/PROGRESS.md`'yi oku** (ilerleme + alınan kararlar + sıradaki adım). `docs/ROADMAP.md` faz durumunu (✅/🟡/⬜) gösterir. Yeni oturuma bu ikisiyle başla. **Testler:** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj`.
+
 **Nasıl inşa edilir → `docs/engineering-standards/`** (`ARCHITECTURE.md`, `CONVENTIONS.md`, `PERFORMANCE.md`, `starter-tree.md`) **bağlayıcıdır.** Katmanlar, assembly'ler, isimlendirme, hata modeli, async sınırı, test köprüsü oradan gelir. Çelişkide **standartlar kazanır**; TDD yalnız oyuna-özel kararları taşır.
 
 ---
