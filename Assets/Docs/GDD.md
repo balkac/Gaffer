@@ -86,8 +86,11 @@ Bir oyuncu dört katmandan oluşur: **rakamlar + kişilik + ilişkiler + seninle
 
 **Katman 1 — Attribute (rakamlar):**
 - Kurgusal isimler ve kulüpler (lisans gerektirmez).
-- Attribute seti bilinçli olarak dar (~8–12): hız, bitiricilik, pas, top kapma, pozisyon alma, dayanıklılık, potansiyel. Dar set = daha kolay dengeleme + okunur UI.
+- **Attribute seti (0–100, FM-benzeri, gruplu ~18–20).** Gruplar: **Teknik** (finishing, technique, first touch, dribbling, passing, crossing, heading, long shots, marking, tackling), **Set-piece** (penalties, free kicks, corners, long throws), **Fiziksel & Hareket** (pace, acceleration, stamina, strength, agility, jumping, balance, positioning) ve yalnız kaleciler için **Kalecilik** (reflexes, handling, aerial reach, command of area, one-on-ones, kicking + GK positioning). Sayılar **tabular**, değere göre vurgulanır (bkz. ART_STYLE §4.1: 85+ accent'te yanar).
+- **Derinlik attribute *sayısında* değil, katmanlarda.** FM'in "mental" ekseni (composure, vision, flair, work rate, off-the-ball, anticipation, decisions, leadership, aggression, bravery) GAFFER'da **attribute değil** — trait + kişilik (Katman 2) *soğurur*. Yani teknik/fiziksel granülerlik zengin, ama "sezgi/karakter" çift-sayılmaz; bu hem GAFFER kimliği hem solo dengeleme için sağlıklı.
+- **Pozisyona göre önemli attribute'lar vurgulanır** (rol-anahtarı): bir striker'da finishing/pace/positioning, bir stoperde tackling/marking/heading, bir kalecide Kalecilik grubu öne çıkar. Bu, *önemi* işaretler (değeri değil) — ART_STYLE §4.1'de görsel kural (tint + accent kenar).
 - **Gizli potansiyel** ve gelişim eğrisi (scout ne kadar doğru okur, bir belirsizlik ekseni).
+- **Scout maskesi:** az gözlemlenmiş oyuncuda görünür attribute'lar bile kesin sayı yerine **aralık** gösterilir ("Finishing 72–86"); scout kalitesi arttıkça netleşir (CM 01/02 "hidden attributes" hissinin dereceli hâli).
 - Yaş, form, sakatlık geçmişi runtime state.
 
 **Katman 2 — Kişilik ve Trait'ler (karakteri yaratan şey):**

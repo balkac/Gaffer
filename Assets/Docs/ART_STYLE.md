@@ -49,6 +49,16 @@ Alternatif accent (takas edilirse): elektrik-lime `#E8FF3A`.
 - Tek çizgi ağırlığı (~1.6), **24px baz grid**, keskin-ama-yuvarlatılmış köşe dili. Attribute, trait, aksiyon ikonları aynı sette.
 - Trait ikonları küçük **rozet** sistemine oturur (kişilik dilini görsel yapar).
 
+### 4.1 Attribute gösterimi (data-viz kuralı — tek accent'e sadık)
+
+Oyuncu attribute'ları (0–100) üç *ayrı* görsel kanalla okunur; karışmazlar:
+
+1. **Değer büyüklüğü = parlaklık rampası + accent (FM'in yeşilinin işlevi, tek-accent paletiyle).** `≥85 → --accent (yanar)`, `70–84 → --chalk (bold)`, `55–69 → #9DAAA4 (soluk)`, `40–54 → --muted`, `<40 → #46564f`. Göz doğrudan iyilere gider. **İkinci parlak renk (FM yeşili/kırmızısı) kullanılmaz.**
+2. **Pozisyon önemi = tint, renk değil.** Rol-anahtarı attribute'ların satırı hafif `--accent` yıkaması (~%9 opacity) + sol accent kenar çizgisi alır → "bu pozisyon için önemli". *Önemi* işaretler, *değeri* değil. Rol→key eşlemesi veriden gelir.
+3. **Scout belirsizliği = aralık + bulanık bant.** Az gözlemlenmişken sayı yerine **aralık** ("72–86") ve bar'da soluk accent belirsizlik bandı; potansiyel `? ? ?`. Scout kalitesi arttıkça netleşir.
+
+Sayılar tabular; iki sütun (Teknik | Fiziksel) + gruplar. Referans mockup'lar: `profile_role_setpieces`, `all_role_profiles`, `profile_masked_vs_unmasked`.
+
 ---
 
 ## 5. Kulüp arması sistemi (parametrik — kritik)
@@ -72,7 +82,7 @@ Hepsi SVG; token paletinden beslenir. "Her kulüp elle çizilsin" tuzağını ç
 
 ## 7. Asset envanteri
 
-UI kit (bileşen + state'ler, 9-slice), ikon seti, arma sistemi, oyuncu token/avatar, tipografi ölçeği, maç-anlatı ekranı görsel dili, **paylaşılabilir "legend card"** (Efsaneler Salonu için dışa aktarılabilir kart — oyuncunun yayını + "found free → sold 40M" beat'i, broadcast stilinde; GDD §4.9), (sonraya) minimal 2D "key moment" saha görseli.
+UI kit (bileşen + state'ler, 9-slice), ikon seti, arma sistemi, oyuncu token/avatar, tipografi ölçeği, maç-anlatı ekranı görsel dili, **(sonraya) paylaşılabilir "legend card"** (post-MVP; Efsaneler Salonu için dışa aktarılabilir kart — oyuncunun yayını + "found free → sold 40M" beat'i, broadcast stilinde; GDD §4.9), (sonraya) minimal 2D "key moment" saha görseli.
 
 ---
 

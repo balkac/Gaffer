@@ -6,9 +6,9 @@
 
 ---
 
-## 📍 Güncel durum (2026-07-08)
+## 📍 Güncel durum (2026-07-07)
 
-**Faz 0 ✅ · Faz 1 ✅ (★ Gate A geçildi) · Faz 2 🟡 · Faz 3 🟡 (üreteç başladı)** — bir lig sezonu uçtan uca oynanıyor (headless + Season Player demo), kaydet/yükle + deterministik oyuncu üreteci (garanti wonderkid) hazır, **47 dotnet testi yeşil**. Ayrıntı + kararlar: **[`PROGRESS.md`](PROGRESS.md)**.
+**Faz 0 ✅ · Faz 1 ✅ (★ Gate A geçildi) · Faz 2 🟡** — bir lig sezonu uçtan uca oynanıyor (headless), kaydet/yükle çekirdeği hazır, **40 dotnet testi yeşil**. Ayrıntı + alınan kararlar: **[`PROGRESS.md`](PROGRESS.md)**.
 
 ---
 
@@ -28,7 +28,7 @@
 | 0 | Kurulum + İnandırıcılık Çekirdeği | ✅ Tamam | **L** | ★ Gate A |
 | 1 | Tuning + Test Ağı | ✅ Tamam (Gate A geçildi) | M | ★ Gate A |
 | 2 | Sezon İskeleti | 🟡 Çekirdek bitti · JSON adapter kaldı | M | |
-| 3 | Yönetim Sistemleri | 🟡 Oyuncu üreteci + wonderkid ✅ · devam | **L** | |
+| 3 | Yönetim Sistemleri | ⬜ | **L** | |
 | 4 | Karakter + Dram | ⬜ | **L** | |
 | 5 | Hafıza + Anlatı | ⬜ | M | ★ Gate B |
 | 6 | Meta / Roguelike | ⬜ | M | |
@@ -87,7 +87,7 @@ Bir run uçtan uca çalışsın (UI olmadan bile).
 Karar döngüsünü tamamla.
 
 **Teslimatlar:**
-- `PlayerGenerator` (deterministik): **isim + milliyet** + attribute + gizli potansiyel dağılımı + trait/kişilik ağırlıklı atama.
+- `PlayerGenerator` (deterministik): **isim + milliyet** + attribute + gizli potansiyel dağılımı + trait/kişilik ağırlıklı atama. Attribute'lar **gruplu 0–100 set** (Teknik / Set-piece / Fiziksel & Hareket / Kalecilik) ve **pozisyona uygun** üretilir (GDD §4.2, ART_STYLE §4.1).
 - **Keşfedilebilir wonderkid garantisi** (CM 01/02 dersi): her run'da alt liglerde, ucuz, düşük-görünür ama yüksek-gizli-potansiyelli, keşfedilmeyi bekleyen az sayıda cevher garantili üretilir (TDD §5).
 - Taktik (dizilim + tempo/pres/risk eksenleri), kadro seçimi.
 - Transfer + **scout belirsizliği** (potansiyel maskeli), basit antrenman. **Düşük-sürtünme model** (basit teklif/karşı-teklif, ajan bürokrasisi yok; "keşfet-büyüt-sat" flip'i çekirdek ödül) ama **run ekonomisi gergin** (satmak bedel taşır — para basma makinesi değil; GDD §4.4).

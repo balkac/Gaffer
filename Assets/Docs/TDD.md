@@ -107,9 +107,20 @@ public sealed class Player {
     public JourneyLog Journey { get; }           // debüt, kilit anlar, transfer — bkz. Bölüm 9
 }
 
-public struct Attributes {                       // struct: sıcak yolda allocation yok (PERFORMANCE)
-    public byte Pace, Finishing, Passing, Tackling, Positioning, Stamina;   // byte'ın gerçek gerekçesi var: paketli, hot path
+public struct Attributes {                       // struct: sıcak yolda allocation yok (PERFORMANCE); 0–100 (byte)
+    // Teknik
+    public byte Finishing, Technique, FirstTouch, Dribbling, Passing, Crossing, Heading, LongShots, Marking, Tackling;
+    // Set-piece
+    public byte Penalties, FreeKicks, Corners, LongThrows;
+    // Fiziksel & Hareket
+    public byte Pace, Acceleration, Stamina, Strength, Agility, Jumping, Balance, Positioning;
+    // Kalecilik (yalnız GK anlamlı; outfield ~0)
+    public byte Reflexes, Handling, AerialReach, CommandOfArea, OneOnOnes, Kicking, GkPositioning;
 }
+// NOT: FM'in "mental" ekseni (composure, vision, flair, work rate, off-the-ball, anticipation,
+// decisions, leadership, aggression) burada YOK — Trait + Personality soğurur (çift-sayım yok).
+// Pozisyona göre "rol-anahtarı" attribute'lar UI'da vurgulanır (bkz. ART_STYLE §4.1); bu bir
+// gösterim kuralıdır, ayrı veri değil (rol → key-attribute eşlemesi config/Domain'de).
 
 public sealed class ManagerCareer {              // meta, run'lar arası kalıcı
     public int Reputation { get; }
