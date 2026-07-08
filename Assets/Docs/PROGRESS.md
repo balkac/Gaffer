@@ -6,11 +6,11 @@
 
 ---
 
-## Güncel durum · 2026-07-07
+## Güncel durum · 2026-07-08
 
-- **Faz 0** ✅ · **Faz 1** ✅ (★ Gate A geçildi) · **Faz 2** 🟡 (çekirdek bitti, JSON adapter kaldı)
-- **40 dotnet testi yeşil** — `dotnet test tests/Gaffer.Tests.csproj` (aynı testler Unity Test Runner'da da koşar)
-- Bir lig sezonu **uçtan uca oynanıyor** (headless, UI'sız); **kaydet/yükle çekirdeği** var (deterministik, versiyonlu)
+- **Faz 0** ✅ · **Faz 1** ✅ (★ Gate A geçildi) · **Faz 2** 🟡 (çekirdek bitti, JSON adapter kaldı) · **Faz 3** 🟡 (üreteç başladı)
+- **47 dotnet testi yeşil** — `dotnet test tests/Gaffer.Tests.csproj` (aynı testler Unity Test Runner'da da koşar)
+- Bir lig sezonu **uçtan uca oynanıyor** (headless + **Season Player** editor demosu); **kaydet/yükle çekirdeği** + **deterministik oyuncu üreteci** (garanti wonderkid dâhil) hazır
 
 ---
 
@@ -27,13 +27,14 @@
 ## Tamamlananlar (katman bazında)
 
 - **Common** — `Result`/`Result<T>`, `IRandom` + `SplitMix64RandomNumberGenerator` (golden-locked, `State` getter save için)
-- **Domain** — `Attributes` (Players); `TeamStrength`, `ClubId`, `Club` (Clubs); `League` (Leagues)
+- **Domain** — `Attributes`, `Player`, `PlayerId`, `Position` (Players); `TeamStrength`, `ClubId`, `Club` (Clubs); `League` (Leagues)
 - **Application/Simulation** — `MatchContext`/`MatchImportance`, `MatchCommand → MatchSimulator → MatchOutcome` (Poisson şans üretimi + kalite çözümü, portlar arkasında), `MatchSimulationSettings` (tuned)
-- **Application/Season** — `FixtureScheduler` (çift devre, circle method), `LeagueTable`, `LeagueSeason` (hafta ilerlet + sonuç geçmişi + `Restore`), `BoardTarget` + `SeasonEvaluator` → `SeasonVerdict`
+- **Application/Season** — `FixtureScheduler` (çift devre, circle method), `LeagueTable`, `LeagueSeason` (hafta ilerlet + sonuç geçmişi + `Restore`), `MatchResult` (skor + dakika-golleri), `BoardTarget` + `SeasonEvaluator` → `SeasonVerdict`
 - **Application/Serialization** — `SeasonSaveData` DTO + `SeasonSaveMapper` + `SaveSchema`/`SaveMigrator` + `ISerializer` port *(JSON impl Infrastructure'da kaldı)*
-- **Editor (`Gaffer.Editor`)** — `SeasonHarnessWindow` (ART_STYLE broadcast, dağılım/Gate A workbench)
+- **Application/Generation** — `PlayerGenerator` (deterministik oyuncu) + `PlayerNameGenerator` (kurgusal isim) + `PlayerPoolGenerator` (garanti wonderkid) + `GenerationContext`
+- **Editor (`Gaffer.Editor`)** — `SeasonHarnessWindow` (dağılım/Gate A workbench) + `SeasonPlayerWindow` (bir sezonu izle: tablo + son hafta sonuçları/gol dakikaları + verdict)
 - **Composition** — `MatchSmokeTest` (Play → Console) + sahne
-- **Tests** — 40 test (`Gaffer.Tests`); `Gaffer.Tests.Unity` runtime determinizm kontrolü
+- **Tests** — 47 test (`Gaffer.Tests`); `Gaffer.Tests.Unity` runtime determinizm kontrolü
 - **Altyapı** — `tests/` dotnet köprüsü (net8.0 / LangVersion 9), `.editorconfig` (§1+§2), `.gitignore`
 
 ---
@@ -41,7 +42,7 @@
 ## Alınan kararlar (ve gerekçeleri)
 
 1. **.NET 8 (`net8.0`) + `LangVersion 9.0`** — test köprüsü SDK 8'de koşar (`~/.dotnet`, sudo'suz kuruldu). LangVersion 9 = Unity 6 paritesi: köprü, Unity'nin reddedeceği bir şeyi (file-scoped namespace vb.) de reddeder. net9 gereksiz (STS); net8 LTS.
-2. **Branch akışı = lokal `--no-ff` merge** — PR/review şimdilik yok (sonra eklenebilir); feature branch'leri **silinmiyor**, geçmişte grup olarak duruyor.
+2. **Branch akışı = lokal `--no-ff` merge; branch'ler BÜYÜK feature/faz için** — her küçük dilim için ayrı branch açma (çok branch birikmişti); dilimler tek feature branch'inde commit olarak birikir, feature bütünlenince merge. **Doküman/küçük değişiklik doğrudan `main`'e.** PR/review şimdilik yok. Merge edilmiş branch'ler silinmez (boş/kullanılmayan hariç).
 3. **Araçlar Unity Editor Window** — `SeasonHarness` konsol uygulaması yerine editor window'a taşındı (ART_STYLE). **`tests/` dotnet köprüsü KORUNDU** — o bir `.exe`/araç değil, çekirdeğin Unity'siz doğrulanmasını sağlayan test mekanizması.
 4. **`TeamStrength` → Domain** — `Club` ve maç sim aynı değer nesnesini paylaşsın, duplication olmasın.
 5. **`Club`/`League` Domain'de, sezon orkestrasyonu `Application/Season`'da** (dokümanın katman haritasına uygun).
@@ -50,15 +51,18 @@
 8. **Save = snapshot + `schemaVersion` + migration + RNG state** — replay-based değil (drama/transfer gelince her kararı replay-edilebilir tutmak kırılgan). Replay determinizmle zaten mümkün; save mekanizması değil.
 9. **`.meta` dosyaları elle GUID'li üretildi** — iskelet Unity açmadan commitlenebilsin, stabil kalsın.
 10. **Saf çekirdek disiplini** — `Common`/`Domain`/`Application` `noEngineReferences`; oklar hep içe (`Presentation → Application → Domain`).
+11. **Editor araçları ≠ ship edilen UI.** Editor window'lar (`Gaffer.Editor`) geliştiriciye hizmet eder; feature geldikçe evrilir, gereksizleşince silinir (ör. `MatchSmokeTest` sonra atılır, `SeasonHarness` kalıcı dev aracı). **Ship edilen oyuncu-UI'si ayrı bir Faz 7 işi** (`Presentation` + `Composition`, runtime, UI Toolkit) — editor window oyuna giremez.
+12. **Oyuncu isimleri = jenerik insan isimleri (kombinatoryal, gerçekçi).** Kulüp isimleri kurgusal (gerçek-kulüp değil) ama oyuncu isimleri sıradan ad+soyad → marka değil, belirli gerçek oyuncuyu kopyalamadıkça sorun yok. Milliyet-flavor'lı havuzlar sonraya.
+13. **Garanti wonderkid = havuza gem-context tohumlama.** İlk N oyuncu düşük-görünür/yüksek-gizli/genç context'ten üretilip karıştırılır; keşif **nadir** kalır (doğrulama testiyle sınırlı).
+14. **CM 01/02 dersleri dokümanlara işlendi** — keşif garantisi (NON-NEGOTIABLE), düşük-sürtünme transfer + gergin ekonomi, blackbox quirk'leri, "asla eklenmeyecekler" listesi, paylaşılabilir legend card (post-MVP).
 
 ---
 
 ## Kalan / sıradaki
 
-- **Faz 2 kapanışı:** `Infrastructure/Persistence` JSON impl — Newtonsoft paketi (`com.unity.nuget.newtonsoft-json`) + `ISerializer` impl + dosya I/O (async). *Unity tarafı, kullanıcı doğrular.*
-- **Bonus:** Editor harness'ı `Application/Season`'ı kullanacak şekilde sadeleştir (harness'taki lig mantığı duplication'ı bitsin).
-- **Demo:** "Season Player" editor window — bir sezonu hafta hafta izle (erken oynanabilir demo; gerçek UI Faz 7).
-- **Sonra Faz 3 (Yönetim):** `PlayerGenerator` + `ClubGenerator` + isim üreteci + taktik + transfer/scout + `BalanceSO`.
+- **Faz 3 (Yönetim, devam) — sıradaki:** `Squad` (kadro → kulüp) → **`BuildEffectiveStrength`** (kadrodan `TeamStrength` türet — oyuncuları sim'e bağlayan köprü) → sim'de **golcü seçimi** (event oyuncuya bağlanır → **isimli golcüler**) → taktik (dizilim + tempo/pres/risk) → transfer/scout (düşük-sürtünme + gergin ekonomi) → `ClubGenerator`/isim üreteci → `BalanceSO`.
+- **Faz 2 kapanışı:** `Infrastructure/Persistence` JSON impl — Newtonsoft paketi + `ISerializer` impl + dosya I/O (async). *Unity tarafı.*
+- **Bonus:** Editor harness'ı `Application/Season`'ı kullanacak şekilde sadeleştir (duplication).
 
 ---
 
@@ -66,6 +70,7 @@
 
 - **Testler:** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj`
 - **Harness:** Unity → menü **`Gaffer > Season Harness`** → Run
+- **Season Player (demo):** Unity → menü **`Gaffer > Season Player`** → Start Season → Advance Week
 - **Maç smoke:** Unity → `Assets/_Project/Scenes/MatchSmokeTest.unity` → **Play** (Console'a maç akar)
 
 ---

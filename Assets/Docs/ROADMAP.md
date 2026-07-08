@@ -6,9 +6,9 @@
 
 ---
 
-## 📍 Güncel durum (2026-07-07)
+## 📍 Güncel durum (2026-07-08)
 
-**Faz 0 ✅ · Faz 1 ✅ (★ Gate A geçildi) · Faz 2 🟡** — bir lig sezonu uçtan uca oynanıyor (headless), kaydet/yükle çekirdeği hazır, **40 dotnet testi yeşil**. Ayrıntı + alınan kararlar: **[`PROGRESS.md`](PROGRESS.md)**.
+**Faz 0 ✅ · Faz 1 ✅ (★ Gate A geçildi) · Faz 2 🟡 · Faz 3 🟡 (üreteç başladı)** — bir lig sezonu uçtan uca oynanıyor (headless + Season Player demo), kaydet/yükle + deterministik oyuncu üreteci (garanti wonderkid) hazır, **47 dotnet testi yeşil**. Ayrıntı + kararlar: **[`PROGRESS.md`](PROGRESS.md)**.
 
 ---
 
@@ -28,7 +28,7 @@
 | 0 | Kurulum + İnandırıcılık Çekirdeği | ✅ Tamam | **L** | ★ Gate A |
 | 1 | Tuning + Test Ağı | ✅ Tamam (Gate A geçildi) | M | ★ Gate A |
 | 2 | Sezon İskeleti | 🟡 Çekirdek bitti · JSON adapter kaldı | M | |
-| 3 | Yönetim Sistemleri | ⬜ | **L** | |
+| 3 | Yönetim Sistemleri | 🟡 Oyuncu üreteci + wonderkid ✅ · devam | **L** | |
 | 4 | Karakter + Dram | ⬜ | **L** | |
 | 5 | Hafıza + Anlatı | ⬜ | M | ★ Gate B |
 | 6 | Meta / Roguelike | ⬜ | M | |
