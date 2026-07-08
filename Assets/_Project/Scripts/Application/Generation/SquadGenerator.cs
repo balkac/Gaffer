@@ -5,11 +5,11 @@ using Gaffer.Domain.Players;
 namespace Gaffer.Application.Generation
 {
     /// <summary>
-    /// Builds a club's <see cref="Squad"/> with a believable line-up — a set number of keepers,
-    /// defenders, midfielders, and forwards, not four uniformly-random positions — so a roster reads
-    /// like a real team and the strength builder finds every line manned. Player ids are handed out
-    /// from <c>firstPlayerId</c> so each club's players stay unique across the league. Deterministic
-    /// through the injected rng. Formations and squad depth tune later; this is a standard senior squad.
+    /// Builds a club's <see cref="Squad"/> with a believable roster of specific roles — two keepers, a
+    /// right-back, four centre-backs, and so on — so a formation finds a real player for every slot and the
+    /// strength builder finds every line manned. The role spread still sums to the standard line totals
+    /// (2 GK / 6 DEF / 7 MID / 5 FWD). Player ids are handed out from <c>firstPlayerId</c> so each club's
+    /// players stay unique across the league. Deterministic through the injected rng.
     /// </summary>
     public sealed class SquadGenerator
     {
@@ -31,20 +31,28 @@ namespace Gaffer.Application.Generation
             var players = new Player[SquadSize];
             int slot = 0;
 
-            slot = AppendLine(players, slot, firstPlayerId, Position.Goalkeeper, Goalkeepers, context, rng);
-            slot = AppendLine(players, slot, firstPlayerId, Position.Defender, Defenders, context, rng);
-            slot = AppendLine(players, slot, firstPlayerId, Position.Midfielder, Midfielders, context, rng);
-            AppendLine(players, slot, firstPlayerId, Position.Forward, Forwards, context, rng);
+            slot = AppendRole(players, slot, firstPlayerId, PlayerRole.Goalkeeper, 2, context, rng);
+            slot = AppendRole(players, slot, firstPlayerId, PlayerRole.RightBack, 1, context, rng);
+            slot = AppendRole(players, slot, firstPlayerId, PlayerRole.CentreBack, 4, context, rng);
+            slot = AppendRole(players, slot, firstPlayerId, PlayerRole.LeftBack, 1, context, rng);
+            slot = AppendRole(players, slot, firstPlayerId, PlayerRole.DefensiveMidfield, 1, context, rng);
+            slot = AppendRole(players, slot, firstPlayerId, PlayerRole.CentralMidfield, 3, context, rng);
+            slot = AppendRole(players, slot, firstPlayerId, PlayerRole.AttackingMidfield, 1, context, rng);
+            slot = AppendRole(players, slot, firstPlayerId, PlayerRole.RightMidfield, 1, context, rng);
+            slot = AppendRole(players, slot, firstPlayerId, PlayerRole.LeftMidfield, 1, context, rng);
+            slot = AppendRole(players, slot, firstPlayerId, PlayerRole.RightWing, 1, context, rng);
+            slot = AppendRole(players, slot, firstPlayerId, PlayerRole.LeftWing, 1, context, rng);
+            AppendRole(players, slot, firstPlayerId, PlayerRole.Striker, 3, context, rng);
 
             return new Squad(players);
         }
 
-        private int AppendLine(Player[] players, int slot, int firstPlayerId, Position position, int count, GenerationContext context, IRandom rng)
+        private int AppendRole(Player[] players, int slot, int firstPlayerId, PlayerRole role, int count, GenerationContext context, IRandom rng)
         {
             for (int i = 0; i < count; i++)
             {
                 var id = new PlayerId(firstPlayerId + slot);
-                players[slot] = _playerGenerator.Generate(id, context, position, rng);
+                players[slot] = _playerGenerator.Generate(id, context, role, rng);
                 slot++;
             }
 

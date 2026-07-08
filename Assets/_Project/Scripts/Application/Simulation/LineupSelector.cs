@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
@@ -5,85 +6,102 @@ using Gaffer.Domain.Players;
 namespace Gaffer.Application.Simulation
 {
     /// <summary>
-    /// Picks the strongest starting eleven from a squad for a formation: the best keeper, then the best
-    /// defenders, midfielders, and forwards to fill each line by <see cref="PlayerRatings.ForPosition"/>.
-    /// If a line is short of bodies it is topped up from the best players left over, so the eleven is
-    /// always filled (up to the squad size). Deterministic — ties break on the lower player id — so it is
-    /// the natural default a manager then adjusts, and the auto-pick for AI clubs.
+    /// Picks the starting eleven for a formation by filling each role slot with the best available player:
+    /// first an exact-role match (a real right-back for the right-back slot), then the best of the same
+    /// broad line, then anyone left. Rating is <see cref="PlayerRatings.ForPosition"/>; ties break on the
+    /// lower player id, so the pick is deterministic — the natural default a manager adjusts, and the
+    /// auto-pick for AI clubs. Role-specific ratings (a full-back valued on pace, a centre-back on heading)
+    /// refine this later; for now the roster's real roles already make each formation field a distinct shape.
     /// </summary>
     public sealed class LineupSelector
     {
         public IReadOnlyList<Player> SelectBest(Squad squad, Formation formation)
         {
-            List<Player> keepers = SortedByRating(squad, Position.Goalkeeper);
-            List<Player> defenders = SortedByRating(squad, Position.Defender);
-            List<Player> midfielders = SortedByRating(squad, Position.Midfielder);
-            List<Player> forwards = SortedByRating(squad, Position.Forward);
+            var available = new List<Player>(squad.Players);
+            var chosen = new List<Player>(formation.Slots.Count);
 
-            var chosen = new List<Player>(formation.Total);
-            var used = new HashSet<int>();
-            Take(chosen, used, keepers, 1);
-            Take(chosen, used, defenders, formation.Defenders);
-            Take(chosen, used, midfielders, formation.Midfielders);
-            Take(chosen, used, forwards, formation.Forwards);
-
-            if (chosen.Count < formation.Total)
+            foreach (PlayerRole slot in formation.Slots)
             {
-                List<Player> everyone = SortedByRating(squad, null);
-                foreach (Player player in everyone)
+                Player pick = PickForSlot(available, slot);
+                if (pick != null)
                 {
-                    if (chosen.Count >= formation.Total)
-                    {
-                        break;
-                    }
-
-                    if (used.Add(player.Id.Value))
-                    {
-                        chosen.Add(player);
-                    }
+                    chosen.Add(pick);
+                    available.Remove(pick);
                 }
             }
 
             return chosen;
         }
 
-        private static void Take(List<Player> chosen, HashSet<int> used, List<Player> sorted, int count)
+        private static Player PickForSlot(List<Player> available, PlayerRole slot)
         {
-            int taken = 0;
-            foreach (Player player in sorted)
+            Player exact = BestWhere(available, slot, matchLine: false);
+            if (exact != null)
             {
-                if (taken >= count)
-                {
-                    break;
-                }
-
-                if (used.Add(player.Id.Value))
-                {
-                    chosen.Add(player);
-                    taken++;
-                }
-            }
-        }
-
-        private static List<Player> SortedByRating(Squad squad, Position? position)
-        {
-            var players = new List<Player>();
-            foreach (Player player in squad.Players)
-            {
-                if (position == null || player.Position == position.Value)
-                {
-                    players.Add(player);
-                }
+                return exact;
             }
 
-            players.Sort(CompareByRatingThenId);
-            return players;
+            Player sameLine = BestWhere(available, slot, matchLine: true);
+            if (sameLine != null)
+            {
+                return sameLine;
+            }
+
+            return BestAny(available);
         }
 
-        private static int CompareByRatingThenId(Player left, Player right)
+        private static Player BestWhere(List<Player> available, PlayerRole slot, bool matchLine)
         {
-            int byRating = PlayerRatings.ForPosition(right).CompareTo(PlayerRatings.ForPosition(left));
-            return byRating != 0 ? byRating : left.Id.Value.CompareTo(right.Id.Value);
+            Position line = PlayerRoles.Line(slot);
+            Player best = null;
+            double bestRating = double.MinValue;
+            int bestId = int.MaxValue;
+            foreach (Player player in available)
+            {
+                bool matches = matchLine ? player.Position == line : player.Role == slot;
+                if (!matches)
+                {
+                    continue;
+                }
+
+                if (IsBetter(player, bestRating, bestId))
+                {
+                    best = player;
+                    bestRating = PlayerRatings.ForPosition(player);
+                    bestId = player.Id.Value;
+                }
+            }
+
+            return best;
+        }
+
+        private static Player BestAny(List<Player> available)
+        {
+            Player best = null;
+            double bestRating = double.MinValue;
+            int bestId = int.MaxValue;
+            foreach (Player player in available)
+            {
+                if (IsBetter(player, bestRating, bestId))
+                {
+                    best = player;
+                    bestRating = PlayerRatings.ForPosition(player);
+                    bestId = player.Id.Value;
+                }
+            }
+
+            return best;
+        }
+
+        private static bool IsBetter(Player candidate, double bestRating, int bestId)
+        {
+            double rating = PlayerRatings.ForPosition(candidate);
+            if (rating > bestRating)
+            {
+                return true;
+            }
+
+            return Math.Abs(rating - bestRating) < 1e-9 && candidate.Id.Value < bestId;
         }
     }
 }

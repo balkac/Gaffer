@@ -521,7 +521,7 @@ namespace Gaffer.Editor.SeasonPlayer
                 SetRadius(toggle, 4);
                 row.Add(toggle);
 
-                var left = MakeLabel(player.Name + "  ·  " + player.Age, 11,
+                var left = MakeLabel(player.Name + "  ·  " + PlayerRoles.Abbrev(player.Role) + "  ·  " + player.Age, 11,
                     starting ? HarnessPalette.Chalk : HarnessPalette.Muted);
                 left.style.flexGrow = 1;
                 row.Add(left);

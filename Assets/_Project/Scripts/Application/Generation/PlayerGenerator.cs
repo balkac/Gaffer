@@ -16,7 +16,7 @@ namespace Gaffer.Application.Generation
             "England", "Scotland", "Wales", "Ireland", "France", "Spain", "Portugal", "Netherlands",
         };
 
-        private const int PositionCount = 4;
+        private const int RoleCount = 12;
 
         private readonly PlayerNameGenerator _names = new PlayerNameGenerator();
 
@@ -25,21 +25,21 @@ namespace Gaffer.Application.Generation
             string name = _names.GenerateName(rng);
             string nationality = Nationalities[rng.NextInt(Nationalities.Length)];
             int age = rng.NextInt(context.MinAge, context.MaxAge + 1);
-            var position = (Position)rng.NextInt(PositionCount);
-            return Build(id, context, name, nationality, age, position, rng);
+            var role = (PlayerRole)rng.NextInt(RoleCount);
+            return Build(id, context, name, nationality, age, role, rng);
         }
 
         /// <summary>
-        /// Generates a player for a fixed role — the squad builder needs a believable line-up (a set
-        /// number of keepers, defenders, and so on), not four uniformly-random positions. Draws the same
-        /// fields as the random overload minus the position roll, so it stays deterministic in its own right.
+        /// Generates a player for a fixed role — the squad builder needs a believable line-up (a keeper, a
+        /// right-back, two strikers, and so on), not uniformly-random roles. Draws the same fields as the
+        /// random overload minus the role roll, so it stays deterministic in its own right.
         /// </summary>
-        public Player Generate(PlayerId id, GenerationContext context, Position position, IRandom rng)
+        public Player Generate(PlayerId id, GenerationContext context, PlayerRole role, IRandom rng)
         {
             string name = _names.GenerateName(rng);
             string nationality = Nationalities[rng.NextInt(Nationalities.Length)];
             int age = rng.NextInt(context.MinAge, context.MaxAge + 1);
-            return Build(id, context, name, nationality, age, position, rng);
+            return Build(id, context, name, nationality, age, role, rng);
         }
 
         // Keepers are poor with the ball at their feet; outfielders barely keep goal. These weak/negligible
@@ -49,12 +49,12 @@ namespace Gaffer.Application.Generation
         private const int NegligibleMin = 1;
         private const int NegligibleMax = 12;
 
-        private Player Build(PlayerId id, GenerationContext context, string name, string nationality, int age, Position position, IRandom rng)
+        private Player Build(PlayerId id, GenerationContext context, string name, string nationality, int age, PlayerRole role, IRandom rng)
         {
-            Attributes attributes = GenerateAttributes(context, position, rng);
+            Attributes attributes = GenerateAttributes(context, PlayerRoles.Line(role), rng);
             byte hiddenPotential = (byte)rng.NextInt(context.MinPotential, context.MaxPotential + 1);
 
-            return new Player(id, name, nationality, position, age, attributes, hiddenPotential);
+            return new Player(id, name, nationality, role, age, attributes, hiddenPotential);
         }
 
         /// <summary>

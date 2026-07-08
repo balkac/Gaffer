@@ -43,38 +43,38 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void SelectBest_PicksTheHighestRatedPerLine()
+        public void SelectBest_FillsEachSlotWithItsExactRole()
         {
             Squad squad = GeneratedSquad();
-            IReadOnlyList<Player> eleven = new LineupSelector().SelectBest(squad, Formation.F442);
-            var chosen = new HashSet<int>();
+            IReadOnlyList<Player> eleven = new LineupSelector().SelectBest(squad, Formation.F433);
+
+            // The generated squad has at least one of every role a 4-3-3 asks for, so each slot is an exact
+            // match: the winger slots field wingers, the striker slot a striker — roles matter in selection.
+            Dictionary<PlayerRole, int> wanted = RoleCounts(Formation.F433.Slots);
+            var got = new List<PlayerRole>(eleven.Count);
             foreach (Player player in eleven)
             {
-                chosen.Add(player.Id.Value);
+                got.Add(player.Role);
             }
 
-            // No benched forward may out-rate a selected forward — the best of each line must start.
-            double worstStartingForward = double.MaxValue;
-            double bestBenchedForward = double.MinValue;
-            foreach (Player player in squad.Players)
+            Dictionary<PlayerRole, int> filled = RoleCounts(got);
+            foreach (KeyValuePair<PlayerRole, int> pair in wanted)
             {
-                if (player.Position != Position.Forward)
-                {
-                    continue;
-                }
+                filled.TryGetValue(pair.Key, out int actual);
+                Assert.That(actual, Is.EqualTo(pair.Value), $"Formation wanted {pair.Value}× {pair.Key}, eleven has {actual}.");
+            }
+        }
 
-                double rating = PlayerRatings.ForPosition(player);
-                if (chosen.Contains(player.Id.Value))
-                {
-                    worstStartingForward = System.Math.Min(worstStartingForward, rating);
-                }
-                else
-                {
-                    bestBenchedForward = System.Math.Max(bestBenchedForward, rating);
-                }
+        private static Dictionary<PlayerRole, int> RoleCounts(IReadOnlyList<PlayerRole> roles)
+        {
+            var counts = new Dictionary<PlayerRole, int>();
+            foreach (PlayerRole role in roles)
+            {
+                counts.TryGetValue(role, out int n);
+                counts[role] = n + 1;
             }
 
-            Assert.That(worstStartingForward, Is.GreaterThanOrEqualTo(bestBenchedForward));
+            return counts;
         }
 
         [Test]

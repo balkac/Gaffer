@@ -8,15 +8,22 @@ namespace Gaffer.Domain.Players
     /// </summary>
     public sealed class Player
     {
-        public Player(PlayerId id, string name, string nationality, Position position, int age, Attributes attributes, byte hiddenPotential)
+        public Player(PlayerId id, string name, string nationality, PlayerRole role, int age, Attributes attributes, byte hiddenPotential)
         {
             Id = id;
             Name = name;
             Nationality = nationality;
-            Position = position;
+            Role = role;
+            Position = PlayerRoles.Line(role);
             Age = age;
             Attributes = attributes;
             HiddenPotential = hiddenPotential;
+        }
+
+        /// <summary>Builds a player from the broad line alone, taking a representative role for it.</summary>
+        public Player(PlayerId id, string name, string nationality, Position position, int age, Attributes attributes, byte hiddenPotential)
+            : this(id, name, nationality, PlayerRoles.Representative(position), age, attributes, hiddenPotential)
+        {
         }
 
         public PlayerId Id { get; }
@@ -24,6 +31,9 @@ namespace Gaffer.Domain.Players
         public string Name { get; }
 
         public string Nationality { get; }
+
+        /// <summary>The specific role (e.g. right-back); <see cref="Position"/> is the broad line it sits on.</summary>
+        public PlayerRole Role { get; }
 
         public Position Position { get; }
 

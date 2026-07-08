@@ -8,7 +8,6 @@ using Gaffer.Editor.Harness;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
-using Position = Gaffer.Domain.Players.Position;
 
 namespace Gaffer.Editor.TransferMarket
 {
@@ -281,7 +280,7 @@ namespace Gaffer.Editor.TransferMarket
             line.style.flexDirection = FlexDirection.Row;
             line.style.alignItems = Align.Center;
 
-            var name = Text(player.Name + "  ·  " + Abbrev(player.Position) + "  ·  " + player.Age, 12, HarnessPalette.Chalk, bold: true);
+            var name = Text(player.Name + "  ·  " + PlayerRoles.Abbrev(player.Role) + "  ·  " + player.Age, 12, HarnessPalette.Chalk, bold: true);
             name.style.flexGrow = 1;
             line.Add(name);
             var worth = Text(FormatValue(PlayerValuation.Value(player)) + " · " + FormatValue(PlayerWage.Weekly(player)) + "/wk   ", 11, HarnessPalette.Muted);
@@ -326,21 +325,6 @@ namespace Gaffer.Editor.TransferMarket
             }
 
             return "€" + value;
-        }
-
-        private static string Abbrev(Position position)
-        {
-            switch (position)
-            {
-                case Position.Goalkeeper:
-                    return "GK";
-                case Position.Defender:
-                    return "DEF";
-                case Position.Midfielder:
-                    return "MID";
-                default:
-                    return "FWD";
-            }
         }
 
         private static VisualElement Row()
