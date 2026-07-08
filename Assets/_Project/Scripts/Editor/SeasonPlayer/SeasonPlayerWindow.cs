@@ -1,10 +1,12 @@
 using System.Collections.Generic;
 using System.Text;
+using Gaffer.Application.Generation;
 using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
+using Gaffer.Domain.Players;
 using Gaffer.Editor.Harness;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -138,14 +140,35 @@ namespace Gaffer.Editor.SeasonPlayer
 
         private League BuildLeague(int count)
         {
+            // Each club now fields a generated squad; its match strength is derived from the players
+            // (BuildEffectiveStrength), so the table's spread emerges from the rosters, not a scalar.
+            // A separate rng stream keeps squad generation from disturbing match determinism.
+            var squadGenerator = new SquadGenerator(new PlayerGenerator());
+            var strengthBuilder = new EffectiveStrengthBuilder();
+            var genRng = new SplitMix64RandomNumberGenerator((ulong)_seed ^ 0x5EEDD5EEDUL);
+
             var clubs = new List<Club>(count);
             for (int i = 0; i < count; i++)
             {
-                double quality = 70.0 - i * (24.0 / (count - 1));
-                clubs.Add(new Club(new ClubId(i), ClubNames[i], new TeamStrength(quality, quality, quality)));
+                GenerationContext context = ContextForRank(i, count);
+                Squad squad = squadGenerator.Generate(i * SquadGenerator.SquadSize, context, genRng);
+                TeamStrength strength = strengthBuilder.Build(squad);
+                clubs.Add(new Club(new ClubId(i), ClubNames[i], squad, strength));
             }
 
             return new League("Gaffer League", clubs);
+        }
+
+        private static GenerationContext ContextForRank(int rank, int count)
+        {
+            // Top clubs draw from a higher ability band, bottom clubs a lower one — a believable spread.
+            double t = count <= 1 ? 0.0 : (double)rank / (count - 1);
+            int centre = Mathf.RoundToInt(72.0f - (float)t * (72.0f - 46.0f));
+            return new GenerationContext
+            {
+                MinAbility = (byte)Mathf.Clamp(centre - 10, 1, 99),
+                MaxAbility = (byte)Mathf.Clamp(centre + 10, 1, 99),
+            };
         }
 
         private void AdvanceOneWeek()
@@ -241,11 +264,92 @@ namespace Gaffer.Editor.SeasonPlayer
                 _body.Add(BuildVerdictBanner());
             }
 
+            _body.Add(BuildSquadCard());
             _body.Add(BuildTableCard());
 
             if (_lastWeek != null)
             {
                 _body.Add(BuildLastWeekCard());
+            }
+        }
+
+        private VisualElement BuildSquadCard()
+        {
+            Club club = _league.Clubs[_managedClub.Value];
+            VisualElement card = MakeCard();
+            card.Add(MakeLabel("YOUR SQUAD · " + club.Name.ToUpperInvariant(), 11, HarnessPalette.Muted, bold: true));
+
+            TeamStrength strength = club.Strength;
+            var axes = new VisualElement();
+            axes.style.flexDirection = FlexDirection.Row;
+            axes.style.marginTop = 6;
+            axes.style.marginBottom = 4;
+            axes.Add(MakeAxisPill("ATK", strength.Attack));
+            axes.Add(MakeAxisPill("MID", strength.Midfield));
+            axes.Add(MakeAxisPill("DEF", strength.Defence));
+            card.Add(axes);
+
+            if (club.Squad != null)
+            {
+                AppendSquadLine(card, "GOALKEEPERS", club.Squad, Position.Goalkeeper);
+                AppendSquadLine(card, "DEFENDERS", club.Squad, Position.Defender);
+                AppendSquadLine(card, "MIDFIELDERS", club.Squad, Position.Midfielder);
+                AppendSquadLine(card, "FORWARDS", club.Squad, Position.Forward);
+            }
+
+            return card;
+        }
+
+        private VisualElement MakeAxisPill(string label, double value)
+        {
+            var pill = new VisualElement();
+            pill.style.flexDirection = FlexDirection.Row;
+            pill.style.marginRight = 14;
+            pill.Add(MakeLabel(label + " ", 12, HarnessPalette.Muted, bold: true));
+            pill.Add(MakeLabel(Mathf.RoundToInt((float)value).ToString(), 14, HarnessPalette.Accent, bold: true));
+            return pill;
+        }
+
+        private void AppendSquadLine(VisualElement card, string heading, Squad squad, Position position)
+        {
+            Label lineHead = MakeLabel(heading, 10, HarnessPalette.Muted, bold: true);
+            lineHead.style.marginTop = 8;
+            lineHead.style.letterSpacing = 1f;
+            card.Add(lineHead);
+
+            foreach (Player player in squad.Players)
+            {
+                if (player.Position != position)
+                {
+                    continue;
+                }
+
+                var row = new VisualElement();
+                row.style.flexDirection = FlexDirection.Row;
+                row.style.justifyContent = Justify.SpaceBetween;
+                row.style.paddingTop = 2;
+                row.style.paddingBottom = 2;
+
+                var left = MakeLabel(player.Name + "  ·  " + player.Age, 11, HarnessPalette.Chalk);
+                left.style.flexGrow = 1;
+                row.Add(left);
+                row.Add(MakeLabel(KeyStats(player), 10, HarnessPalette.Muted));
+
+                card.Add(row);
+            }
+        }
+
+        private static string KeyStats(Player player)
+        {
+            Attributes a = player.Attributes;
+            switch (player.Position)
+            {
+                case Position.Forward:
+                    return "FIN " + a.Finishing + "  PAC " + a.Pace + "  POS " + a.Positioning;
+                case Position.Midfielder:
+                    return "PAS " + a.Passing + "  POS " + a.Positioning + "  STA " + a.Stamina;
+                default:
+                    return "TKL " + a.Tackling + "  POS " + a.Positioning + "  PAC " + a.Pace;
             }
         }
 
