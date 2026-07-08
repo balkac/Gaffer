@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Transfers;
 using Gaffer.Common;
+using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
 using Gaffer.Editor.Harness;
 using UnityEditor;
@@ -12,30 +13,36 @@ using Position = Gaffer.Domain.Players.Position;
 namespace Gaffer.Editor.TransferMarket
 {
     /// <summary>
-    /// An early scouting bench: generate a run's player pool (guaranteed wonderkid included) and browse it
-    /// through the scout mask. Drag the accuracy slider and watch the attribute and potential bands narrow —
-    /// the discovery fantasy in miniature: at low accuracy a gem hides among ordinary prospects. Not shipped;
-    /// a preview of how the real transfer UI (Faz 7) will present scouting. Reveal is a dev aid only.
+    /// An early transfer bench: you have a squad, a tight budget, and a market to scout. Browse the pool
+    /// through the scout mask (drag accuracy to sharpen the bands), sign a prospect on a hunch, and sell
+    /// from your squad — the low-friction, tense economy in miniature (GDD §4.4). Buying pays a premium and
+    /// selling takes a discount, so churning bleeds cash. Not shipped; a preview of the Faz 7 transfer UI.
+    /// Reveal is a dev aid. Player growth (the "grow" of discover-grow-sell) lands in a later step.
     /// </summary>
     public sealed class TransferMarketWindow : EditorWindow
     {
-        private int _poolSize = 60;
+        private int _poolSize = 40;
         private int _gems = 3;
         private long _seed = 20260708L;
+        private long _startingBudget = 6_000_000L;
         private float _accuracy = 0.3f;
         private bool _reveal;
 
         private IReadOnlyList<Player> _pool;
+        private List<Player> _market;
+        private Squad _squad;
+        private long _budget;
+        private string _status;
         private readonly Scout _scout = new Scout();
 
-        private VisualElement _list;
+        private VisualElement _body;
 
         [MenuItem("Gaffer/Transfer Market")]
         public static void ShowWindow()
         {
             TransferMarketWindow window = GetWindow<TransferMarketWindow>();
             window.titleContent = new GUIContent("Transfer Market");
-            window.minSize = new Vector2(560, 680);
+            window.minSize = new Vector2(580, 720);
         }
 
         public void CreateGUI()
@@ -51,22 +58,22 @@ namespace Gaffer.Editor.TransferMarket
             Label title = Text("TRANSFER MARKET", 22, HarnessPalette.Chalk, bold: true);
             title.style.letterSpacing = 2f;
             page.Add(title);
-            page.Add(Text("Scout the pool — drag accuracy to sharpen the bands", 11, HarnessPalette.Muted));
+            page.Add(Text("Scout the pool, sign on a hunch, sell to balance the books", 11, HarnessPalette.Muted));
 
             page.Add(BuildSetup());
 
-            _list = new VisualElement();
-            _list.style.marginTop = 6;
-            page.Add(_list);
-            _list.Add(Card());
-            ((VisualElement)_list[0]).Add(Text("Set it up, then Generate Pool.", 12, HarnessPalette.Muted));
+            _body = new VisualElement();
+            _body.style.marginTop = 6;
+            page.Add(_body);
+            _body.Add(Card());
+            ((VisualElement)_body[0]).Add(Text("Set it up, then Generate Market.", 12, HarnessPalette.Muted));
         }
 
         private VisualElement BuildSetup()
         {
             VisualElement card = Card();
 
-            var size = new IntegerField("Pool size") { value = _poolSize };
+            var size = new IntegerField("Market size") { value = _poolSize };
             size.RegisterValueChangedCallback(e => _poolSize = e.newValue);
             card.Add(size);
 
@@ -78,11 +85,15 @@ namespace Gaffer.Editor.TransferMarket
             seed.RegisterValueChangedCallback(e => _seed = e.newValue);
             card.Add(seed);
 
+            var budget = new LongField("Starting budget (€)") { value = _startingBudget };
+            budget.RegisterValueChangedCallback(e => _startingBudget = e.newValue);
+            card.Add(budget);
+
             var accuracy = new Slider("Scout accuracy", 0f, 1f) { value = _accuracy };
             accuracy.RegisterValueChangedCallback(e =>
             {
                 _accuracy = e.newValue;
-                RenderList();
+                Render();
             });
             card.Add(accuracy);
 
@@ -90,11 +101,11 @@ namespace Gaffer.Editor.TransferMarket
             reveal.RegisterValueChangedCallback(e =>
             {
                 _reveal = e.newValue;
-                RenderList();
+                Render();
             });
             card.Add(reveal);
 
-            var generate = new Button(GeneratePool) { text = "Generate Pool" };
+            var generate = new Button(Generate) { text = "Generate Market" };
             generate.style.backgroundColor = HarnessPalette.Accent;
             generate.style.color = HarnessPalette.Pitch;
             generate.style.unityFontStyleAndWeight = FontStyle.Bold;
@@ -106,25 +117,66 @@ namespace Gaffer.Editor.TransferMarket
             return card;
         }
 
-        private void GeneratePool()
+        private void Generate()
         {
-            var generator = new PlayerPoolGenerator(new PlayerGenerator());
-            GenerationContext ordinary = new GenerationContext();
+            var seedRng = new SplitMix64RandomNumberGenerator((ulong)_seed);
+            _squad = new SquadGenerator(new PlayerGenerator()).Generate(0, new GenerationContext(), seedRng);
+
+            var poolGen = new PlayerPoolGenerator(new PlayerGenerator());
             GenerationContext gem = new GenerationContext
             {
                 MinAge = 16, MaxAge = 19, MinAbility = 35, MaxAbility = 52, MinPotential = 84, MaxPotential = 95,
             };
+            _pool = poolGen.GeneratePool(
+                Mathf.Max(1, _poolSize), Mathf.Max(0, _gems), new GenerationContext(), gem,
+                new SplitMix64RandomNumberGenerator((ulong)_seed ^ 0xA5A5A5UL));
+            _market = new List<Player>(_pool);
 
-            _pool = generator.GeneratePool(
-                Mathf.Max(1, _poolSize), Mathf.Max(0, _gems), ordinary, gem,
-                new SplitMix64RandomNumberGenerator((ulong)_seed));
-            RenderList();
+            _budget = _startingBudget;
+            _status = null;
+            Render();
         }
 
-        private void RenderList()
+        private void Sign(Player player)
         {
-            _list.Clear();
-            if (_pool == null)
+            Result<TransferResult> result = TransferService.Sign(_budget, _squad, player);
+            if (result.IsFailure)
+            {
+                _status = result.Error;
+            }
+            else
+            {
+                _budget = result.Value.Budget;
+                _squad = result.Value.Squad;
+                _market.Remove(player);
+                _status = "Signed " + player.Name + " for " + FormatValue(result.Value.Fee) + ".";
+            }
+
+            Render();
+        }
+
+        private void Sell(Player player)
+        {
+            Result<TransferResult> result = TransferService.Sell(_budget, _squad, player);
+            if (result.IsFailure)
+            {
+                _status = result.Error;
+            }
+            else
+            {
+                _budget = result.Value.Budget;
+                _squad = result.Value.Squad;
+                _market.Add(player);
+                _status = "Sold " + player.Name + " for " + FormatValue(result.Value.Fee) + ".";
+            }
+
+            Render();
+        }
+
+        private void Render()
+        {
+            _body.Clear();
+            if (_squad == null)
             {
                 return;
             }
@@ -133,53 +185,93 @@ namespace Gaffer.Editor.TransferMarket
             var top = new VisualElement();
             top.style.flexDirection = FlexDirection.Row;
             top.style.justifyContent = Justify.SpaceBetween;
-            top.Add(Text(_pool.Count + " PROSPECTS", 13, HarnessPalette.Accent, bold: true));
-            top.Add(Text("Accuracy " + Mathf.RoundToInt(_accuracy * 100f) + "%", 12, HarnessPalette.Muted));
+            top.Add(Text("BUDGET  " + FormatValue(_budget), 15, HarnessPalette.Accent, bold: true));
+            top.Add(Text(_squad.Count + " in squad · accuracy " + Mathf.RoundToInt(_accuracy * 100f) + "%", 12, HarnessPalette.Muted));
             header.Add(top);
-            header.Add(Text(
-                _reveal ? "Revealing true potential (dev)." : "Potential is masked — trust the band, take the punt.",
-                11, HarnessPalette.Muted));
-            _list.Add(header);
-
-            VisualElement card = Card();
-            for (int i = 0; i < _pool.Count; i++)
+            if (!string.IsNullOrEmpty(_status))
             {
-                card.Add(BuildRow(_pool[i]));
+                header.Add(Text(_status, 11, HarnessPalette.Chalk));
             }
 
-            _list.Add(card);
+            _body.Add(header);
+            _body.Add(BuildSquadCard());
+            _body.Add(BuildMarketCard());
         }
 
-        private VisualElement BuildRow(Player player)
+        private VisualElement BuildSquadCard()
         {
-            ScoutReport report = _scout.Observe(player, _accuracy);
+            VisualElement card = Card();
+            card.Add(Text("YOUR SQUAD", 11, HarnessPalette.Muted, bold: true));
 
-            var row = new VisualElement();
-            row.style.paddingTop = 6;
-            row.style.paddingBottom = 6;
-            row.style.borderBottomWidth = 1;
-            row.style.borderBottomColor = HarnessPalette.PitchLine;
-
-            var line = new VisualElement();
-            line.style.flexDirection = FlexDirection.Row;
-            line.style.justifyContent = Justify.SpaceBetween;
-
-            var left = Text(player.Name + "  ·  " + Abbrev(player.Position) + "  ·  " + player.Age, 12, HarnessPalette.Chalk, bold: true);
-            left.style.flexGrow = 1;
-            line.Add(left);
-            line.Add(Text(FormatValue(PlayerValuation.Value(player)), 12, HarnessPalette.Chalk, bold: true));
-            row.Add(line);
-
-            string potential = "Potential " + report.PotentialLow + "–" + report.PotentialHigh;
-            if (_reveal)
+            foreach (Player player in _squad.Players)
             {
-                potential += "   (true " + player.HiddenPotential + ")";
+                var row = Row();
+                var line = LineWithName(player, PlayerValuation.Value(player));
+                var sell = new Button(() => Sell(player)) { text = "Sell " + FormatValue(TransferService.SellFee(player)) };
+                StyleActionButton(sell, HarnessPalette.Loss);
+                line.Add(sell);
+                row.Add(line);
+                card.Add(row);
             }
 
-            row.Add(Text(potential, 11, HarnessPalette.Accent));
-            row.Add(Text(FormatAttributes(report), 10, HarnessPalette.Muted));
+            return card;
+        }
 
-            return row;
+        private VisualElement BuildMarketCard()
+        {
+            VisualElement card = Card();
+            card.Add(Text("MARKET — " + _market.Count + " PROSPECTS", 11, HarnessPalette.Muted, bold: true));
+            card.Add(Text(
+                _reveal ? "Revealing true potential (dev)." : "Potential is masked — trust the band, take the punt.",
+                10, HarnessPalette.Muted));
+
+            foreach (Player player in _market)
+            {
+                ScoutReport report = _scout.Observe(player, _accuracy);
+
+                var row = Row();
+                var line = LineWithName(player, PlayerValuation.Value(player));
+                var sign = new Button(() => Sign(player)) { text = "Sign " + FormatValue(TransferService.SignFee(player)) };
+                StyleActionButton(sign, HarnessPalette.Accent);
+                line.Add(sign);
+                row.Add(line);
+
+                string potential = "Potential " + report.PotentialLow + "–" + report.PotentialHigh;
+                if (_reveal)
+                {
+                    potential += "   (true " + player.HiddenPotential + ")";
+                }
+
+                row.Add(Text(potential, 11, HarnessPalette.Accent));
+                row.Add(Text(FormatAttributes(report), 10, HarnessPalette.Muted));
+                card.Add(row);
+            }
+
+            return card;
+        }
+
+        private static VisualElement LineWithName(Player player, long value)
+        {
+            var line = new VisualElement();
+            line.style.flexDirection = FlexDirection.Row;
+            line.style.alignItems = Align.Center;
+
+            var name = Text(player.Name + "  ·  " + Abbrev(player.Position) + "  ·  " + player.Age, 12, HarnessPalette.Chalk, bold: true);
+            name.style.flexGrow = 1;
+            line.Add(name);
+            var worth = Text(FormatValue(value) + "   ", 11, HarnessPalette.Muted);
+            line.Add(worth);
+            return line;
+        }
+
+        private static void StyleActionButton(Button button, Color color)
+        {
+            button.style.backgroundColor = color;
+            button.style.color = HarnessPalette.Pitch;
+            button.style.unityFontStyleAndWeight = FontStyle.Bold;
+            button.style.height = 20;
+            button.style.fontSize = 10;
+            SetRadius(button, 4);
         }
 
         private static string FormatAttributes(ScoutReport report)
@@ -224,6 +316,16 @@ namespace Gaffer.Editor.TransferMarket
                 default:
                     return "FWD";
             }
+        }
+
+        private static VisualElement Row()
+        {
+            var row = new VisualElement();
+            row.style.paddingTop = 6;
+            row.style.paddingBottom = 6;
+            row.style.borderBottomWidth = 1;
+            row.style.borderBottomColor = HarnessPalette.PitchLine;
+            return row;
         }
 
         private static Label Text(string text, int size, Color color, bool bold = false)
