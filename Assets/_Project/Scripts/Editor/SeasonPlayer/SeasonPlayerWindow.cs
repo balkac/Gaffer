@@ -9,9 +9,9 @@ using Gaffer.Domain.Leagues;
 using Gaffer.Domain.Players;
 using Gaffer.Editor.Harness;
 using UnityEditor;
-using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
+using Position = Gaffer.Domain.Players.Position;
 
 namespace Gaffer.Editor.SeasonPlayer
 {
