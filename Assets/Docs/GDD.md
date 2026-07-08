@@ -76,6 +76,8 @@ Görsel motor yok. Maç, attribute'lardan olasılık üreten, dakika dakika çö
 
 **Determinizm:** Simülasyon seed'li RNG ile deterministik. Aynı seed → aynı sonuç. Bu hem hata ayıklamayı, hem testi, hem "aynı maçı tekrar izleme" özelliğini mümkün kılar.
 
+**Blackbox quirk'leri — sürpriz bir özelliktir, bug değil (CM 01/02 dersi).** Simülasyon *tam öngörülebilir olmamalı*: ara sıra beklenmedik bir yükseliş (alt-lig bir gencin gerçek yıldızları geçmesi) ya da bir favorinin çöküşü sistemik olarak mümkün olmalı. CM 01/02'nin efsane wonderkid'i Tsigalko tam da bu quirk'ten doğdu; keşif fantezisinin yarısı bu öngörülemezliktir. Yukarıdaki "inandırıcı ama sürpriz gerçek hisseder" hedefi bunu kapsar — nadir overperformer'ları törpüleme.
+
 Oyunun dengesi burada yaşar; en çok emek isteyen yer burasıdır.
 
 ### 4.2 Oyuncu Modeli — attribute değil, karakter
@@ -115,6 +117,9 @@ Bir oyuncu dört katmandan oluşur: **rakamlar + kişilik + ilişkiler + seninle
 - Kısıtlı bütçe; her transfer bir bahis. Serbest oyuncu havuzu run başına seed'li üretilir.
 - **Scout belirsizliği** temel mekanik: oyuncunun gerçek potansiyeli maskeli; scout kalitesi (meta-perk) maskeyi inceltir. "Bilgi satın alma" bir para birimine dönüşür.
 - Rakip menajer AI'ı da transfer yapar. MVP'de basit kural tabanlı, sonra derinleştirilir.
+- **Düşük sürtünme (CM 01/02 dersi).** Transfer akıcı olmalı: basit teklif → kabul/karşı-teklif, hızlı sonuçlanır. **Ajan bürokrasisi, klause labirenti, basın sirki yok** (bkz. §9 "asla eklenmeyecekler"). Düzenli oynayıp performans gösteren bir oyuncuya teklifler doğal gelir — sahne süresi + form, satılabilirliği besler.
+- **"Keşfet-büyüt-sat" flip'i çekirdek bir ödüldür.** Bedava/ucuz bulup büyüttüğün cevheri büyük paraya satmak, oyunun Ali Yılmaz payoff'udur (bkz. 4.9 legend card). Bu *an* tatmin edici ve lucrative olmalı.
+- **Ama roguelike ekonomisi gergin kalır (kritik denge).** CM 01/02'de AI'nın yanlış-değerlemesi transferi bir para-basma makinesine çeviriyordu; roguelike'ta bu run'ın riskini öldürür. GAFFER'da satmak bir *bedel* taşır: oyuncuyu kaybedersin (kadro + duygusal), board hedefi baskısı seni her cevheri satamaz tutar. Yani flip lucrative bir *an*'dır, spam'lenebilir bir döngü değil — para basma değil, tuzlu bir karar.
 
 ### 4.5 Antrenman ve Gelişim
 
@@ -153,6 +158,7 @@ Oyun hikayeyi pasif bırakmaz; **aktif olarak inşa edip yüzeye çıkarır.**
 - **Perk ağacı:** Kalıcı, run'lar arası taşınan pasif avantajlar (scout, pazarlık, gençlik, moral yönetimi).
 - **Arketipler:** Zamanla açılan menajer oyun-tarzı kimlikleri (ör. "gençlik akademisi ustası", "pres canavarı"). Her run'a farklı başlangıç modifier'ı ve farklı optimal strateji verir.
 - **Efsaneler Salonu (Legends / Hall of Fame):** Her run kendi Ali Yılmaz'ını doğurur; keşfedip büyüttüğün oyuncular kalıcı kariyer mirasına yazılır. Dram katmanı ile roguelike katmanı birbirini besler — "3 run önce bedava bulduğum çocuk" senin efsanen olur. Bu, oyunun uzun-vadeli duygusal çıpasıdır.
+- **Paylaşılabilir "legend card" *(sonraya — MVP dışı)*:** Oyuncular prosedürel olduğu için CM 01/02'deki "herkesin bildiği Tsigalko" gibi *paylaşılan* bir kültür kendiliğinden oluşmaz; senin efsanen **kişisel**. Bu boşluğu kapatmak için her efsane dışa aktarılabilir/paylaşılabilir bir karta dönüşür ("bedava buldun → 40M'a sattın", broadcast stilinde). Kişisel efsaneyi paylaşılabilir kılar — CM'in Tsigalko t-shirt'ünün modern karşılığı (görsel: ART_STYLE §7). **MVP'de yalnız Hall of Fame *çekirdeği* var** (efsanelerinin kalıcı kaydı/listesi); tasarlanmış paylaşılabilir kart post-MVP paylaşım/retention katmanına aittir (bkz. §9 ve ROADMAP "MVP sonrası ufuk").
 
 ### 4.10 Menajer Karakteri — *sen the gaffer'sın*
 
@@ -262,6 +268,9 @@ Unity UI Toolkit önerilir (veri-bağlama ve tablo ağırlıklı UI için uygun)
 - Community data / gerçek isim desteği
 - Monetizasyon
 - Rakip AI'ın gelişmiş taktik/transfer zekası (MVP'de kural tabanlı yeter)
+
+**Bilinçli olarak ASLA eklenmeyecekler (CM 01/02 dersi — "sonraya" değil, hiç):**
+Fanların modern FM'den kaçıp CM 01/02'ye sarılma sebebi onun **yalınlığı** ve hızıdır (bir sezon bir öğleden sonrada biter). GAFFER şu şişkinliği asla eklemez: basın toplantıları, board/yönetim toplantıları maratonu, ajan pazarlığı bürokrasisi, sosyal medya simülasyonu, oyuncu-ego İK yükü. Dram sistemi bunun **panzehiridir**: dram bir İK yükü değil, hızlı-tatmin eden bir *karar anıdır* — sürtünme değil, tuz. Sadelik bir eksik değil, bilinçli ve korunacak bir özelliktir.
 
 ---
 

@@ -72,7 +72,7 @@ Hepsi SVG; token paletinden beslenir. "Her kulüp elle çizilsin" tuzağını ç
 
 ## 7. Asset envanteri
 
-UI kit (bileşen + state'ler, 9-slice), ikon seti, arma sistemi, oyuncu token/avatar, tipografi ölçeği, maç-anlatı ekranı görsel dili, (sonraya) minimal 2D "key moment" saha görseli.
+UI kit (bileşen + state'ler, 9-slice), ikon seti, arma sistemi, oyuncu token/avatar, tipografi ölçeği, maç-anlatı ekranı görsel dili, **paylaşılabilir "legend card"** (Efsaneler Salonu için dışa aktarılabilir kart — oyuncunun yayını + "found free → sold 40M" beat'i, broadcast stilinde; GDD §4.9), (sonraya) minimal 2D "key moment" saha görseli.
 
 ---
 

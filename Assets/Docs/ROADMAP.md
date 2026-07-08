@@ -88,11 +88,12 @@ Karar döngüsünü tamamla.
 
 **Teslimatlar:**
 - `PlayerGenerator` (deterministik): **isim + milliyet** + attribute + gizli potansiyel dağılımı + trait/kişilik ağırlıklı atama.
+- **Keşfedilebilir wonderkid garantisi** (CM 01/02 dersi): her run'da alt liglerde, ucuz, düşük-görünür ama yüksek-gizli-potansiyelli, keşfedilmeyi bekleyen az sayıda cevher garantili üretilir (TDD §5).
 - Taktik (dizilim + tempo/pres/risk eksenleri), kadro seçimi.
-- Transfer + **scout belirsizliği** (potansiyel maskeli), basit antrenman.
+- Transfer + **scout belirsizliği** (potansiyel maskeli), basit antrenman. **Düşük-sürtünme model** (basit teklif/karşı-teklif, ajan bürokrasisi yok; "keşfet-büyüt-sat" flip'i çekirdek ödül) ama **run ekonomisi gergin** (satmak bedel taşır — para basma makinesi değil; GDD §4.4).
 - Rakip menajer AI'ı: kural tabanlı transfer/taktik.
 
-**Çıkış kriteri:** Kadro, taktik, transfer, antrenman kararları anlamlı ve sonuçlu; oyuncular üretiliyor (elle karakter yok).
+**Çıkış kriteri:** Kadro, taktik, transfer, antrenman kararları anlamlı ve sonuçlu; oyuncular üretiliyor (elle karakter yok); **keşif fantezisi gerçek** — ara sıra düşük-görünür genç patlıyor, garanti cevher cevhere dönüşüyor (TDD §11 keşif doğrulaması).
 
 ---
 
@@ -180,7 +181,7 @@ Dar ama kapalı.
 
 ## MVP sonrası ufuk (bilinçli ertelenenler)
 
-2D "key moments" görselleştirme · idle/idle-hybrid katman · derin ilişki ağı · geniş dram içeriği (yüzlerce olay, set-piece zincirleri) · derin arketip ağacı · çok ligli dünya · community data / gerçek isim · **monetizasyon** (kozmetik, ödüllü reklam, premium unlock) · gelişmiş rakip AI · Türkçe ünlü-uyumu ek-motoru · daha zengin/RPG-vari menajer (görünüş, backstory).
+2D "key moments" görselleştirme · **paylaşılabilir "legend card"** (Efsaneler Salonu kartı — MVP'de yalnız çekirdek liste var) · idle/idle-hybrid katman · derin ilişki ağı · geniş dram içeriği (yüzlerce olay, set-piece zincirleri) · derin arketip ağacı · çok ligli dünya · community data / gerçek isim · **monetizasyon** (kozmetik, ödüllü reklam, premium unlock) · gelişmiş rakip AI · Türkçe ünlü-uyumu ek-motoru · daha zengin/RPG-vari menajer (görünüş, backstory).
 
 ---
 
