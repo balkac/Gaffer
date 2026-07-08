@@ -5,31 +5,35 @@ using Gaffer.Domain.Players;
 namespace Gaffer.Application.Simulation
 {
     /// <summary>
-    /// Derives a squad's match <see cref="TeamStrength"/> from its players — the bridge that connects
-    /// generated players to the simulation (BuildEffectiveStrength, TDD §6.1). Each axis is the average
-    /// of the relevant role rating over the players who man that line: attack from the forwards, midfield
-    /// from the midfielders, defence from the defenders and goalkeeper. An empty line falls back to the
-    /// squad-wide average of that rating, so the result is always plausible and never divides by zero.
-    /// Tactics, form, and traits shift these axes in later steps; the weights tune into a BalanceSO then.
+    /// Derives a match <see cref="TeamStrength"/> from the players who take the field — the bridge that
+    /// connects the starting eleven to the simulation (BuildEffectiveStrength, TDD §6.1). Each axis is the
+    /// average of the relevant role rating over the players who man that line: attack from the forwards,
+    /// midfield from the midfielders, defence from the defenders and goalkeeper. An empty line falls back
+    /// to the whole-lineup average of that rating, so the result is always plausible and never divides by
+    /// zero. Tactics shift the axes; form and traits follow. The weights tune into a BalanceSO then.
     /// </summary>
     public sealed class EffectiveStrengthBuilder
     {
         public TeamStrength Build(Squad squad)
         {
-            return Build(squad, Tactics.Balanced);
+            return Build(squad.Players, Tactics.Balanced);
         }
 
         public TeamStrength Build(Squad squad, Tactics tactics)
         {
-            IReadOnlyList<Player> players = squad.Players;
+            return Build(squad.Players, tactics);
+        }
+
+        public TeamStrength Build(IReadOnlyList<Player> players, Tactics tactics)
+        {
             if (players.Count == 0)
             {
                 return new TeamStrength(0.0, 0.0, 0.0);
             }
 
-            double squadAttack = 0.0;
-            double squadMidfield = 0.0;
-            double squadDefence = 0.0;
+            double lineupAttack = 0.0;
+            double lineupMidfield = 0.0;
+            double lineupDefence = 0.0;
 
             double forwardAttack = 0.0;
             int forwardCount = 0;
@@ -41,13 +45,13 @@ namespace Gaffer.Application.Simulation
             foreach (Player player in players)
             {
                 Attributes attributes = player.Attributes;
-                double attack = AttackRating(attributes);
-                double midfield = MidfieldRating(attributes);
-                double defence = DefenceRating(player.Position, attributes);
+                double attack = PlayerRatings.Attack(attributes);
+                double midfield = PlayerRatings.Midfield(attributes);
+                double defence = PlayerRatings.Defence(player.Position, attributes);
 
-                squadAttack += attack;
-                squadMidfield += midfield;
-                squadDefence += defence;
+                lineupAttack += attack;
+                lineupMidfield += midfield;
+                lineupDefence += defence;
 
                 switch (player.Position)
                 {
@@ -67,9 +71,9 @@ namespace Gaffer.Application.Simulation
                 }
             }
 
-            double attackAxis = LineAverage(forwardAttack, forwardCount, squadAttack, players.Count);
-            double midfieldAxis = LineAverage(midfielderMidfield, midfielderCount, squadMidfield, players.Count);
-            double defenceAxis = LineAverage(defensiveDefence, defensiveCount, squadDefence, players.Count);
+            double attackAxis = LineAverage(forwardAttack, forwardCount, lineupAttack, players.Count);
+            double midfieldAxis = LineAverage(midfielderMidfield, midfielderCount, lineupMidfield, players.Count);
+            double defenceAxis = LineAverage(defensiveDefence, defensiveCount, lineupDefence, players.Count);
 
             return ApplyTactics(attackAxis, midfieldAxis, defenceAxis, tactics);
         }
@@ -90,32 +94,9 @@ namespace Gaffer.Application.Simulation
             return new TeamStrength(attack * attackMult, midfield * midfieldMult, defence * defenceMult);
         }
 
-        // Each rating weights a role's key attributes (see RoleKeyAttributes); weights sum to 1 so the
-        // axis stays on the 0–100 attribute scale. Defence branches on the role: a keeper is rated on the
-        // keeping group, an outfielder on tackling, marking, and heading.
-        private static double AttackRating(Attributes a)
+        private static double LineAverage(double lineTotal, int lineCount, double lineupTotal, int lineupCount)
         {
-            return (0.35 * a.Finishing) + (0.20 * a.Pace) + (0.20 * a.Technique) + (0.15 * a.Positioning) + (0.10 * a.Dribbling);
-        }
-
-        private static double MidfieldRating(Attributes a)
-        {
-            return (0.30 * a.Passing) + (0.25 * a.Technique) + (0.15 * a.FirstTouch) + (0.15 * a.Positioning) + (0.15 * a.Stamina);
-        }
-
-        private static double DefenceRating(Position position, Attributes a)
-        {
-            if (position == Position.Goalkeeper)
-            {
-                return (0.30 * a.Reflexes) + (0.20 * a.Handling) + (0.20 * a.OneOnOnes) + (0.15 * a.CommandOfArea) + (0.10 * a.AerialReach) + (0.05 * a.GkPositioning);
-            }
-
-            return (0.30 * a.Tackling) + (0.30 * a.Marking) + (0.15 * a.Heading) + (0.15 * a.Strength) + (0.10 * a.Positioning);
-        }
-
-        private static double LineAverage(double lineTotal, int lineCount, double squadTotal, int squadCount)
-        {
-            return lineCount > 0 ? lineTotal / lineCount : squadTotal / squadCount;
+            return lineCount > 0 ? lineTotal / lineCount : lineupTotal / lineupCount;
         }
     }
 }

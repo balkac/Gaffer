@@ -38,6 +38,8 @@ namespace Gaffer.Editor.SeasonPlayer
         private int _promotionPosition = 3;
         private int _survivalPosition = 17;
         private Tactics _tactics = Tactics.Balanced;
+        private Formation _formation = Formation.F442;
+        private HashSet<int> _starters;
 
         private League _league;
         private LeagueSeason _season;
@@ -132,10 +134,76 @@ namespace Gaffer.Editor.SeasonPlayer
             _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
             _managedClub = new ClubId(Mathf.Clamp(_managedIndex, 0, count - 1));
             _target = new BoardTarget(_promotionPosition, _survivalPosition);
+            AutoPickStarters();
+            _season.SetFormation(_managedClub, _formation);
+            _season.SetStarters(_managedClub, CurrentStarters());
             _season.SetTactics(_managedClub, _tactics);
             _verdict = null;
             _lastWeek = null;
 
+            Refresh();
+        }
+
+        private Squad ManagedSquad()
+        {
+            return _league.Clubs[_managedClub.Value].Squad;
+        }
+
+        // Fills the starting set with the best eleven for the current formation — the default a manager tweaks.
+        private void AutoPickStarters()
+        {
+            _starters = new HashSet<int>();
+            IReadOnlyList<Player> eleven = new LineupSelector().SelectBest(ManagedSquad(), _formation);
+            foreach (Player player in eleven)
+            {
+                _starters.Add(player.Id.Value);
+            }
+        }
+
+        private IReadOnlyList<Player> CurrentStarters()
+        {
+            var starters = new List<Player>();
+            foreach (Player player in ManagedSquad().Players)
+            {
+                if (_starters != null && _starters.Contains(player.Id.Value))
+                {
+                    starters.Add(player);
+                }
+            }
+
+            return starters;
+        }
+
+        private void ToggleStarter(int playerId)
+        {
+            if (_starters == null)
+            {
+                return;
+            }
+
+            if (!_starters.Remove(playerId))
+            {
+                _starters.Add(playerId);
+            }
+
+            _season.SetStarters(_managedClub, CurrentStarters());
+            Refresh();
+        }
+
+        private void ChangeFormation(string formationName)
+        {
+            foreach (Formation preset in Formation.Presets)
+            {
+                if (preset.Name == formationName)
+                {
+                    _formation = preset;
+                    break;
+                }
+            }
+
+            AutoPickStarters();
+            _season.SetFormation(_managedClub, _formation);
+            _season.SetStarters(_managedClub, CurrentStarters());
             Refresh();
         }
 
@@ -265,6 +333,7 @@ namespace Gaffer.Editor.SeasonPlayer
                 _body.Add(BuildVerdictBanner());
             }
 
+            _body.Add(BuildLineupCard());
             _body.Add(BuildTacticsCard());
             _body.Add(BuildSquadCard());
             _body.Add(BuildTableCard());
@@ -273,6 +342,44 @@ namespace Gaffer.Editor.SeasonPlayer
             {
                 _body.Add(BuildLastWeekCard());
             }
+        }
+
+        private VisualElement BuildLineupCard()
+        {
+            VisualElement card = MakeCard();
+            card.Add(MakeLabel("LINEUP", 11, HarnessPalette.Muted, bold: true));
+
+            int starting = _starters?.Count ?? 0;
+            bool full = starting == _formation.Total;
+            card.Add(MakeLabel(
+                "Starting XI: " + starting + "/" + _formation.Total + "   ·   tap ★ below to pick who plays",
+                10, full ? HarnessPalette.Muted : HarnessPalette.Loss));
+
+            var names = new List<string>();
+            foreach (Formation preset in Formation.Presets)
+            {
+                names.Add(preset.Name);
+            }
+
+            var formation = new DropdownField("Formation", names, IndexOfFormation());
+            formation.RegisterValueChangedCallback(e => ChangeFormation(e.newValue));
+            card.Add(formation);
+
+            return card;
+        }
+
+        private int IndexOfFormation()
+        {
+            IReadOnlyList<Formation> presets = Formation.Presets;
+            for (int i = 0; i < presets.Count; i++)
+            {
+                if (presets[i].Name == _formation.Name)
+                {
+                    return i;
+                }
+            }
+
+            return 0;
         }
 
         private VisualElement BuildTacticsCard()
@@ -314,11 +421,15 @@ namespace Gaffer.Editor.SeasonPlayer
         {
             Club club = _league.Clubs[_managedClub.Value];
             VisualElement card = MakeCard();
-            card.Add(MakeLabel("YOUR SQUAD · " + club.Name.ToUpperInvariant(), 11, HarnessPalette.Muted, bold: true));
+            int starting = _starters?.Count ?? 0;
+            card.Add(MakeLabel(
+                "YOUR SQUAD · " + club.Name.ToUpperInvariant() + "  ·  " + starting + "/" + _formation.Total + " STARTING",
+                11, HarnessPalette.Muted, bold: true));
 
-            // The managed club's axes reflect its live tactics (the same derivation the season runs each week).
+            // The managed club's axes reflect the chosen eleven and live tactics — the same derivation the
+            // season runs each week, so what you see is what takes the field.
             TeamStrength strength = club.Squad != null
-                ? new EffectiveStrengthBuilder().Build(club.Squad, _tactics)
+                ? new EffectiveStrengthBuilder().Build(CurrentStarters(), _tactics)
                 : club.Strength;
             var axes = new VisualElement();
             axes.style.flexDirection = FlexDirection.Row;
@@ -364,13 +475,29 @@ namespace Gaffer.Editor.SeasonPlayer
                     continue;
                 }
 
+                bool starting = _starters != null && _starters.Contains(player.Id.Value);
+
                 var row = new VisualElement();
                 row.style.flexDirection = FlexDirection.Row;
-                row.style.justifyContent = Justify.SpaceBetween;
+                row.style.alignItems = Align.Center;
                 row.style.paddingTop = 2;
                 row.style.paddingBottom = 2;
 
-                var left = MakeLabel(player.Name + "  ·  " + player.Age, 11, HarnessPalette.Chalk);
+                int playerId = player.Id.Value;
+                var toggle = new Button(() => ToggleStarter(playerId)) { text = starting ? "★" : "·" };
+                toggle.style.width = 22;
+                toggle.style.height = 18;
+                toggle.style.marginRight = 6;
+                toggle.style.paddingLeft = 0;
+                toggle.style.paddingRight = 0;
+                toggle.style.backgroundColor = starting ? HarnessPalette.Accent : new Color(0, 0, 0, 0);
+                toggle.style.color = starting ? HarnessPalette.Pitch : HarnessPalette.Muted;
+                toggle.style.unityFontStyleAndWeight = FontStyle.Bold;
+                SetRadius(toggle, 4);
+                row.Add(toggle);
+
+                var left = MakeLabel(player.Name + "  ·  " + player.Age, 11,
+                    starting ? HarnessPalette.Chalk : HarnessPalette.Muted);
                 left.style.flexGrow = 1;
                 row.Add(left);
                 row.Add(BuildKeyStats(player));

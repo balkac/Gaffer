@@ -3,6 +3,7 @@ using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
+using Gaffer.Domain.Players;
 
 namespace Gaffer.Application.Season
 {
@@ -18,7 +19,10 @@ namespace Gaffer.Application.Season
         private readonly Dictionary<ClubId, Club> _clubsById;
         private readonly Dictionary<int, List<Fixture>> _fixturesByRound;
         private readonly Dictionary<ClubId, Tactics> _tacticsByClub;
+        private readonly Dictionary<ClubId, Formation> _formationByClub;
+        private readonly Dictionary<ClubId, IReadOnlyList<Player>> _startersByClub;
         private readonly EffectiveStrengthBuilder _strengthBuilder;
+        private readonly LineupSelector _lineupSelector;
         private readonly LeagueTable _table;
         private readonly List<MatchResult> _playedResults;
         private int _currentRound;
@@ -47,15 +51,30 @@ namespace Gaffer.Application.Season
             }
 
             _tacticsByClub = new Dictionary<ClubId, Tactics>();
+            _formationByClub = new Dictionary<ClubId, Formation>();
+            _startersByClub = new Dictionary<ClubId, IReadOnlyList<Player>>();
             _strengthBuilder = new EffectiveStrengthBuilder();
+            _lineupSelector = new LineupSelector();
             _table = new LeagueTable(clubIds);
             _playedResults = new List<MatchResult>();
         }
 
-        /// <summary>Sets a club's tactics; its match strength is re-derived from its squad each round.</summary>
+        /// <summary>Sets a club's tactics; its match strength is re-derived from its lineup each round.</summary>
         public void SetTactics(ClubId club, Tactics tactics)
         {
             _tacticsByClub[club] = tactics;
+        }
+
+        /// <summary>Sets a club's formation, used to auto-pick its eleven when no explicit lineup is set.</summary>
+        public void SetFormation(ClubId club, Formation formation)
+        {
+            _formationByClub[club] = formation;
+        }
+
+        /// <summary>Sets the exact eleven a club fields; overrides the auto-pick until changed.</summary>
+        public void SetStarters(ClubId club, IReadOnlyList<Player> starters)
+        {
+            _startersByClub[club] = starters;
         }
 
         public int CurrentRound => _currentRound;
@@ -107,12 +126,33 @@ namespace Gaffer.Application.Season
             return new WeekResult(round, matches);
         }
 
-        // A club with a squad has its strength derived fresh from squad + tactics each round, so a tactical
-        // change takes effect the next week; a squad-less club (restored, or a strength-only fixture) keeps
-        // its precomputed strength.
+        // A club with a squad fields an eleven — the manager's explicit lineup, or the best auto-pick for its
+        // formation — and its strength is derived fresh from that eleven + tactics each round, so a change
+        // takes effect the next week. A squad-less club (restored, or a strength-only fixture) keeps its
+        // precomputed strength.
         private TeamStrength StrengthOf(Club club)
         {
-            return club.Squad != null ? _strengthBuilder.Build(club.Squad, TacticsOf(club.Id)) : club.Strength;
+            if (club.Squad == null)
+            {
+                return club.Strength;
+            }
+
+            return _strengthBuilder.Build(StartersOf(club), TacticsOf(club.Id));
+        }
+
+        private IReadOnlyList<Player> StartersOf(Club club)
+        {
+            if (_startersByClub.TryGetValue(club.Id, out IReadOnlyList<Player> starters))
+            {
+                return starters;
+            }
+
+            return _lineupSelector.SelectBest(club.Squad, FormationOf(club.Id));
+        }
+
+        private Formation FormationOf(ClubId club)
+        {
+            return _formationByClub.TryGetValue(club, out Formation formation) ? formation : Formation.F442;
         }
 
         private Tactics TacticsOf(ClubId club)
