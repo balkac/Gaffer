@@ -12,11 +12,18 @@ namespace Gaffer.Application.Season
     public readonly struct MatchResult
     {
         public MatchResult(ClubId home, ClubId away, int homeGoals, int awayGoals, IReadOnlyList<MatchEvent> events)
+            : this(home, away, homeGoals, awayGoals, 0, 0, events)
+        {
+        }
+
+        public MatchResult(ClubId home, ClubId away, int homeGoals, int awayGoals, int homeShots, int awayShots, IReadOnlyList<MatchEvent> events)
         {
             Home = home;
             Away = away;
             HomeGoals = homeGoals;
             AwayGoals = awayGoals;
+            HomeShots = homeShots;
+            AwayShots = awayShots;
             Events = events;
         }
 
@@ -27,6 +34,10 @@ namespace Gaffer.Application.Season
         public int HomeGoals { get; }
 
         public int AwayGoals { get; }
+
+        public int HomeShots { get; }
+
+        public int AwayShots { get; }
 
         public IReadOnlyList<MatchEvent> Events { get; }
     }

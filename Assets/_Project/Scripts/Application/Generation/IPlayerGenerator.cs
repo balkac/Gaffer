@@ -11,5 +11,8 @@ namespace Gaffer.Application.Generation
     public interface IPlayerGenerator
     {
         Player Generate(PlayerId id, GenerationContext context, IRandom rng);
+
+        /// <summary>Generates a player for a fixed role, for squad building where the line-up is chosen.</summary>
+        Player Generate(PlayerId id, GenerationContext context, PlayerRole role, IRandom rng);
     }
 }

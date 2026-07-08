@@ -6,23 +6,46 @@ namespace Gaffer.Tests
     public sealed class AttributesTests
     {
         [Test]
-        public void Constructor_EachStat_RoundTrips()
+        public void Initializer_EachGroup_RoundTrips()
         {
-            var attributes = new Attributes(1, 2, 3, 4, 5, 6);
+            var attributes = new Attributes
+            {
+                Finishing = 71,
+                Tackling = 42,
+                Passing = 63,
+                Pace = 80,
+                Positioning = 66,
+                Stamina = 74,
+                Reflexes = 55,
+                GkPositioning = 58,
+            };
 
-            Assert.That(attributes.Pace, Is.EqualTo(1));
-            Assert.That(attributes.Finishing, Is.EqualTo(2));
-            Assert.That(attributes.Passing, Is.EqualTo(3));
-            Assert.That(attributes.Tackling, Is.EqualTo(4));
-            Assert.That(attributes.Positioning, Is.EqualTo(5));
-            Assert.That(attributes.Stamina, Is.EqualTo(6));
+            Assert.That(attributes.Finishing, Is.EqualTo(71));
+            Assert.That(attributes.Tackling, Is.EqualTo(42));
+            Assert.That(attributes.Passing, Is.EqualTo(63));
+            Assert.That(attributes.Pace, Is.EqualTo(80));
+            Assert.That(attributes.Positioning, Is.EqualTo(66));
+            Assert.That(attributes.Stamina, Is.EqualTo(74));
+            Assert.That(attributes.Reflexes, Is.EqualTo(55));
+            Assert.That(attributes.GkPositioning, Is.EqualTo(58));
+        }
+
+        [Test]
+        public void UnsetFields_DefaultToZero()
+        {
+            var attributes = new Attributes { Finishing = 90 };
+
+            // A striker's goalkeeping stats sit at zero unless set — the outfield/keeper split.
+            Assert.That(attributes.Reflexes, Is.EqualTo(0));
+            Assert.That(attributes.Handling, Is.EqualTo(0));
+            Assert.That(attributes.OneOnOnes, Is.EqualTo(0));
         }
 
         [Test]
         public void Equality_SameValues_AreEqual()
         {
-            var left = new Attributes(70, 65, 72, 40, 68, 80);
-            var right = new Attributes(70, 65, 72, 40, 68, 80);
+            Attributes left = Sample();
+            Attributes right = Sample();
 
             Assert.That(left, Is.EqualTo(right));
             Assert.That(left == right, Is.True);
@@ -32,11 +55,39 @@ namespace Gaffer.Tests
         [Test]
         public void Equality_DifferentStat_AreNotEqual()
         {
-            var baseline = new Attributes(70, 65, 72, 40, 68, 80);
-            var faster = new Attributes(99, 65, 72, 40, 68, 80);
+            Attributes baseline = Sample();
+            Attributes faster = Sample();
+            faster.Pace = 99;
 
             Assert.That(baseline, Is.Not.EqualTo(faster));
             Assert.That(baseline != faster, Is.True);
+        }
+
+        [Test]
+        public void Equality_DifferentGoalkeepingStat_AreNotEqual()
+        {
+            Attributes baseline = Sample();
+            Attributes sharper = Sample();
+            sharper.Reflexes = 88;
+
+            Assert.That(baseline, Is.Not.EqualTo(sharper));
+        }
+
+        private static Attributes Sample()
+        {
+            return new Attributes
+            {
+                Finishing = 70,
+                Technique = 65,
+                Passing = 72,
+                Tackling = 40,
+                Marking = 44,
+                Positioning = 68,
+                Pace = 77,
+                Stamina = 80,
+                Strength = 61,
+                Reflexes = 30,
+            };
         }
     }
 }
