@@ -9,8 +9,8 @@
 ## Güncel durum · 2026-07-08
 
 - **Faz 0** ✅ · **Faz 1** ✅ (★ Gate A geçildi) · **Faz 2** 🟡 (çekirdek bitti, JSON adapter kaldı) · **Faz 3** 🟡 (üreteç + kadro→güç köprüsü + kulüp kadroları hazır)
-- **58 dotnet testi yeşil** — `dotnet test tests/Gaffer.Tests.csproj` (aynı testler Unity Test Runner'da da koşar)
-- Bir lig sezonu **uçtan uca oynanıyor** (headless + **Season Player** editor demosu); **kaydet/yükle çekirdeği** + **deterministik oyuncu üreteci** (garanti wonderkid dâhil) + **kadro→`TeamStrength` köprüsü** (`BuildEffectiveStrength`) hazır. **Season Player artık her kulübe üretilmiş kadro veriyor**, gücü kadrodan türetiyor ve yönettiğin **kadroyu isimli oyuncular + rol-anahtarı statlarla** (değere göre renklenen, ART_STYLE §4.1) gösteriyor
+- **65 dotnet testi yeşil** — `dotnet test tests/Gaffer.Tests.csproj` (aynı testler Unity Test Runner'da da koşar)
+- Bir lig sezonu **uçtan uca oynanıyor** (headless + **Season Player** editor demosu); **kaydet/yükle çekirdeği** + **deterministik oyuncu üreteci** (garanti wonderkid dâhil) + **kadro→`TeamStrength` köprüsü** (`BuildEffectiveStrength`) hazır. **Season Player artık her kulübe üretilmiş kadro veriyor**, gücü kadrodan türetiyor, yönettiğin **kadroyu isimli oyuncular + rol-anahtarı statlarla** (değere göre renklenen, ART_STYLE §4.1) gösteriyor ve maç sonuçlarında **isimli golcüleri** ("Doe 23', Roe 67'") listeliyor
 
 ---
 
@@ -28,13 +28,13 @@
 
 - **Common** — `Result`/`Result<T>`, `IRandom` + `SplitMix64RandomNumberGenerator` (golden-locked, `State` getter save için)
 - **Domain** — `Attributes` (gruplu ~29 alan: Teknik/Set-piece/Fiziksel&Hareket/Kalecilik), `RoleKeyAttributes` (rol→anahtar-attribute eşlemesi), `Player`, `PlayerId`, `Position` (Players); `TeamStrength`, `ClubId`, `Club` (opsiyonel `Squad` taşır), `Squad` (Clubs); `League` (Leagues)
-- **Application/Simulation** — `MatchContext`/`MatchImportance`, `MatchCommand → MatchSimulator → MatchOutcome` (Poisson şans üretimi + kalite çözümü, portlar arkasında), `MatchSimulationSettings` (tuned), `EffectiveStrengthBuilder` (`Squad → TeamStrength`: rol-anahtarı attribute'lardan ağırlıklı hat-rating ortalaması; defans rating'i pozisyona duyarlı — kaleci kalecilik grubundan; boş hat → kadro geneline düşer)
+- **Application/Simulation** — `MatchContext`/`MatchImportance`, `MatchCommand → MatchSimulator → MatchOutcome` (Poisson şans üretimi + kalite çözümü, portlar arkasında), `MatchSimulationSettings` (tuned), `EffectiveStrengthBuilder` (`Squad → TeamStrength`: rol-anahtarı attribute'lardan ağırlıklı hat-rating ortalaması; defans rating'i pozisyona duyarlı — kaleci kalecilik grubundan; boş hat → kadro geneline düşer), `IScorerSelector`/`WeightedScorerSelector` (gol olunca bitiricilik+pozisyon+rol ağırlıklı golcü; `MatchCommand` kadroları taşır, `MatchEvent` golcüyü tutar; kadro yoksa golcü null → strength-only maçlar bozulmaz)
 - **Application/Season** — `FixtureScheduler` (çift devre, circle method), `LeagueTable`, `LeagueSeason` (hafta ilerlet + sonuç geçmişi + `Restore`), `MatchResult` (skor + dakika-golleri), `BoardTarget` + `SeasonEvaluator` → `SeasonVerdict`
 - **Application/Serialization** — `SeasonSaveData` DTO + `SeasonSaveMapper` + `SaveSchema`/`SaveMigrator` + `ISerializer` port *(JSON impl Infrastructure'da kaldı)*
 - **Application/Generation** — `PlayerGenerator` (deterministik, **pozisyona uygun** attribute üretimi: fiziksel herkese in-band, teknik outfield'a in-band/kaleciye zayıf, kalecilik grubu kaleciye in-band/outfield'a ~0) + `PlayerNameGenerator` (kurgusal isim) + `PlayerPoolGenerator` (garanti wonderkid) + `SquadGenerator` (inandırıcı diziliş: 2 GK / 6 DEF / 7 MID / 5 FWD) + `GenerationContext`
 - **Editor (`Gaffer.Editor`)** — `SeasonHarnessWindow` (dağılım/Gate A workbench) + `SeasonPlayerWindow` (bir sezonu izle: tablo + son hafta sonuçları/gol dakikaları + verdict)
 - **Composition** — `MatchSmokeTest` (Play → Console) + sahne
-- **Tests** — 58 test (`Gaffer.Tests`); `Gaffer.Tests.Unity` runtime determinizm kontrolü
+- **Tests** — 65 test (`Gaffer.Tests`); `Gaffer.Tests.Unity` runtime determinizm kontrolü
 - **Altyapı** — `tests/` dotnet köprüsü (net8.0 / LangVersion 9), `.editorconfig` (§1+§2), `.gitignore`
 
 ---
@@ -61,7 +61,7 @@
 
 ## Kalan / sıradaki
 
-- **Faz 3 (Yönetim, devam) — sıradaki:** ✅ `Squad` + `BuildEffectiveStrength` + `SquadGenerator` + `Club`↔`Squad` (Season Player kadrodan güç türetip roster'ı gösteriyor) hazır. **Sıradaki:** sim'de **golcü seçimi** — maç komutu kadroyu taşısın, gol olunca bitiricilik/pozisyon ağırlıklı bir oyuncu seçilsin → `MatchEvent` golcüyü tutsun → Season Player **isimli golcüleri** göstersin. Sonra taktik (dizilim + tempo/pres/risk) → transfer/scout (düşük-sürtünme + gergin ekonomi) → `ClubGenerator`/isim üreteci → `BalanceSO`.
+- **Faz 3 (Yönetim, devam) — sıradaki:** ✅ `Squad` + `BuildEffectiveStrength` + `SquadGenerator` + `Club`↔`Squad` + gruplu attribute modeli + **isimli golcü seçimi** (`WeightedScorerSelector`, Season Player golcüleri gösteriyor) hazır. **Sıradaki:** **taktik** (dizilim + tempo/pres/risk eksenleri → `BuildEffectiveStrength`'i ve golcü/şans dağılımını etkiler) → kadro seçimi (starting XI) → transfer/scout (düşük-sürtünme + gergin ekonomi + scout maskesi/aralık) → `ClubGenerator`/isim üreteci → `BalanceSO`.
 - **Faz 2 kapanışı:** `Infrastructure/Persistence` JSON impl — Newtonsoft paketi + `ISerializer` impl + dosya I/O (async). *Unity tarafı.*
 - **Bonus:** Editor harness'ı `Application/Season`'ı kullanacak şekilde sadeleştir (duplication).
 

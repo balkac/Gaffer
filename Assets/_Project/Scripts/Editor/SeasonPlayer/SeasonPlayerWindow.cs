@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
@@ -401,10 +400,10 @@ namespace Gaffer.Editor.SeasonPlayer
                     homeName + "  " + match.HomeGoals + " - " + match.AwayGoals + "  " + awayName,
                     12, scoreColor, involvesManaged));
 
-                string minutes = FormatGoalMinutes(match);
-                if (minutes.Length > 0)
+                string scorers = FormatScorers(match);
+                if (scorers.Length > 0)
                 {
-                    block.Add(MakeLabel(minutes, 10, HarnessPalette.Muted));
+                    block.Add(MakeLabel(scorers, 10, HarnessPalette.Muted));
                 }
 
                 card.Add(block);
@@ -413,10 +412,11 @@ namespace Gaffer.Editor.SeasonPlayer
             return card;
         }
 
-        private string FormatGoalMinutes(MatchResult match)
+        // "Ashfield  Doe 23', Roe 67'     Brackenmoor  Poe 81'" — named scorers per side, in minute order.
+        private string FormatScorers(MatchResult match)
         {
-            var home = new List<int>();
-            var away = new List<int>();
+            var home = new List<string>();
+            var away = new List<string>();
             foreach (MatchEvent matchEvent in match.Events)
             {
                 if (matchEvent.Kind != MatchEventKind.Goal)
@@ -426,11 +426,11 @@ namespace Gaffer.Editor.SeasonPlayer
 
                 if (matchEvent.Side == TeamSide.Home)
                 {
-                    home.Add(matchEvent.Minute);
+                    home.Add(ScorerEntry(match.Home, matchEvent));
                 }
                 else
                 {
-                    away.Add(matchEvent.Minute);
+                    away.Add(ScorerEntry(match.Away, matchEvent));
                 }
             }
 
@@ -439,38 +439,49 @@ namespace Gaffer.Editor.SeasonPlayer
                 return string.Empty;
             }
 
-            home.Sort();
-            away.Sort();
-
             var parts = new List<string>();
             if (home.Count > 0)
             {
-                parts.Add(_league.Clubs[match.Home.Value].Name + " " + MinutesText(home));
+                parts.Add(_league.Clubs[match.Home.Value].Name + "  " + string.Join(", ", home));
             }
 
             if (away.Count > 0)
             {
-                parts.Add(_league.Clubs[match.Away.Value].Name + " " + MinutesText(away));
+                parts.Add(_league.Clubs[match.Away.Value].Name + "  " + string.Join(", ", away));
             }
 
             return string.Join("      ", parts);
         }
 
-        private static string MinutesText(List<int> minutes)
+        private string ScorerEntry(ClubId club, MatchEvent goal)
         {
-            var builder = new StringBuilder();
-            for (int i = 0; i < minutes.Count; i++)
-            {
-                if (i > 0)
-                {
-                    builder.Append(", ");
-                }
+            string name = ScorerSurname(club, goal.Scorer);
+            return name.Length > 0 ? name + " " + goal.Minute + "'" : goal.Minute + "'";
+        }
 
-                builder.Append(minutes[i]);
-                builder.Append('\'');
+        private string ScorerSurname(ClubId club, PlayerId? scorer)
+        {
+            if (scorer == null)
+            {
+                return string.Empty;
             }
 
-            return builder.ToString();
+            Squad squad = _league.Clubs[club.Value].Squad;
+            if (squad == null)
+            {
+                return string.Empty;
+            }
+
+            foreach (Player player in squad.Players)
+            {
+                if (player.Id == scorer.Value)
+                {
+                    int space = player.Name.LastIndexOf(' ');
+                    return space >= 0 ? player.Name.Substring(space + 1) : player.Name;
+                }
+            }
+
+            return string.Empty;
         }
 
         private VisualElement BuildVerdictBanner()

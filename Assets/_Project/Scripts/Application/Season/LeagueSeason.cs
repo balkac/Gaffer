@@ -84,7 +84,7 @@ namespace Gaffer.Application.Season
             {
                 Club home = _clubsById[fixture.Home];
                 Club away = _clubsById[fixture.Away];
-                var command = new MatchCommand(home.Strength, away.Strength, context);
+                var command = new MatchCommand(home.Strength, away.Strength, home.Squad, away.Squad, context);
                 MatchOutcome outcome = simulator.Simulate(command, rng);
 
                 _table.RecordMatch(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals);
