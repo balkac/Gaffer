@@ -39,7 +39,12 @@ namespace Gaffer.Editor.SeasonPlayer
         private int _survivalPosition = 17;
         private Tactics _tactics = Tactics.Balanced;
         private Formation _formation = Formation.F442;
-        private HashSet<int> _starters;
+        private Player[] _lineup;
+        private int _dragFromSlot = -1;
+        private int _dragFromBenchId = -1;
+        private string _lineupStatus;
+        private VisualElement _pitch;
+        private readonly List<VisualElement> _slotTokens = new List<VisualElement>();
 
         private League _league;
         private LeagueSeason _season;
@@ -147,43 +152,128 @@ namespace Gaffer.Editor.SeasonPlayer
             return _league.Clubs[_managedClub.Value].Squad;
         }
 
-        // Fills the starting set with the best eleven for the current formation — the default a manager tweaks.
+        // Fills each formation slot with the best eleven for the current formation — the default a manager tweaks.
         private void AutoPickStarters()
         {
-            _starters = new HashSet<int>();
             IReadOnlyList<Player> eleven = new LineupSelector().SelectBest(ManagedSquad(), _formation);
-            foreach (Player player in eleven)
+            _lineup = new Player[_formation.Total];
+            for (int i = 0; i < eleven.Count && i < _lineup.Length; i++)
             {
-                _starters.Add(player.Id.Value);
+                _lineup[i] = eleven[i];
             }
         }
 
         private IReadOnlyList<Player> CurrentStarters()
         {
             var starters = new List<Player>();
-            foreach (Player player in ManagedSquad().Players)
+            if (_lineup != null)
             {
-                if (_starters != null && _starters.Contains(player.Id.Value))
+                foreach (Player player in _lineup)
                 {
-                    starters.Add(player);
+                    if (player != null)
+                    {
+                        starters.Add(player);
+                    }
                 }
             }
 
             return starters;
         }
 
-        private void ToggleStarter(int playerId)
+        private List<Player> BenchPlayers()
         {
-            if (_starters == null)
+            var bench = new List<Player>();
+            foreach (Player player in ManagedSquad().Players)
+            {
+                if (SlotOf(player.Id.Value) < 0)
+                {
+                    bench.Add(player);
+                }
+            }
+
+            return bench;
+        }
+
+        private int SlotOf(int playerId)
+        {
+            if (_lineup != null)
+            {
+                for (int i = 0; i < _lineup.Length; i++)
+                {
+                    if (_lineup[i] != null && _lineup[i].Id.Value == playerId)
+                    {
+                        return i;
+                    }
+                }
+            }
+
+            return -1;
+        }
+
+        private bool IsStarting(int playerId)
+        {
+            return SlotOf(playerId) >= 0;
+        }
+
+        // Drops a player into a slot: if he was already on the pitch the two swap; if he came off the bench he
+        // takes the slot and whoever was there is benched.
+        private void PlaceInSlot(int slot, Player player)
+        {
+            int from = SlotOf(player.Id.Value);
+            if (from == slot)
             {
                 return;
             }
 
-            if (!_starters.Remove(playerId))
+            Player occupant = _lineup[slot];
+            _lineup[slot] = player;
+            if (from >= 0)
             {
-                _starters.Add(playerId);
+                _lineup[from] = occupant;
             }
 
+            CommitLineup();
+        }
+
+        private void ToggleStarter(int playerId)
+        {
+            int slot = SlotOf(playerId);
+            if (slot >= 0)
+            {
+                _lineup[slot] = null;
+                CommitLineup();
+                return;
+            }
+
+            for (int i = 0; i < _lineup.Length; i++)
+            {
+                if (_lineup[i] == null)
+                {
+                    _lineup[i] = FindInSquad(playerId);
+                    CommitLineup();
+                    return;
+                }
+            }
+
+            _lineupStatus = "The eleven is full — bench someone first.";
+            Refresh();
+        }
+
+        private Player FindInSquad(int playerId)
+        {
+            foreach (Player player in ManagedSquad().Players)
+            {
+                if (player.Id.Value == playerId)
+                {
+                    return player;
+                }
+            }
+
+            return null;
+        }
+
+        private void CommitLineup()
+        {
             _season.SetStarters(_managedClub, CurrentStarters());
             Refresh();
         }
@@ -347,11 +437,16 @@ namespace Gaffer.Editor.SeasonPlayer
             VisualElement card = MakeCard();
             card.Add(MakeLabel("LINEUP", 11, HarnessPalette.Muted, bold: true));
 
-            int starting = _starters?.Count ?? 0;
+            int starting = CurrentStarters().Count;
             bool full = starting == _formation.Total;
             card.Add(MakeLabel(
-                "Starting XI: " + starting + "/" + _formation.Total + "   ·   tap ★ below to pick who plays",
+                "Starting XI: " + starting + "/" + _formation.Total + "   ·   drag players on the pitch, or up from the bench",
                 10, full ? HarnessPalette.Muted : HarnessPalette.Loss));
+
+            if (!string.IsNullOrEmpty(_lineupStatus))
+            {
+                card.Add(MakeLabel(_lineupStatus, 10, HarnessPalette.Loss));
+            }
 
             var names = new List<string>();
             foreach (Formation preset in Formation.Presets)
@@ -362,6 +457,9 @@ namespace Gaffer.Editor.SeasonPlayer
             var formation = new DropdownField("Formation", names, IndexOfFormation());
             formation.RegisterValueChangedCallback(e => ChangeFormation(e.newValue));
             card.Add(formation);
+
+            card.Add(BuildPitch());
+            card.Add(BuildBench());
 
             return card;
         }
@@ -378,6 +476,282 @@ namespace Gaffer.Editor.SeasonPlayer
             }
 
             return 0;
+        }
+
+        private const float TokenWidth = 58f;
+        private const float TokenHeight = 46f;
+
+        private VisualElement BuildPitch()
+        {
+            var pitch = new VisualElement();
+            _pitch = pitch;
+            pitch.style.height = 380;
+            pitch.style.marginTop = 8;
+            pitch.style.backgroundColor = HarnessPalette.Pitch;
+            SetBorder(pitch, HarnessPalette.PitchLine, 1);
+            SetRadius(pitch, 8);
+            pitch.style.position = UnityEngine.UIElements.Position.Relative;
+            pitch.style.overflow = Overflow.Hidden;
+
+            // Halfway line, for a broadcast-pitch read.
+            var halfway = new VisualElement();
+            halfway.style.position = UnityEngine.UIElements.Position.Absolute;
+            halfway.style.left = 0;
+            halfway.style.right = 0;
+            halfway.style.top = Length.Percent(50);
+            halfway.style.height = 1;
+            halfway.style.backgroundColor = HarnessPalette.PitchLine;
+            pitch.Add(halfway);
+
+            _slotTokens.Clear();
+            Vector2[] positions = SlotPositions();
+            for (int i = 0; i < _formation.Total; i++)
+            {
+                Player player = _lineup != null && i < _lineup.Length ? _lineup[i] : null;
+                PlayerRole role = _formation.Slots[i];
+                VisualElement token = MakePitchToken(player, role, i, positions[i]);
+                _slotTokens.Add(token);
+                pitch.Add(token);
+            }
+
+            return pitch;
+        }
+
+        private VisualElement MakePitchToken(Player player, PlayerRole slotRole, int slot, Vector2 pos)
+        {
+            var token = new VisualElement();
+            token.style.position = UnityEngine.UIElements.Position.Absolute;
+            token.style.left = Length.Percent(pos.x * 100f);
+            token.style.top = Length.Percent(pos.y * 100f);
+            token.style.translate = new Translate(Length.Percent(-50), Length.Percent(-50));
+            token.style.width = TokenWidth;
+            token.style.height = TokenHeight;
+            token.style.alignItems = Align.Center;
+            token.style.justifyContent = Justify.Center;
+            SetRadius(token, 8);
+
+            bool empty = player == null;
+            token.style.backgroundColor = empty ? new Color(0, 0, 0, 0) : HarnessPalette.PitchRaised;
+            SetBorder(token, empty ? HarnessPalette.PitchLine : HarnessPalette.Accent, empty ? 1 : 2);
+
+            token.Add(MakeLabel(PlayerRoles.Abbrev(slotRole), 9, HarnessPalette.Muted, bold: true));
+            if (!empty)
+            {
+                var name = MakeLabel(Surname(player.Name), 10, HarnessPalette.Chalk, bold: true);
+                name.style.unityTextAlign = TextAnchor.MiddleCenter;
+                token.Add(name);
+                token.Add(MakeLabel(Mathf.RoundToInt((float)PlayerRatings.ForPosition(player)).ToString(), 9, HarnessPalette.Accent, bold: true));
+
+                RegisterDrag(token, slot, player.Id.Value);
+            }
+
+            return token;
+        }
+
+        private VisualElement BuildBench()
+        {
+            var wrap = new VisualElement();
+            wrap.style.marginTop = 8;
+            wrap.Add(MakeLabel("BENCH", 10, HarnessPalette.Muted, bold: true));
+
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.flexWrap = Wrap.Wrap;
+            foreach (Player player in BenchPlayers())
+            {
+                var chip = new VisualElement();
+                chip.style.flexDirection = FlexDirection.Row;
+                chip.style.alignItems = Align.Center;
+                chip.style.marginRight = 6;
+                chip.style.marginTop = 4;
+                chip.style.paddingLeft = 6;
+                chip.style.paddingRight = 6;
+                chip.style.height = 22;
+                chip.style.backgroundColor = HarnessPalette.PitchRaised;
+                SetBorder(chip, HarnessPalette.PitchLine, 1);
+                SetRadius(chip, 6);
+                chip.Add(MakeLabel(PlayerRoles.Abbrev(player.Role) + " " + Surname(player.Name), 10, HarnessPalette.Muted));
+
+                RegisterDrag(chip, -1, player.Id.Value);
+                row.Add(chip);
+            }
+
+            wrap.Add(row);
+            return wrap;
+        }
+
+        // Pointer-capture drag: pick up a token (from a slot or the bench), let it follow the cursor, and on
+        // release drop it onto whichever pitch slot is under the pointer — or off the pitch to bench a starter.
+        private void RegisterDrag(VisualElement token, int slot, int playerId)
+        {
+            token.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                _dragFromSlot = slot;
+                _dragFromBenchId = slot >= 0 ? -1 : playerId;
+                token.CapturePointer(evt.pointerId);
+                token.BringToFront();
+                evt.StopPropagation();
+            });
+
+            token.RegisterCallback<PointerMoveEvent>(evt =>
+            {
+                // Only slot tokens (children of the pitch) follow the cursor; a bench chip lives in a
+                // different container, so it just captures the pointer and detects the drop on release.
+                if (slot < 0 || !token.HasPointerCapture(evt.pointerId) || _pitch == null)
+                {
+                    return;
+                }
+
+                Vector2 local = _pitch.WorldToLocal(evt.position);
+                token.style.position = UnityEngine.UIElements.Position.Absolute;
+                token.style.translate = new Translate(0f, 0f);
+                token.style.left = local.x - (TokenWidth / 2f);
+                token.style.top = local.y - (TokenHeight / 2f);
+            });
+
+            token.RegisterCallback<PointerUpEvent>(evt =>
+            {
+                if (!token.HasPointerCapture(evt.pointerId))
+                {
+                    return;
+                }
+
+                token.ReleasePointer(evt.pointerId);
+                HandleDrop(evt.position);
+            });
+        }
+
+        private void HandleDrop(Vector2 position)
+        {
+            _lineupStatus = null;
+            int dropSlot = -1;
+            for (int i = 0; i < _slotTokens.Count; i++)
+            {
+                // Skip the slot we picked up from — its token follows the cursor, so it would always match.
+                if (i == _dragFromSlot)
+                {
+                    continue;
+                }
+
+                if (_slotTokens[i].worldBound.Contains(position))
+                {
+                    dropSlot = i;
+                    break;
+                }
+            }
+
+            Player dragged = _dragFromSlot >= 0
+                ? (_dragFromSlot < _lineup.Length ? _lineup[_dragFromSlot] : null)
+                : FindInSquad(_dragFromBenchId);
+
+            if (dropSlot < 0)
+            {
+                // Dropped off the slots: bench the player if he was on the pitch.
+                if (_dragFromSlot >= 0)
+                {
+                    _lineup[_dragFromSlot] = null;
+                    CommitLineup();
+                }
+                else
+                {
+                    Refresh();
+                }
+            }
+            else if (dragged != null)
+            {
+                PlaceInSlot(dropSlot, dragged);
+            }
+            else
+            {
+                Refresh();
+            }
+
+            _dragFromSlot = -1;
+            _dragFromBenchId = -1;
+        }
+
+        // A believable pitch layout: each slot gets a vertical band from its role and an even horizontal
+        // spread within that band, with wide roles pushed to the touchlines.
+        private Vector2[] SlotPositions()
+        {
+            var bands = new Dictionary<float, List<int>>();
+            var y = new float[_formation.Total];
+            for (int i = 0; i < _formation.Total; i++)
+            {
+                y[i] = BandY(_formation.Slots[i]);
+                if (!bands.TryGetValue(y[i], out List<int> members))
+                {
+                    members = new List<int>();
+                    bands[y[i]] = members;
+                }
+
+                members.Add(i);
+            }
+
+            var positions = new Vector2[_formation.Total];
+            foreach (KeyValuePair<float, List<int>> band in bands)
+            {
+                List<int> members = band.Value;
+                members.Sort((a, b) =>
+                {
+                    int byWidth = HorizontalKey(_formation.Slots[a]).CompareTo(HorizontalKey(_formation.Slots[b]));
+                    return byWidth != 0 ? byWidth : a.CompareTo(b);
+                });
+
+                for (int rank = 0; rank < members.Count; rank++)
+                {
+                    float x = (rank + 1f) / (members.Count + 1f);
+                    positions[members[rank]] = new Vector2(x, band.Key);
+                }
+            }
+
+            return positions;
+        }
+
+        private static float BandY(PlayerRole role)
+        {
+            switch (role)
+            {
+                case PlayerRole.Goalkeeper:
+                    return 0.90f;
+                case PlayerRole.RightBack:
+                case PlayerRole.CentreBack:
+                case PlayerRole.LeftBack:
+                    return 0.72f;
+                case PlayerRole.DefensiveMidfield:
+                    return 0.59f;
+                case PlayerRole.RightMidfield:
+                case PlayerRole.CentralMidfield:
+                case PlayerRole.LeftMidfield:
+                    return 0.47f;
+                case PlayerRole.AttackingMidfield:
+                    return 0.35f;
+                default:
+                    return 0.20f;
+            }
+        }
+
+        private static int HorizontalKey(PlayerRole role)
+        {
+            switch (role)
+            {
+                case PlayerRole.RightBack:
+                case PlayerRole.RightMidfield:
+                case PlayerRole.RightWing:
+                    return 2;
+                case PlayerRole.LeftBack:
+                case PlayerRole.LeftMidfield:
+                case PlayerRole.LeftWing:
+                    return 0;
+                default:
+                    return 1;
+            }
+        }
+
+        private static string Surname(string name)
+        {
+            int space = name.LastIndexOf(' ');
+            return space >= 0 ? name.Substring(space + 1) : name;
         }
 
         private VisualElement BuildTacticsCard()
@@ -446,7 +820,7 @@ namespace Gaffer.Editor.SeasonPlayer
         {
             Club club = _league.Clubs[_managedClub.Value];
             VisualElement card = MakeCard();
-            int starting = _starters?.Count ?? 0;
+            int starting = CurrentStarters().Count;
             card.Add(MakeLabel(
                 "YOUR SQUAD · " + club.Name.ToUpperInvariant() + "  ·  " + starting + "/" + _formation.Total + " STARTING",
                 11, HarnessPalette.Muted, bold: true));
@@ -500,7 +874,7 @@ namespace Gaffer.Editor.SeasonPlayer
                     continue;
                 }
 
-                bool starting = _starters != null && _starters.Contains(player.Id.Value);
+                bool starting = IsStarting(player.Id.Value);
 
                 var row = new VisualElement();
                 row.style.flexDirection = FlexDirection.Row;
