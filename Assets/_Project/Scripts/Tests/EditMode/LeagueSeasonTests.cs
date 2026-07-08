@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Gaffer.Application.Generation;
 using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
@@ -40,12 +41,11 @@ namespace Gaffer.Tests
         {
             MatchSimulator simulator = CreateSimulator();
             MatchContext context = NormalContext();
-            var rng = new SplitMix64RandomNumberGenerator(seed);
 
             int guard = 0;
             while (!season.IsComplete && guard < 1000)
             {
-                season.AdvanceWeek(simulator, context, rng);
+                season.AdvanceWeek(simulator, context, seed);
                 guard++;
             }
         }
@@ -74,11 +74,61 @@ namespace Gaffer.Tests
         {
             var season = new LeagueSeason(CreateLeague());
 
-            WeekResult week = season.AdvanceWeek(CreateSimulator(), NormalContext(), new SplitMix64RandomNumberGenerator(1));
+            WeekResult week = season.AdvanceWeek(CreateSimulator(), NormalContext(), 1UL);
 
             Assert.That(week.Round, Is.EqualTo(0));
             Assert.That(week.Matches.Count, Is.EqualTo(ClubCount / 2));
             Assert.That(season.CurrentRound, Is.EqualTo(1));
+        }
+
+        private static League CreateSquadLeague()
+        {
+            var squadGen = new SquadGenerator(new PlayerGenerator());
+            var builder = new EffectiveStrengthBuilder();
+            var genRng = new SplitMix64RandomNumberGenerator(4242UL);
+            var clubs = new List<Club>(ClubCount);
+            for (int i = 0; i < ClubCount; i++)
+            {
+                Squad squad = squadGen.Generate(i * SquadGenerator.SquadSize, new GenerationContext(), genRng);
+                clubs.Add(new Club(new ClubId(i), "Club " + i, squad, builder.Build(squad)));
+            }
+
+            return new League("Squad League", clubs);
+        }
+
+        [Test]
+        public void AdvanceWeek_ChangingOneClubsTactics_LeavesMatchesWithoutItIdentical()
+        {
+            const ulong seed = 909UL;
+            var withDefault = new LeagueSeason(CreateSquadLeague());
+            var withTweak = new LeagueSeason(CreateSquadLeague());
+            var tweaked = new ClubId(0);
+            withTweak.SetTactics(tweaked, new Tactics(Mentality.VeryAttacking, Tempo.Intense, Pressing.Press, Approach.Possession));
+
+            PlayWholeSeason(withDefault, seed);
+            PlayWholeSeason(withTweak, seed);
+
+            // Per-fixture seeding means only club 0's matches can differ; every other fixture is byte-identical.
+            IReadOnlyList<MatchResult> a = withDefault.PlayedResults;
+            IReadOnlyList<MatchResult> b = withTweak.PlayedResults;
+            Assert.That(a.Count, Is.EqualTo(b.Count));
+            int comparedWithout = 0;
+            for (int i = 0; i < a.Count; i++)
+            {
+                if (a[i].Home.Value == tweaked.Value || a[i].Away.Value == tweaked.Value)
+                {
+                    continue;
+                }
+
+                Assert.That(b[i].Home.Value, Is.EqualTo(a[i].Home.Value));
+                Assert.That(b[i].Away.Value, Is.EqualTo(a[i].Away.Value));
+                Assert.That(b[i].HomeGoals, Is.EqualTo(a[i].HomeGoals));
+                Assert.That(b[i].AwayGoals, Is.EqualTo(a[i].AwayGoals));
+                Assert.That(b[i].HomeShots, Is.EqualTo(a[i].HomeShots));
+                comparedWithout++;
+            }
+
+            Assert.That(comparedWithout, Is.GreaterThan(0), "Expected some matches not involving the tweaked club.");
         }
 
         [Test]

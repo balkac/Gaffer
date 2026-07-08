@@ -50,18 +50,18 @@ namespace Gaffer.Tests
         [Test]
         public void Restore_MidSeason_ReproducesTableAndRound()
         {
+            const ulong seed = 2024UL;
             League league = CreateLeague();
             var season = new LeagueSeason(league);
             MatchSimulator simulator = CreateSimulator();
             MatchContext context = NormalContext();
-            var rng = new SplitMix64RandomNumberGenerator(2024UL);
             for (int i = 0; i < 10; i++)
             {
-                season.AdvanceWeek(simulator, context, rng);
+                season.AdvanceWeek(simulator, context, seed);
             }
 
             var mapper = new SeasonSaveMapper();
-            SeasonSaveData data = mapper.Capture(league, season, rng.State);
+            SeasonSaveData data = mapper.Capture(league, season, seed);
             RestoredSeason restored = mapper.Restore(data);
 
             Assert.That(restored.Season.CurrentRound, Is.EqualTo(season.CurrentRound));
@@ -85,29 +85,26 @@ namespace Gaffer.Tests
 
             // Reference: one uninterrupted run.
             var reference = new LeagueSeason(CreateLeague());
-            var referenceRng = new SplitMix64RandomNumberGenerator(seed);
             while (!reference.IsComplete)
             {
-                reference.AdvanceWeek(simulator, context, referenceRng);
+                reference.AdvanceWeek(simulator, context, seed);
             }
 
             // Interrupted: play half, save, restore, continue.
             League league = CreateLeague();
             var season = new LeagueSeason(league);
-            var rng = new SplitMix64RandomNumberGenerator(seed);
             int half = season.RoundCount / 2;
             for (int i = 0; i < half; i++)
             {
-                season.AdvanceWeek(simulator, context, rng);
+                season.AdvanceWeek(simulator, context, seed);
             }
 
             var mapper = new SeasonSaveMapper();
-            SeasonSaveData data = mapper.Capture(league, season, rng.State);
+            SeasonSaveData data = mapper.Capture(league, season, seed);
             RestoredSeason restored = mapper.Restore(data);
-            var resumedRng = new SplitMix64RandomNumberGenerator(data.RngState);
             while (!restored.Season.IsComplete)
             {
-                restored.Season.AdvanceWeek(simulator, context, resumedRng);
+                restored.Season.AdvanceWeek(simulator, context, data.MatchSeed);
             }
 
             IReadOnlyList<LeagueTableRow> expected = reference.Table.Ordered();

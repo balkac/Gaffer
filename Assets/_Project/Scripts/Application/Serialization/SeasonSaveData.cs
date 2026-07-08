@@ -17,7 +17,8 @@ namespace Gaffer.Application.Serialization
 
         public List<MatchResultSaveData> Results { get; set; } = new List<MatchResultSaveData>();
 
-        public ulong RngState { get; set; }
+        /// <summary>The fixed season seed each match is derived from — enough to reproduce every fixture.</summary>
+        public ulong MatchSeed { get; set; }
     }
 
     public sealed class ClubSaveData

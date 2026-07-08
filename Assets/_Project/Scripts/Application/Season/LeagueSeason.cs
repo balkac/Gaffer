@@ -101,7 +101,7 @@ namespace Gaffer.Application.Season
             return season;
         }
 
-        public WeekResult AdvanceWeek(MatchSimulator simulator, MatchContext context, IRandom rng)
+        public WeekResult AdvanceWeek(MatchSimulator simulator, MatchContext context, ulong seasonSeed)
         {
             var matches = new List<MatchResult>();
             if (IsComplete)
@@ -118,7 +118,13 @@ namespace Gaffer.Application.Season
                     home.Squad, away.Squad,
                     ProfileOf(home.Id), ProfileOf(away.Id),
                     context);
-                MatchOutcome outcome = simulator.Simulate(command, rng);
+
+                // Each match gets its own rng, seeded from a stable function of the fixture's identity, so a
+                // change to one club's tactics only reshapes its own matches — the rest of the league's
+                // results stay byte-identical, and a resumed save reproduces the remaining fixtures exactly.
+                var matchRng = new SplitMix64RandomNumberGenerator(
+                    MixSeed(seasonSeed, _currentRound, fixture.Home.Value, fixture.Away.Value));
+                MatchOutcome outcome = simulator.Simulate(command, matchRng);
 
                 _table.RecordMatch(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals);
                 matches.Add(new MatchResult(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals, outcome.HomeShots, outcome.AwayShots, outcome.Events));
@@ -128,6 +134,23 @@ namespace Gaffer.Application.Season
             int round = _currentRound;
             _currentRound++;
             return new WeekResult(round, matches);
+        }
+
+        // Avalanche-mixes the season seed with the fixture's identity into a well-distributed per-match seed
+        // (SplitMix64 finalizer stages). Independent of any other match's draws, so match order and tactical
+        // changes elsewhere never shift this match's stream.
+        private static ulong MixSeed(ulong seasonSeed, int round, int home, int away)
+        {
+            unchecked
+            {
+                ulong z = seasonSeed + 0x9E3779B97F4A7C15UL;
+                z ^= (ulong)(uint)round * 0xBF58476D1CE4E5B9UL;
+                z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+                z ^= (ulong)(uint)home * 0x94D049BB133111EBUL;
+                z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+                z ^= (ulong)(uint)away;
+                return z ^ (z >> 31);
+            }
         }
 
         // A club with a squad fields an eleven — the manager's explicit lineup, or the best auto-pick for its

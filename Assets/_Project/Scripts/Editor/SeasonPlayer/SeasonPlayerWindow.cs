@@ -47,7 +47,6 @@ namespace Gaffer.Editor.SeasonPlayer
         private BoardTarget _target;
         private MatchSimulator _simulator;
         private MatchContext _context;
-        private SplitMix64RandomNumberGenerator _rng;
         private SeasonVerdict? _verdict;
         private WeekResult _lastWeek;
 
@@ -127,7 +126,6 @@ namespace Gaffer.Editor.SeasonPlayer
             int count = Mathf.Clamp(_teamCount, 4, ClubNames.Length);
             _league = BuildLeague(count);
             _season = new LeagueSeason(_league);
-            _rng = new SplitMix64RandomNumberGenerator((ulong)_seed);
             _simulator = new MatchSimulator(
                 new PoissonChanceGenerator(MatchSimulationSettings.Default),
                 new QualityChanceResolver());
@@ -247,7 +245,7 @@ namespace Gaffer.Editor.SeasonPlayer
                 return;
             }
 
-            _lastWeek = _season.AdvanceWeek(_simulator, _context, _rng);
+            _lastWeek = _season.AdvanceWeek(_simulator, _context, (ulong)_seed);
             CheckComplete();
             Refresh();
         }
@@ -262,7 +260,7 @@ namespace Gaffer.Editor.SeasonPlayer
             int guard = 0;
             while (!_season.IsComplete && guard < 1000)
             {
-                WeekResult week = _season.AdvanceWeek(_simulator, _context, _rng);
+                WeekResult week = _season.AdvanceWeek(_simulator, _context, (ulong)_seed);
                 if (week.Matches.Count > 0)
                 {
                     _lastWeek = week;

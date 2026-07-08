@@ -9,20 +9,20 @@ namespace Gaffer.Application.Serialization
 {
     /// <summary>
     /// Maps between the live season and its serializable snapshot. Capture records the clubs, the
-    /// played results, the rounds done, and the rng state; Restore rebuilds the league and replays
-    /// the results so the resumed season — and the rng, reconstructed from <see cref="SeasonSaveData.RngState"/>
-    /// — continues deterministically.
+    /// played results, the rounds done, and the season seed; Restore rebuilds the league and replays
+    /// the results so the resumed season continues deterministically — remaining fixtures are seeded from
+    /// <see cref="SeasonSaveData.MatchSeed"/>, so they reproduce an uninterrupted run exactly.
     /// </summary>
     public sealed class SeasonSaveMapper
     {
-        public SeasonSaveData Capture(League league, LeagueSeason season, ulong rngState)
+        public SeasonSaveData Capture(League league, LeagueSeason season, ulong matchSeed)
         {
             var data = new SeasonSaveData
             {
                 SchemaVersion = SaveSchema.CurrentVersion,
                 LeagueName = league.Name,
                 PlayedRounds = season.CurrentRound,
-                RngState = rngState,
+                MatchSeed = matchSeed,
             };
 
             foreach (Club club in league.Clubs)
