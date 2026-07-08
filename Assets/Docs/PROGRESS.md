@@ -8,9 +8,9 @@
 
 ## Güncel durum · 2026-07-08
 
-- **Faz 0** ✅ · **Faz 1** ✅ (★ Gate A geçildi) · **Faz 2** 🟡 (çekirdek bitti, JSON adapter kaldı) · **Faz 3** 🟡 (üreteç başladı)
-- **47 dotnet testi yeşil** — `dotnet test tests/Gaffer.Tests.csproj` (aynı testler Unity Test Runner'da da koşar)
-- Bir lig sezonu **uçtan uca oynanıyor** (headless + **Season Player** editor demosu); **kaydet/yükle çekirdeği** + **deterministik oyuncu üreteci** (garanti wonderkid dâhil) hazır
+- **Faz 0** ✅ · **Faz 1** ✅ (★ Gate A geçildi) · **Faz 2** 🟡 (çekirdek bitti, JSON adapter kaldı) · **Faz 3** 🟡 (üreteç + kadro→güç köprüsü hazır)
+- **53 dotnet testi yeşil** — `dotnet test tests/Gaffer.Tests.csproj` (aynı testler Unity Test Runner'da da koşar)
+- Bir lig sezonu **uçtan uca oynanıyor** (headless + **Season Player** editor demosu); **kaydet/yükle çekirdeği** + **deterministik oyuncu üreteci** (garanti wonderkid dâhil) + **kadro→`TeamStrength` köprüsü** (`BuildEffectiveStrength`) hazır
 
 ---
 
@@ -27,14 +27,14 @@
 ## Tamamlananlar (katman bazında)
 
 - **Common** — `Result`/`Result<T>`, `IRandom` + `SplitMix64RandomNumberGenerator` (golden-locked, `State` getter save için)
-- **Domain** — `Attributes`, `Player`, `PlayerId`, `Position` (Players); `TeamStrength`, `ClubId`, `Club` (Clubs); `League` (Leagues)
-- **Application/Simulation** — `MatchContext`/`MatchImportance`, `MatchCommand → MatchSimulator → MatchOutcome` (Poisson şans üretimi + kalite çözümü, portlar arkasında), `MatchSimulationSettings` (tuned)
+- **Domain** — `Attributes`, `Player`, `PlayerId`, `Position` (Players); `TeamStrength`, `ClubId`, `Club`, `Squad` (Clubs); `League` (Leagues)
+- **Application/Simulation** — `MatchContext`/`MatchImportance`, `MatchCommand → MatchSimulator → MatchOutcome` (Poisson şans üretimi + kalite çözümü, portlar arkasında), `MatchSimulationSettings` (tuned), `EffectiveStrengthBuilder` (`Squad → TeamStrength`: hat-bazlı rol-rating ortalaması; boş hat → kadro geneline düşer)
 - **Application/Season** — `FixtureScheduler` (çift devre, circle method), `LeagueTable`, `LeagueSeason` (hafta ilerlet + sonuç geçmişi + `Restore`), `MatchResult` (skor + dakika-golleri), `BoardTarget` + `SeasonEvaluator` → `SeasonVerdict`
 - **Application/Serialization** — `SeasonSaveData` DTO + `SeasonSaveMapper` + `SaveSchema`/`SaveMigrator` + `ISerializer` port *(JSON impl Infrastructure'da kaldı)*
 - **Application/Generation** — `PlayerGenerator` (deterministik oyuncu) + `PlayerNameGenerator` (kurgusal isim) + `PlayerPoolGenerator` (garanti wonderkid) + `GenerationContext`
 - **Editor (`Gaffer.Editor`)** — `SeasonHarnessWindow` (dağılım/Gate A workbench) + `SeasonPlayerWindow` (bir sezonu izle: tablo + son hafta sonuçları/gol dakikaları + verdict)
 - **Composition** — `MatchSmokeTest` (Play → Console) + sahne
-- **Tests** — 47 test (`Gaffer.Tests`); `Gaffer.Tests.Unity` runtime determinizm kontrolü
+- **Tests** — 53 test (`Gaffer.Tests`); `Gaffer.Tests.Unity` runtime determinizm kontrolü
 - **Altyapı** — `tests/` dotnet köprüsü (net8.0 / LangVersion 9), `.editorconfig` (§1+§2), `.gitignore`
 
 ---
@@ -60,7 +60,7 @@
 
 ## Kalan / sıradaki
 
-- **Faz 3 (Yönetim, devam) — sıradaki:** `Squad` (kadro → kulüp) → **`BuildEffectiveStrength`** (kadrodan `TeamStrength` türet — oyuncuları sim'e bağlayan köprü) → sim'de **golcü seçimi** (event oyuncuya bağlanır → **isimli golcüler**) → taktik (dizilim + tempo/pres/risk) → transfer/scout (düşük-sürtünme + gergin ekonomi) → `ClubGenerator`/isim üreteci → `BalanceSO`.
+- **Faz 3 (Yönetim, devam) — sıradaki:** ✅ `Squad` (kadro) + `BuildEffectiveStrength` (kadrodan `TeamStrength` türet) hazır. **Sıradaki:** `Club`'a `Squad` bağla + `LeagueSeason` maç gücünü kadrodan türetsin (köprüyü sim'e kablola) → sim'de **golcü seçimi** (event oyuncuya bağlanır → **isimli golcüler**) → taktik (dizilim + tempo/pres/risk) → transfer/scout (düşük-sürtünme + gergin ekonomi) → `ClubGenerator`/isim üreteci → `BalanceSO`.
 - **Faz 2 kapanışı:** `Infrastructure/Persistence` JSON impl — Newtonsoft paketi + `ISerializer` impl + dosya I/O (async). *Unity tarafı.*
 - **Bonus:** Editor harness'ı `Application/Season`'ı kullanacak şekilde sadeleştir (duplication).
 
