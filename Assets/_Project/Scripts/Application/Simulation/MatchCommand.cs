@@ -12,16 +12,23 @@ namespace Gaffer.Application.Simulation
     public readonly struct MatchCommand
     {
         public MatchCommand(TeamStrength home, TeamStrength away, MatchContext context)
-            : this(home, away, null, null, context)
+            : this(home, away, null, null, ChanceProfile.Neutral, ChanceProfile.Neutral, context)
         {
         }
 
         public MatchCommand(TeamStrength home, TeamStrength away, Squad homeSquad, Squad awaySquad, MatchContext context)
+            : this(home, away, homeSquad, awaySquad, ChanceProfile.Neutral, ChanceProfile.Neutral, context)
+        {
+        }
+
+        public MatchCommand(TeamStrength home, TeamStrength away, Squad homeSquad, Squad awaySquad, ChanceProfile homeProfile, ChanceProfile awayProfile, MatchContext context)
         {
             Home = home;
             Away = away;
             HomeSquad = homeSquad;
             AwaySquad = awaySquad;
+            HomeProfile = homeProfile;
+            AwayProfile = awayProfile;
             Context = context;
         }
 
@@ -32,6 +39,10 @@ namespace Gaffer.Application.Simulation
         public Squad HomeSquad { get; }
 
         public Squad AwaySquad { get; }
+
+        public ChanceProfile HomeProfile { get; }
+
+        public ChanceProfile AwayProfile { get; }
 
         public MatchContext Context { get; }
     }

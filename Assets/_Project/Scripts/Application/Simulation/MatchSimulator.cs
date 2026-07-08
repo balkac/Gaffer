@@ -37,9 +37,20 @@ namespace Gaffer.Application.Simulation
             var goals = new List<MatchEvent>();
             int homeGoals = 0;
             int awayGoals = 0;
+            int homeShots = 0;
+            int awayShots = 0;
 
             foreach (Chance chance in chances)
             {
+                if (chance.Side == TeamSide.Home)
+                {
+                    homeShots++;
+                }
+                else
+                {
+                    awayShots++;
+                }
+
                 if (!_chanceResolver.ResolvesToGoal(chance, rng))
                 {
                     continue;
@@ -60,7 +71,7 @@ namespace Gaffer.Application.Simulation
             }
 
             goals.Sort((left, right) => left.Minute.CompareTo(right.Minute));
-            return new MatchOutcome(homeGoals, awayGoals, goals);
+            return new MatchOutcome(homeGoals, awayGoals, homeShots, awayShots, goals);
         }
     }
 }

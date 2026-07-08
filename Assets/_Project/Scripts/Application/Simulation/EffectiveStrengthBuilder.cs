@@ -78,18 +78,18 @@ namespace Gaffer.Application.Simulation
             return ApplyTactics(attackAxis, midfieldAxis, defenceAxis, tactics);
         }
 
-        // Tactics shift the base axes multiplicatively; a Balanced setup (all scales 0) is the identity.
-        // Attacking mentality trades defence for attack; an intense tempo pushes forward at a defensive
-        // cost; a high press wins the midfield but exposes the line. Weights tune into a BalanceSO later.
+        // Mentality and pressing shift the base axes multiplicatively; a Balanced setup (scales 0) is the
+        // identity. Attacking mentality trades defence for attack; a high press wins the midfield but
+        // exposes the line. Tempo and approach do not touch strength — they shape the ChanceProfile
+        // instead, so each axis stays mechanically distinct. Weights tune into a BalanceSO later.
         private static TeamStrength ApplyTactics(double attack, double midfield, double defence, Tactics tactics)
         {
             int mentality = tactics.MentalityScale;
-            int tempo = tactics.TempoScale;
             int pressing = tactics.PressingScale;
 
-            double attackMult = (1.0 + (0.09 * mentality)) * (1.0 + (0.07 * tempo));
-            double midfieldMult = (1.0 + (0.04 * tempo)) * (1.0 + (0.09 * pressing));
-            double defenceMult = (1.0 - (0.07 * mentality)) * (1.0 - (0.05 * tempo)) * (1.0 - (0.04 * pressing));
+            double attackMult = 1.0 + (0.09 * mentality);
+            double midfieldMult = 1.0 + (0.09 * pressing);
+            double defenceMult = (1.0 - (0.07 * mentality)) * (1.0 - (0.04 * pressing));
 
             return new TeamStrength(attack * attackMult, midfield * midfieldMult, defence * defenceMult);
         }

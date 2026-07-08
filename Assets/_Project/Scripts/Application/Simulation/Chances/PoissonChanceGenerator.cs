@@ -28,22 +28,22 @@ namespace Gaffer.Application.Simulation
             var chances = new List<Chance>();
             double homePossession = ComputePossession(command.Home.Midfield, command.Away.Midfield);
 
-            AppendSideChances(chances, TeamSide.Home, command.Home.Attack, command.Away.Defence, homePossession, _settings.HomeAdvantage, rng);
-            AppendSideChances(chances, TeamSide.Away, command.Away.Attack, command.Home.Defence, 1.0 - homePossession, 1.0, rng);
+            AppendSideChances(chances, TeamSide.Home, command.Home.Attack, command.Away.Defence, homePossession, _settings.HomeAdvantage, command.HomeProfile, rng);
+            AppendSideChances(chances, TeamSide.Away, command.Away.Attack, command.Home.Defence, 1.0 - homePossession, 1.0, command.AwayProfile, rng);
 
             return chances;
         }
 
-        private void AppendSideChances(List<Chance> chances, TeamSide side, double attack, double opponentDefence, double possession, double advantage, IRandom rng)
+        private void AppendSideChances(List<Chance> chances, TeamSide side, double attack, double opponentDefence, double possession, double advantage, ChanceProfile profile, IRandom rng)
         {
             double strengthRatio = opponentDefence <= 0.0 ? _settings.MaxStrengthRatio : ClampRatio(attack / opponentDefence);
-            double expectedChances = _settings.BaseChancesPerTeam * (2.0 * possession) * strengthRatio * advantage;
+            double expectedChances = _settings.BaseChancesPerTeam * (2.0 * possession) * strengthRatio * advantage * profile.Volume;
 
             int count = SamplePoisson(expectedChances, rng);
             for (int i = 0; i < count; i++)
             {
                 int minute = rng.NextInt(MinuteFirst, MinuteAfterLast);
-                double quality = ComputeChanceQuality(rng);
+                double quality = ComputeChanceQuality(profile.Quality, rng);
                 chances.Add(new Chance(side, minute, quality));
             }
         }
@@ -59,10 +59,11 @@ namespace Gaffer.Application.Simulation
             return homeMidfield / total;
         }
 
-        private double ComputeChanceQuality(IRandom rng)
+        private double ComputeChanceQuality(double qualityMultiplier, IRandom rng)
         {
-            // Vary quality 0.5×–1.5× the tuned mean, capped below 1 so no chance is a certainty.
-            double quality = _settings.MeanChanceQuality * (0.5 + rng.NextDouble());
+            // Vary quality 0.5×–1.5× the tuned mean, scaled by the tactical profile (the counter sharpens
+            // it), capped below 1 so no chance is a certainty.
+            double quality = _settings.MeanChanceQuality * qualityMultiplier * (0.5 + rng.NextDouble());
             return Math.Min(quality, MaxChanceQuality);
         }
 

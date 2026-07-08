@@ -173,6 +173,25 @@ namespace Gaffer.Tests
         }
 
         [Test]
+        public void Simulate_Shots_AreNeverFewerThanGoals()
+        {
+            MatchSimulator simulator = CreateSimulator();
+            MatchCommand command = CreateBalancedCommand();
+
+            var rng = new SplitMix64RandomNumberGenerator(321);
+            int totalShots = 0;
+            for (int i = 0; i < 500; i++)
+            {
+                MatchOutcome outcome = simulator.Simulate(command, rng);
+                Assert.That(outcome.HomeShots, Is.GreaterThanOrEqualTo(outcome.HomeGoals));
+                Assert.That(outcome.AwayShots, Is.GreaterThanOrEqualTo(outcome.AwayGoals));
+                totalShots += outcome.HomeShots + outcome.AwayShots;
+            }
+
+            Assert.That(totalShots, Is.GreaterThan(0), "A run of matches should create shots.");
+        }
+
+        [Test]
         public void Simulate_WithoutSquads_LeavesGoalsUnnamed()
         {
             MatchSimulator simulator = CreateSimulator();

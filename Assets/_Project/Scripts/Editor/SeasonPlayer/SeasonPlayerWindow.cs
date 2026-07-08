@@ -386,22 +386,34 @@ namespace Gaffer.Editor.SeasonPlayer
         {
             VisualElement card = MakeCard();
             card.Add(MakeLabel("TACTICS", 11, HarnessPalette.Muted, bold: true));
-            card.Add(MakeLabel("Applies to your club from next week — watch the strength shift.", 10, HarnessPalette.Muted));
+            card.Add(MakeLabel("Applies to your club from next week.", 10, HarnessPalette.Muted));
 
             var mentality = new EnumField("Mentality", _tactics.Mentality);
             mentality.RegisterValueChangedCallback(e =>
-                ChangeTactics(new Tactics((Mentality)e.newValue, _tactics.Tempo, _tactics.Pressing)));
+                ChangeTactics(new Tactics((Mentality)e.newValue, _tactics.Tempo, _tactics.Pressing, _tactics.Approach)));
             card.Add(mentality);
 
             var tempo = new EnumField("Tempo", _tactics.Tempo);
             tempo.RegisterValueChangedCallback(e =>
-                ChangeTactics(new Tactics(_tactics.Mentality, (Tempo)e.newValue, _tactics.Pressing)));
+                ChangeTactics(new Tactics(_tactics.Mentality, (Tempo)e.newValue, _tactics.Pressing, _tactics.Approach)));
             card.Add(tempo);
 
             var pressing = new EnumField("Pressing", _tactics.Pressing);
             pressing.RegisterValueChangedCallback(e =>
-                ChangeTactics(new Tactics(_tactics.Mentality, _tactics.Tempo, (Pressing)e.newValue)));
+                ChangeTactics(new Tactics(_tactics.Mentality, _tactics.Tempo, (Pressing)e.newValue, _tactics.Approach)));
             card.Add(pressing);
+
+            var approach = new EnumField("Approach", _tactics.Approach);
+            approach.RegisterValueChangedCallback(e =>
+                ChangeTactics(new Tactics(_tactics.Mentality, _tactics.Tempo, _tactics.Pressing, (Approach)e.newValue)));
+            card.Add(approach);
+
+            // Mentality and pressing move the strength axes above; tempo and approach shape the chances.
+            ChanceProfile profile = ChanceProfile.FromTactics(_tactics);
+            card.Add(MakeLabel(
+                "Chances: " + Mathf.RoundToInt((float)(profile.Volume * 100f)) + "% volume · " +
+                Mathf.RoundToInt((float)(profile.Quality * 100f)) + "% quality",
+                10, HarnessPalette.Accent));
 
             return card;
         }
@@ -567,6 +579,11 @@ namespace Gaffer.Editor.SeasonPlayer
                 block.Add(MakeLabel(
                     homeName + "  " + match.HomeGoals + " - " + match.AwayGoals + "  " + awayName,
                     12, scoreColor, involvesManaged));
+
+                if (match.HomeShots + match.AwayShots > 0)
+                {
+                    block.Add(MakeLabel("shots " + match.HomeShots + "–" + match.AwayShots, 10, HarnessPalette.Muted));
+                }
 
                 string scorers = FormatScorers(match);
                 if (scorers.Length > 0)

@@ -113,11 +113,15 @@ namespace Gaffer.Application.Season
             {
                 Club home = _clubsById[fixture.Home];
                 Club away = _clubsById[fixture.Away];
-                var command = new MatchCommand(StrengthOf(home), StrengthOf(away), home.Squad, away.Squad, context);
+                var command = new MatchCommand(
+                    StrengthOf(home), StrengthOf(away),
+                    home.Squad, away.Squad,
+                    ProfileOf(home.Id), ProfileOf(away.Id),
+                    context);
                 MatchOutcome outcome = simulator.Simulate(command, rng);
 
                 _table.RecordMatch(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals);
-                matches.Add(new MatchResult(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals, outcome.Events));
+                matches.Add(new MatchResult(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals, outcome.HomeShots, outcome.AwayShots, outcome.Events));
             }
 
             _playedResults.AddRange(matches);
@@ -158,6 +162,11 @@ namespace Gaffer.Application.Season
         private Tactics TacticsOf(ClubId club)
         {
             return _tacticsByClub.TryGetValue(club, out Tactics tactics) ? tactics : Tactics.Balanced;
+        }
+
+        private ChanceProfile ProfileOf(ClubId club)
+        {
+            return ChanceProfile.FromTactics(TacticsOf(club));
         }
     }
 }
