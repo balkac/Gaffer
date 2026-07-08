@@ -30,29 +30,47 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void Sign_WithEnoughBudget_AddsThePlayerAndDeductsTheFee()
+        public void Sign_WithEnoughCashAndWageRoom_AddsPlayerAndUpdatesFinances()
         {
             Squad squad = SquadOf(20);
             Player target = Forward(1, 75, 24);
-            long fee = TransferService.SignFee(target);
+            long fee = TransferService.Fee(target);
+            long wage = PlayerWage.Weekly(target);
+            var finances = new Finances(fee + 500_000, 200_000, 100_000);
 
-            Result<TransferResult> result = TransferService.Sign(fee + 500_000, squad, target);
+            Result<TransferResult> result = TransferService.Sign(finances, squad, target);
 
             Assert.That(result.IsSuccess, Is.True);
-            Assert.That(result.Value.Budget, Is.EqualTo(500_000));
+            Assert.That(result.Value.Finances.Cash, Is.EqualTo(500_000));
+            Assert.That(result.Value.Finances.WeeklyWageBill, Is.EqualTo(100_000 + wage));
             Assert.That(result.Value.Squad.Count, Is.EqualTo(21));
             Assert.That(result.Value.Squad.Contains(target.Id), Is.True);
             Assert.That(squad.Count, Is.EqualTo(20), "The original squad must be unchanged.");
         }
 
         [Test]
-        public void Sign_WithoutEnoughBudget_Fails()
+        public void Sign_WithoutEnoughCash_Fails()
         {
             Squad squad = SquadOf(20);
             Player target = Forward(1, 80, 24);
-            long fee = TransferService.SignFee(target);
+            long fee = TransferService.Fee(target);
+            var finances = new Finances(fee - 1, 1_000_000, 0);
 
-            Result<TransferResult> result = TransferService.Sign(fee - 1, squad, target);
+            Result<TransferResult> result = TransferService.Sign(finances, squad, target);
+
+            Assert.That(result.IsFailure, Is.True);
+        }
+
+        [Test]
+        public void Sign_WithoutWageRoom_Fails()
+        {
+            Squad squad = SquadOf(20);
+            Player target = Forward(1, 80, 24);
+            long wage = PlayerWage.Weekly(target);
+            // Plenty of cash, but the wage budget is already full to within less than his wage.
+            var finances = new Finances(500_000_000, 100_000, 100_000 - (wage - 1));
+
+            Result<TransferResult> result = TransferService.Sign(finances, squad, target);
 
             Assert.That(result.IsFailure, Is.True);
         }
@@ -63,23 +81,27 @@ namespace Gaffer.Tests
             Player target = Forward(1, 70, 24);
             var squad = new Squad(new List<Player> { target });
 
-            Result<TransferResult> result = TransferService.Sign(100_000_000, squad, target);
+            Result<TransferResult> result = TransferService.Sign(new Finances(500_000_000, 500_000, 0), squad, target);
 
             Assert.That(result.IsFailure, Is.True);
         }
 
         [Test]
-        public void Sell_RemovesThePlayerAndAddsTheFee()
+        public void Sell_RemovesPlayerAddsCashAndFreesWages()
         {
             Squad squad = SquadOf(20);
             Player onRoster = squad.Players[3];
+            long fee = TransferService.Fee(onRoster);
+            long wage = PlayerWage.Weekly(onRoster);
+            var finances = new Finances(2_000_000, 200_000, 120_000);
 
-            Result<TransferResult> result = TransferService.Sell(2_000_000, squad, onRoster);
+            Result<TransferResult> result = TransferService.Sell(finances, squad, onRoster);
 
             Assert.That(result.IsSuccess, Is.True);
             Assert.That(result.Value.Squad.Count, Is.EqualTo(19));
             Assert.That(result.Value.Squad.Contains(onRoster.Id), Is.False);
-            Assert.That(result.Value.Budget, Is.EqualTo(2_000_000 + TransferService.SellFee(onRoster)));
+            Assert.That(result.Value.Finances.Cash, Is.EqualTo(2_000_000 + fee));
+            Assert.That(result.Value.Finances.WeeklyWageBill, Is.EqualTo(120_000 - wage));
         }
 
         [Test]
@@ -88,20 +110,18 @@ namespace Gaffer.Tests
             Squad squad = SquadOf(11);
             Player onRoster = squad.Players[0];
 
-            Result<TransferResult> result = TransferService.Sell(0, squad, onRoster);
+            Result<TransferResult> result = TransferService.Sell(new Finances(0, 200_000, 100_000), squad, onRoster);
 
             Assert.That(result.IsFailure, Is.True);
         }
 
         [Test]
-        public void SignThenSell_LosesMoneyOnTheSpread()
+        public void Fee_IsTheMarketValue_NoSpread()
         {
-            // Buying at a premium and selling at a discount means churning the same player bleeds cash.
-            Player target = Forward(1, 78, 25);
-            long signFee = TransferService.SignFee(target);
-            long sellFee = TransferService.SellFee(target);
+            // Value is value both ways — round-tripping an undeveloped player is break-even, no money printer.
+            Player player = Forward(1, 78, 25);
 
-            Assert.That(sellFee, Is.LessThan(signFee));
+            Assert.That(TransferService.Fee(player), Is.EqualTo(PlayerValuation.Value(player)));
         }
     }
 }

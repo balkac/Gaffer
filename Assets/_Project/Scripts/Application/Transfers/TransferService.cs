@@ -1,21 +1,42 @@
-using System;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
 
 namespace Gaffer.Application.Transfers
 {
-    /// <summary>The new budget and squad after a transfer, and the fee that moved.</summary>
+    /// <summary>
+    /// A club's money at a moment: transfer cash for fees, and a weekly wage budget the wage bill must stay
+    /// under (the CM 01/02 two-budget model). Immutable — a transfer returns a new one.
+    /// </summary>
+    public readonly struct Finances
+    {
+        public Finances(long cash, long weeklyWageBudget, long weeklyWageBill)
+        {
+            Cash = cash;
+            WeeklyWageBudget = weeklyWageBudget;
+            WeeklyWageBill = weeklyWageBill;
+        }
+
+        public long Cash { get; }
+
+        public long WeeklyWageBudget { get; }
+
+        public long WeeklyWageBill { get; }
+
+        public long WageHeadroom => WeeklyWageBudget - WeeklyWageBill;
+    }
+
+    /// <summary>The finances and squad after a transfer, plus the fee that moved.</summary>
     public sealed class TransferResult
     {
-        public TransferResult(long budget, Squad squad, long fee)
+        public TransferResult(Finances finances, Squad squad, long fee)
         {
-            Budget = budget;
+            Finances = finances;
             Squad = squad;
             Fee = fee;
         }
 
-        public long Budget { get; }
+        public Finances Finances { get; }
 
         public Squad Squad { get; }
 
@@ -23,45 +44,47 @@ namespace Gaffer.Application.Transfers
     }
 
     /// <summary>
-    /// Signs and sells players against a budget — the low-friction transfer model (GDD §4.4): no agents,
-    /// just a fee and a yes/no. The economy stays tense on purpose. You pay a premium over market value to
-    /// prise a player away, and you receive a little under value when you sell, so churning the squad
-    /// bleeds money — it is not a printer. Expected failures (can't afford, not on the roster, squad too
-    /// thin) return a <see cref="Result{T}"/> to handle, not an exception.
+    /// Signs and sells players — the low-friction transfer model (GDD §4.4): a fee and a yes/no, no agents.
+    /// A transfer is priced at the player's market value with no premium or discount — value is value. The
+    /// economy stays tense not through a fee tax but the CM 01/02 way: a signing must fit both the transfer
+    /// cash and the weekly wage budget, and wages bite every week, so you cannot hoard talent. Because value
+    /// tracks current ability (not the hidden ceiling), an undeveloped player round-trips at break-even —
+    /// there is no money printer; the flip's profit comes from growing him first. Expected failures return a
+    /// <see cref="Result{T}"/>.
     /// </summary>
     public static class TransferService
     {
-        private const double BuyPremium = 1.15;
-        private const double SellDiscount = 0.92;
         private const int MinSquadSize = 11;
 
-        public static long SignFee(Player player)
+        public static long Fee(Player player)
         {
-            return Round(PlayerValuation.Value(player) * BuyPremium);
+            return PlayerValuation.Value(player);
         }
 
-        public static long SellFee(Player player)
-        {
-            return Round(PlayerValuation.Value(player) * SellDiscount);
-        }
-
-        public static Result<TransferResult> Sign(long budget, Squad squad, Player player)
+        public static Result<TransferResult> Sign(Finances finances, Squad squad, Player player)
         {
             if (squad.Contains(player.Id))
             {
                 return Result<TransferResult>.Failure("That player is already in the squad.");
             }
 
-            long fee = SignFee(player);
-            if (fee > budget)
+            long fee = Fee(player);
+            if (fee > finances.Cash)
             {
-                return Result<TransferResult>.Failure($"Not enough budget: the fee is {fee} but only {budget} is available.");
+                return Result<TransferResult>.Failure($"Not enough transfer cash: the fee is {fee} but only {finances.Cash} is available.");
             }
 
-            return Result<TransferResult>.Success(new TransferResult(budget - fee, squad.Add(player), fee));
+            long wage = PlayerWage.Weekly(player);
+            if (wage > finances.WageHeadroom)
+            {
+                return Result<TransferResult>.Failure($"No room in the wage budget: his wage is {wage}/wk but only {finances.WageHeadroom}/wk is free.");
+            }
+
+            var after = new Finances(finances.Cash - fee, finances.WeeklyWageBudget, finances.WeeklyWageBill + wage);
+            return Result<TransferResult>.Success(new TransferResult(after, squad.Add(player), fee));
         }
 
-        public static Result<TransferResult> Sell(long budget, Squad squad, Player player)
+        public static Result<TransferResult> Sell(Finances finances, Squad squad, Player player)
         {
             if (!squad.Contains(player.Id))
             {
@@ -73,13 +96,10 @@ namespace Gaffer.Application.Transfers
                 return Result<TransferResult>.Failure($"The squad is already down to {MinSquadSize}; you can't sell more.");
             }
 
-            long fee = SellFee(player);
-            return Result<TransferResult>.Success(new TransferResult(budget + fee, squad.Remove(player.Id), fee));
-        }
-
-        private static long Round(double value)
-        {
-            return (long)Math.Round(value);
+            long fee = Fee(player);
+            long wage = PlayerWage.Weekly(player);
+            var after = new Finances(finances.Cash + fee, finances.WeeklyWageBudget, finances.WeeklyWageBill - wage);
+            return Result<TransferResult>.Success(new TransferResult(after, squad.Remove(player.Id), fee));
         }
     }
 }

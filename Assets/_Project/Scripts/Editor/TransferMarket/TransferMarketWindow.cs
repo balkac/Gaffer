@@ -24,14 +24,15 @@ namespace Gaffer.Editor.TransferMarket
         private int _poolSize = 40;
         private int _gems = 3;
         private long _seed = 20260708L;
-        private long _startingBudget = 6_000_000L;
+        private long _startingCash = 6_000_000L;
+        private long _wageBudget = 160_000L;
         private float _accuracy = 0.3f;
         private bool _reveal;
 
         private IReadOnlyList<Player> _pool;
         private List<Player> _market;
         private Squad _squad;
-        private long _budget;
+        private Finances _finances;
         private string _status;
         private readonly Scout _scout = new Scout();
 
@@ -85,9 +86,13 @@ namespace Gaffer.Editor.TransferMarket
             seed.RegisterValueChangedCallback(e => _seed = e.newValue);
             card.Add(seed);
 
-            var budget = new LongField("Starting budget (€)") { value = _startingBudget };
-            budget.RegisterValueChangedCallback(e => _startingBudget = e.newValue);
-            card.Add(budget);
+            var cash = new LongField("Transfer cash (€)") { value = _startingCash };
+            cash.RegisterValueChangedCallback(e => _startingCash = e.newValue);
+            card.Add(cash);
+
+            var wageBudget = new LongField("Wage budget (€/wk)") { value = _wageBudget };
+            wageBudget.RegisterValueChangedCallback(e => _wageBudget = e.newValue);
+            card.Add(wageBudget);
 
             var accuracy = new Slider("Scout accuracy", 0f, 1f) { value = _accuracy };
             accuracy.RegisterValueChangedCallback(e =>
@@ -132,24 +137,35 @@ namespace Gaffer.Editor.TransferMarket
                 new SplitMix64RandomNumberGenerator((ulong)_seed ^ 0xA5A5A5UL));
             _market = new List<Player>(_pool);
 
-            _budget = _startingBudget;
+            _finances = new Finances(_startingCash, _wageBudget, TotalWages(_squad));
             _status = null;
             Render();
         }
 
+        private static long TotalWages(Squad squad)
+        {
+            long total = 0;
+            foreach (Player player in squad.Players)
+            {
+                total += PlayerWage.Weekly(player);
+            }
+
+            return total;
+        }
+
         private void Sign(Player player)
         {
-            Result<TransferResult> result = TransferService.Sign(_budget, _squad, player);
+            Result<TransferResult> result = TransferService.Sign(_finances, _squad, player);
             if (result.IsFailure)
             {
                 _status = result.Error;
             }
             else
             {
-                _budget = result.Value.Budget;
+                _finances = result.Value.Finances;
                 _squad = result.Value.Squad;
                 _market.Remove(player);
-                _status = "Signed " + player.Name + " for " + FormatValue(result.Value.Fee) + ".";
+                _status = "Signed " + player.Name + " for " + FormatValue(result.Value.Fee) + " (" + FormatValue(PlayerWage.Weekly(player)) + "/wk).";
             }
 
             Render();
@@ -157,14 +173,14 @@ namespace Gaffer.Editor.TransferMarket
 
         private void Sell(Player player)
         {
-            Result<TransferResult> result = TransferService.Sell(_budget, _squad, player);
+            Result<TransferResult> result = TransferService.Sell(_finances, _squad, player);
             if (result.IsFailure)
             {
                 _status = result.Error;
             }
             else
             {
-                _budget = result.Value.Budget;
+                _finances = result.Value.Finances;
                 _squad = result.Value.Squad;
                 _market.Add(player);
                 _status = "Sold " + player.Name + " for " + FormatValue(result.Value.Fee) + ".";
@@ -185,9 +201,18 @@ namespace Gaffer.Editor.TransferMarket
             var top = new VisualElement();
             top.style.flexDirection = FlexDirection.Row;
             top.style.justifyContent = Justify.SpaceBetween;
-            top.Add(Text("BUDGET  " + FormatValue(_budget), 15, HarnessPalette.Accent, bold: true));
+            top.Add(Text("CASH  " + FormatValue(_finances.Cash), 15, HarnessPalette.Accent, bold: true));
             top.Add(Text(_squad.Count + " in squad · accuracy " + Mathf.RoundToInt(_accuracy * 100f) + "%", 12, HarnessPalette.Muted));
             header.Add(top);
+
+            bool overWages = _finances.WageHeadroom < 0;
+            Color wageColor = overWages ? HarnessPalette.Loss : HarnessPalette.Muted;
+            header.Add(Text(
+                "Wages " + FormatValue(_finances.WeeklyWageBill) + " / " + FormatValue(_finances.WeeklyWageBudget) +
+                " per week  ·  " + FormatValue(_finances.WageHeadroom) + "/wk free  ·  " +
+                FormatValue(_finances.WeeklyWageBill * 52) + "/yr",
+                11, wageColor));
+
             if (!string.IsNullOrEmpty(_status))
             {
                 header.Add(Text(_status, 11, HarnessPalette.Chalk));
@@ -206,8 +231,8 @@ namespace Gaffer.Editor.TransferMarket
             foreach (Player player in _squad.Players)
             {
                 var row = Row();
-                var line = LineWithName(player, PlayerValuation.Value(player));
-                var sell = new Button(() => Sell(player)) { text = "Sell " + FormatValue(TransferService.SellFee(player)) };
+                var line = LineWithName(player);
+                var sell = new Button(() => Sell(player)) { text = "Sell " + FormatValue(TransferService.Fee(player)) };
                 StyleActionButton(sell, HarnessPalette.Loss);
                 line.Add(sell);
                 row.Add(line);
@@ -230,8 +255,8 @@ namespace Gaffer.Editor.TransferMarket
                 ScoutReport report = _scout.Observe(player, _accuracy);
 
                 var row = Row();
-                var line = LineWithName(player, PlayerValuation.Value(player));
-                var sign = new Button(() => Sign(player)) { text = "Sign " + FormatValue(TransferService.SignFee(player)) };
+                var line = LineWithName(player);
+                var sign = new Button(() => Sign(player)) { text = "Sign " + FormatValue(TransferService.Fee(player)) };
                 StyleActionButton(sign, HarnessPalette.Accent);
                 line.Add(sign);
                 row.Add(line);
@@ -250,7 +275,7 @@ namespace Gaffer.Editor.TransferMarket
             return card;
         }
 
-        private static VisualElement LineWithName(Player player, long value)
+        private static VisualElement LineWithName(Player player)
         {
             var line = new VisualElement();
             line.style.flexDirection = FlexDirection.Row;
@@ -259,7 +284,7 @@ namespace Gaffer.Editor.TransferMarket
             var name = Text(player.Name + "  ·  " + Abbrev(player.Position) + "  ·  " + player.Age, 12, HarnessPalette.Chalk, bold: true);
             name.style.flexGrow = 1;
             line.Add(name);
-            var worth = Text(FormatValue(value) + "   ", 11, HarnessPalette.Muted);
+            var worth = Text(FormatValue(PlayerValuation.Value(player)) + " · " + FormatValue(PlayerWage.Weekly(player)) + "/wk   ", 11, HarnessPalette.Muted);
             line.Add(worth);
             return line;
         }
