@@ -9,7 +9,7 @@
 ## Güncel durum · 2026-07-08
 
 - **Faz 0** ✅ · **Faz 1** ✅ (★ Gate A geçildi) · **Faz 2** 🟡 (çekirdek bitti, JSON adapter kaldı) · **Faz 3** 🟡 (üreteç + kadro→güç köprüsü + kulüp kadroları hazır)
-- **81 dotnet testi yeşil** — `dotnet test tests/Gaffer.Tests.csproj` (aynı testler Unity Test Runner'da da koşar)
+- **91 dotnet testi yeşil** — `dotnet test tests/Gaffer.Tests.csproj` (aynı testler Unity Test Runner'da da koşar)
 - Bir lig sezonu **uçtan uca oynanıyor** (headless + **Season Player** editor demosu); **kaydet/yükle çekirdeği** + **deterministik oyuncu üreteci** (garanti wonderkid dâhil) + **kadro→`TeamStrength` köprüsü** (`BuildEffectiveStrength`) hazır. **Season Player artık her kulübe üretilmiş kadro veriyor**, gücü kadrodan türetiyor, yönettiğin **kadroyu isimli oyuncular + rol-anahtarı statlarla** (değere göre renklenen, ART_STYLE §4.1) gösteriyor maç sonuçlarında **isimli golcüleri** ("Doe 23', Roe 67'") listeliyor ve **taktik** (mentality/tempo/pressing) seçtirip gücün canlı kaydığını gösteriyor, **formasyon + Start/Bench ile ilk 11'i seçtiriyor** (güç yalnız sahadaki 11'den), **Approach** (Counter/Possession) seçtiriyor + şans-profilini gösteriyor, ve maç sonuçlarında **şut sayısını** listeliyor
 
 ---
@@ -31,10 +31,11 @@
 - **Application/Simulation** — `MatchContext`/`MatchImportance`, `MatchCommand → MatchSimulator → MatchOutcome` (Poisson şans üretimi + kalite çözümü, portlar arkasında), `MatchSimulationSettings` (tuned), `EffectiveStrengthBuilder` (`Squad → TeamStrength`: rol-anahtarı attribute'lardan ağırlıklı hat-rating ortalaması; defans rating'i pozisyona duyarlı — kaleci kalecilik grubundan; boş hat → kadro geneline düşer), `PlayerRatings` (rol-rating; builder + selector paylaşır), `Formation` (4-4-2/4-3-3/3-5-2/5-3-2/4-5-1) + `LineupSelector` (formasyona göre en iyi 11, deterministik) → **güç artık tüm kadrodan değil sahadaki 11'den türüyor**, `Tactics` (Mentality/Pressing → güç; **Tempo/Approach → şans modeli**; Balanced = kimlik) + `ChanceProfile` (`FromTactics`: tempo→hacim, approach→hacim/kalite; **Counter = az ama keskin şans**, Possession = çok ama sönük) — `MatchOutcome`/`MatchResult` artık **şut sayısı** taşır (Counter'ın "az şut, klinik" farkı görünür), `IScorerSelector`/`WeightedScorerSelector` (gol olunca golcü seçimi **iki yoldan**: açık oyun [finishing/pozisyon/pace, forvet baskın] + hava topu [heading/jumping/strength, stopere kornerden gol]; kaleci taban ağırlıktan muaf → ~%0.05, efsane anı ama nadir. Ölçüm: FWD ~%48 / MID ~%36 / DEF ~%15 / GK ~%0.05. `MatchCommand` kadroları taşır, `MatchEvent` golcüyü tutar; kadro yoksa golcü null → strength-only maçlar bozulmaz)
 - **Application/Season** — `FixtureScheduler` (çift devre, circle method), `LeagueTable`, `LeagueSeason` (hafta ilerlet + sonuç geçmişi + `Restore`; her kadrolu kulübün gücünü **ilk 11 + taktikten** her hafta türetir — `SetStarters`/`SetFormation`/`SetTactics`; **her maç kendi rng'sini fikstür kimliğinden tohumlar** → `AdvanceWeek(sim, ctx, seasonSeed)`, bir kulübün taktiği yalnız kendi maçlarını etkiler), `MatchResult` (skor + dakika-golleri), `BoardTarget` + `SeasonEvaluator` → `SeasonVerdict`
 - **Application/Serialization** — `SeasonSaveData` DTO (**v2: `MatchSeed`** — sabit sezon-seed, evolving rng-state değil) + `SeasonSaveMapper` + `SaveSchema`/`SaveMigrator` + `ISerializer` port *(JSON impl Infrastructure'da kaldı)*
+- **Application/Transfers** — `PlayerValuation` (piyasa değeri: güncel yetenek + yaş; **gizli potansiyeli fiyatlamaz** → cevher ucuz kalır, flip'in ödülü budur) + `Scout`/`ScoutReport` (maske: rol-anahtarı attribute'lar + potansiyel **aralıkla**; doğruluk arttıkça daralır, hep gerçeği içerir, ortası gerçeği vermez; deterministik)
 - **Application/Generation** — `PlayerGenerator` (deterministik, **pozisyona uygun** attribute üretimi: fiziksel herkese in-band, teknik outfield'a in-band/kaleciye zayıf, kalecilik grubu kaleciye in-band/outfield'a ~0) + `PlayerNameGenerator` (kurgusal isim) + `PlayerPoolGenerator` (garanti wonderkid) + `SquadGenerator` (inandırıcı diziliş: 2 GK / 6 DEF / 7 MID / 5 FWD) + `GenerationContext`
-- **Editor (`Gaffer.Editor`)** — `SeasonHarnessWindow` (dağılım/Gate A workbench) + `SeasonPlayerWindow` (bir sezonu izle: tablo + son hafta sonuçları/gol dakikaları + verdict)
+- **Editor (`Gaffer.Editor`)** — `SeasonHarnessWindow` (dağılım/Gate A workbench) + `SeasonPlayerWindow` (bir sezonu izle: tablo + roster/ilk-11 + taktik + isimli golcüler + şut + verdict) + `TransferMarketWindow` (havuzu scout-maskesiyle gez: doğruluk slider'ıyla aralıklar daralır, gizli cevheri sisin ardında ara)
 - **Composition** — `MatchSmokeTest` (Play → Console) + sahne
-- **Tests** — 81 test (`Gaffer.Tests`); `Gaffer.Tests.Unity` runtime determinizm kontrolü
+- **Tests** — 91 test (`Gaffer.Tests`); `Gaffer.Tests.Unity` runtime determinizm kontrolü
 - **Altyapı** — `tests/` dotnet köprüsü (net8.0 / LangVersion 9), `.editorconfig` (§1+§2), `.gitignore`
 
 ---
@@ -63,7 +64,7 @@
 
 ## Kalan / sıradaki
 
-- **Faz 3 (Yönetim, devam) — sıradaki:** ✅ `Squad` + `BuildEffectiveStrength` + `SquadGenerator` + `Club`↔`Squad` + gruplu attribute modeli + isimli golcü seçimi + **taktik** (`Tactics`) + **ilk 11 seçimi** (`Formation` + `LineupSelector`; güç sahadaki 11'den, Season Player'da formasyon + Start/Bench) hazır. **Sıradaki:** **transfer + scout** (düşük-sürtünme teklif/karşı-teklif + gergin ekonomi + scout maskesi/aralık → görünür attribute'lar bile aralıkla) → `ClubGenerator`/isim üreteci → `BalanceSO`. *(Taktik/ilk-11 şimdilik efektif gücü kaydırıyor; tempo'nun şans-hacmine doğrudan etkisi + save'de taktik/dizilim kalıcılığı sonraya.)*
+- **Faz 3 (Yönetim, devam) — sıradaki:** ✅ `Squad` + `BuildEffectiveStrength` + `SquadGenerator` + `Club`↔`Squad` + gruplu attribute modeli + isimli golcü seçimi + **taktik** (`Tactics`) + **ilk 11 seçimi** (`Formation` + `LineupSelector`; güç sahadaki 11'den, Season Player'da formasyon + Start/Bench) hazır. ✅ **scout maskesi/aralık + değerleme** (`Scout`/`PlayerValuation`, Transfer Market penceresi doğruluk slider'ıyla gösteriyor) hazır. **Sıradaki:** transfer döngüsünü kapat — **kulüp bütçesi/ekonomi** (gergin: satmak bedel taşır, para basma makinesi değil) + **al/sat işlemi** (düşük-sürtünme teklif/karşı-teklif; imzalanan oyuncu kadroya katılır) → oyuncu **gelişimi** (potansiyel zamanla realize olur → "büyüt"). Sonra `ClubGenerator`/isim üreteci → `BalanceSO`. *(Taktik/ilk-11 efektif gücü kaydırıyor; tempo'nun şans-hacmine doğrudan etkisi + save'de taktik/dizilim/ekonomi kalıcılığı sonraya.)*
 - **Faz 2 kapanışı:** `Infrastructure/Persistence` JSON impl — Newtonsoft paketi + `ISerializer` impl + dosya I/O (async). *Unity tarafı.*
 - **Bonus:** Editor harness'ı `Application/Season`'ı kullanacak şekilde sadeleştir (duplication).
 
@@ -74,6 +75,7 @@
 - **Testler:** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj`
 - **Harness:** Unity → menü **`Gaffer > Season Harness`** → Run
 - **Season Player (demo):** Unity → menü **`Gaffer > Season Player`** → Start Season → Advance Week
+- **Transfer Market (demo):** Unity → menü **`Gaffer > Transfer Market`** → Generate Pool → Scout accuracy slider'ını sürükle (aralıklar daralır)
 - **Maç smoke:** Unity → `Assets/_Project/Scenes/MatchSmokeTest.unity` → **Play** (Console'a maç akar)
 
 ---
