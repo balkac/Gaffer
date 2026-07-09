@@ -26,15 +26,7 @@ namespace Gaffer.Editor.SeasonPlayer
     /// </summary>
     public sealed class SeasonPlayerWindow : EditorWindow
     {
-        private static readonly string[] ClubNames =
-        {
-            "Ashfield United", "Brackenmoor", "Coldharbour City", "Dunmore Athletic",
-            "Elmspur Rovers", "Fenwick Town", "Gravesend", "Harrowgate",
-            "Ironbridge", "Keswick Vale", "Langford City", "Marrowfield",
-            "Northcliff", "Oakhaven", "Pemberton", "Quarrydale",
-            "Redmarsh", "Stonebury", "Thornwood", "Uplyme United",
-            "Vardenfell", "Westgate Albion", "Yarmouth Bay", "Ravensden",
-        };
+        private const int MaxTeams = 64;
 
         private int _teamCount = 20;
         private long _seed = 20260707L;
@@ -144,7 +136,7 @@ namespace Gaffer.Editor.SeasonPlayer
 
         private void StartSeason()
         {
-            int count = Mathf.Clamp(_teamCount, 4, ClubNames.Length);
+            int count = Mathf.Clamp(_teamCount, 4, MaxTeams);
             _league = BuildLeague(count);
             _season = new LeagueSeason(_league);
             _simulator = new MatchSimulator(
@@ -442,35 +434,12 @@ namespace Gaffer.Editor.SeasonPlayer
 
         private League BuildLeague(int count)
         {
-            // Each club now fields a generated squad; its match strength is derived from the players
-            // (BuildEffectiveStrength), so the table's spread emerges from the rosters, not a scalar.
-            // A separate rng stream keeps squad generation from disturbing match determinism.
-            var squadGenerator = new SquadGenerator(new PlayerGenerator());
-            var strengthBuilder = new EffectiveStrengthBuilder();
+            // The whole world is generated now: LeagueGenerator names the league and every club, fields each a
+            // tier-scaled squad, and derives strength from the roster. A separate rng stream keeps squad and
+            // name generation from disturbing match determinism.
+            var generator = new LeagueGenerator(new SquadGenerator(new PlayerGenerator()));
             var genRng = new SplitMix64RandomNumberGenerator((ulong)_seed ^ 0x5EEDD5EEDUL);
-
-            var clubs = new List<Club>(count);
-            for (int i = 0; i < count; i++)
-            {
-                GenerationContext context = ContextForRank(i, count);
-                Squad squad = squadGenerator.Generate(i * SquadGenerator.SquadSize, context, genRng);
-                TeamStrength strength = strengthBuilder.Build(squad);
-                clubs.Add(new Club(new ClubId(i), ClubNames[i], squad, strength));
-            }
-
-            return new League("Gaffer League", clubs);
-        }
-
-        private static GenerationContext ContextForRank(int rank, int count)
-        {
-            // Top clubs draw from a higher ability band, bottom clubs a lower one — a believable spread.
-            double t = count <= 1 ? 0.0 : (double)rank / (count - 1);
-            int centre = Mathf.RoundToInt(72.0f - (float)t * (72.0f - 46.0f));
-            return new GenerationContext
-            {
-                MinAbility = (byte)Mathf.Clamp(centre - 10, 1, 99),
-                MaxAbility = (byte)Mathf.Clamp(centre + 10, 1, 99),
-            };
+            return generator.Generate(count, genRng);
         }
 
         private void AdvanceOneWeek()
