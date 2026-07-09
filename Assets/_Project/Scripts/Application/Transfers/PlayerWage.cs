@@ -18,7 +18,7 @@ namespace Gaffer.Application.Transfers
 
         public static long Weekly(Player player)
         {
-            double ability = PlayerRatings.ForPosition(player) / 100.0;
+            double ability = PlayerRatings.ForRole(player) / 100.0;
             double raw = Math.Pow(Math.Max(0.0, ability), 2.0) * MaxWeekly;
             long rounded = (long)Math.Round(raw / RoundTo) * RoundTo;
             return Math.Max(Floor, rounded);

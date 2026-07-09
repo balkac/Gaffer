@@ -8,10 +8,11 @@ namespace Gaffer.Application.Simulation
     /// <summary>
     /// Picks the starting eleven for a formation by filling each role slot with the best available player:
     /// first an exact-role match (a real right-back for the right-back slot), then the best of the same
-    /// broad line, then anyone left. Rating is <see cref="PlayerRatings.ForPosition"/>; ties break on the
+    /// broad line, then anyone left. Rating is <see cref="PlayerRatings.ForRole(Player)"/> — role-specific, so
+    /// a full-back is judged on pace and crossing and a centre-back on heading, and a player filling a
+    /// same-line slot out of his natural role is rated on his own role, not the slot's. Ties break on the
     /// lower player id, so the pick is deterministic — the natural default a manager adjusts, and the
-    /// auto-pick for AI clubs. Role-specific ratings (a full-back valued on pace, a centre-back on heading)
-    /// refine this later; for now the roster's real roles already make each formation field a distinct shape.
+    /// auto-pick for AI clubs.
     /// </summary>
     public sealed class LineupSelector
     {
@@ -67,7 +68,7 @@ namespace Gaffer.Application.Simulation
                 if (IsBetter(player, bestRating, bestId))
                 {
                     best = player;
-                    bestRating = PlayerRatings.ForPosition(player);
+                    bestRating = PlayerRatings.ForRole(player);
                     bestId = player.Id.Value;
                 }
             }
@@ -85,7 +86,7 @@ namespace Gaffer.Application.Simulation
                 if (IsBetter(player, bestRating, bestId))
                 {
                     best = player;
-                    bestRating = PlayerRatings.ForPosition(player);
+                    bestRating = PlayerRatings.ForRole(player);
                     bestId = player.Id.Value;
                 }
             }
@@ -95,7 +96,7 @@ namespace Gaffer.Application.Simulation
 
         private static bool IsBetter(Player candidate, double bestRating, int bestId)
         {
-            double rating = PlayerRatings.ForPosition(candidate);
+            double rating = PlayerRatings.ForRole(candidate);
             if (rating > bestRating)
             {
                 return true;

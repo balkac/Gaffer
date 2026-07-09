@@ -539,7 +539,7 @@ namespace Gaffer.Editor.SeasonPlayer
                 var name = MakeLabel(Surname(player.Name), 10, HarnessPalette.Chalk, bold: true);
                 name.style.unityTextAlign = TextAnchor.MiddleCenter;
                 token.Add(name);
-                token.Add(MakeLabel(Mathf.RoundToInt((float)PlayerRatings.ForPosition(player)).ToString(), 9, HarnessPalette.Accent, bold: true));
+                token.Add(MakeLabel(Mathf.RoundToInt((float)PlayerRatings.ForRole(player)).ToString(), 9, HarnessPalette.Accent, bold: true));
 
                 RegisterDrag(token, slot, player.Id.Value);
             }
@@ -956,7 +956,7 @@ namespace Gaffer.Editor.SeasonPlayer
             var wrap = new VisualElement();
             wrap.style.flexDirection = FlexDirection.Row;
 
-            foreach (AttributeKey key in RoleKeyAttributes.For(player.Position))
+            foreach (AttributeKey key in RoleKeyAttributes.For(player.Role))
             {
                 byte value = key.Read(player.Attributes);
                 Label chip = MakeLabel(key.Label + " " + value, 10, AttributeColor(value), value >= 85);
