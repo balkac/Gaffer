@@ -123,5 +123,41 @@ namespace Gaffer.Tests
 
             Assert.That(TransferService.Fee(player), Is.EqualTo(PlayerValuation.Value(player)));
         }
+
+        [Test]
+        public void PayWeeklyWages_DeductsTheWageBillFromCash_LeavesBudgetAndBill()
+        {
+            var finances = new Finances(1_000_000, 200_000, 150_000);
+
+            Finances after = finances.PayWeeklyWages();
+
+            Assert.That(after.Cash, Is.EqualTo(850_000));
+            Assert.That(after.WeeklyWageBudget, Is.EqualTo(200_000), "The budget is a cap, not spent.");
+            Assert.That(after.WeeklyWageBill, Is.EqualTo(150_000), "The bill is unchanged by paying it.");
+        }
+
+        [Test]
+        public void PayWeeklyWages_OverManyWeeks_DrainsCashByBillEachWeek()
+        {
+            var finances = new Finances(1_000_000, 300_000, 100_000);
+
+            for (int week = 0; week < 8; week++)
+            {
+                finances = finances.PayWeeklyWages();
+            }
+
+            // Eight weeks at 100k drains 800k — the wage budget is a real weekly cost now, not a passive cap.
+            Assert.That(finances.Cash, Is.EqualTo(200_000));
+        }
+
+        [Test]
+        public void PayWeeklyWages_WhenBillExceedsCash_GoesNegative()
+        {
+            var finances = new Finances(50_000, 300_000, 100_000);
+
+            Finances after = finances.PayWeeklyWages();
+
+            Assert.That(after.Cash, Is.EqualTo(-50_000), "An unaffordable wage bill overspends into the red.");
+        }
     }
 }
