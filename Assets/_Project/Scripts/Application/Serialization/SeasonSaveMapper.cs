@@ -4,23 +4,27 @@ using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
+using Gaffer.Domain.Players;
 
 namespace Gaffer.Application.Serialization
 {
     /// <summary>
-    /// Maps between the live season and its serializable snapshot. Capture records the clubs, the
-    /// played results, the rounds done, and the season seed; Restore rebuilds the league and replays
-    /// the results so the resumed season continues deterministically — remaining fixtures are seeded from
-    /// <see cref="SeasonSaveData.MatchSeed"/>, so they reproduce an uninterrupted run exactly.
+    /// Maps between the live season and its serializable snapshot. Capture records the clubs (with their
+    /// full squads, so development and renewal survive across seasons), the season number, the played
+    /// results, the rounds done, and the season seed; Restore rebuilds the league and replays the results
+    /// so the resumed season continues deterministically — remaining fixtures are seeded from
+    /// <see cref="SeasonSaveData.MatchSeed"/>, so they reproduce an uninterrupted run exactly. A club with
+    /// no roster (a strength-only harness fixture, or an older v2 save) round-trips as strength only.
     /// </summary>
     public sealed class SeasonSaveMapper
     {
-        public SeasonSaveData Capture(League league, LeagueSeason season, ulong matchSeed)
+        public SeasonSaveData Capture(League league, LeagueSeason season, ulong matchSeed, int seasonNumber)
         {
             var data = new SeasonSaveData
             {
                 SchemaVersion = SaveSchema.CurrentVersion,
                 LeagueName = league.Name,
+                SeasonNumber = seasonNumber,
                 PlayedRounds = season.CurrentRound,
                 MatchSeed = matchSeed,
             };
@@ -34,6 +38,7 @@ namespace Gaffer.Application.Serialization
                     Attack = club.Strength.Attack,
                     Midfield = club.Strength.Midfield,
                     Defence = club.Strength.Defence,
+                    Squad = CaptureSquad(club.Squad),
                 });
             }
 
@@ -56,7 +61,11 @@ namespace Gaffer.Application.Serialization
             var clubs = new List<Club>(data.Clubs.Count);
             foreach (ClubSaveData club in data.Clubs)
             {
-                clubs.Add(new Club(new ClubId(club.Id), club.Name, new TeamStrength(club.Attack, club.Midfield, club.Defence)));
+                var strength = new TeamStrength(club.Attack, club.Midfield, club.Defence);
+                Squad squad = RestoreSquad(club.Squad);
+                clubs.Add(squad == null
+                    ? new Club(new ClubId(club.Id), club.Name, strength)
+                    : new Club(new ClubId(club.Id), club.Name, squad, strength));
             }
 
             var league = new League(data.LeagueName, clubs);
@@ -70,7 +79,80 @@ namespace Gaffer.Application.Serialization
             }
 
             LeagueSeason season = LeagueSeason.Restore(league, data.PlayedRounds, results);
-            return new RestoredSeason(league, season);
+            return new RestoredSeason(league, season, data.SeasonNumber);
+        }
+
+        private static List<PlayerSaveData> CaptureSquad(Squad squad)
+        {
+            if (squad == null)
+            {
+                return null;
+            }
+
+            var players = new List<PlayerSaveData>(squad.Players.Count);
+            foreach (Player player in squad.Players)
+            {
+                players.Add(new PlayerSaveData
+                {
+                    Id = player.Id.Value,
+                    Name = player.Name,
+                    Nationality = player.Nationality,
+                    Role = (int)player.Role,
+                    Age = player.Age,
+                    HiddenPotential = player.HiddenPotential,
+                    Attributes = ToData(player.Attributes),
+                });
+            }
+
+            return players;
+        }
+
+        private static Squad RestoreSquad(List<PlayerSaveData> saved)
+        {
+            if (saved == null)
+            {
+                return null;
+            }
+
+            var players = new List<Player>(saved.Count);
+            foreach (PlayerSaveData p in saved)
+            {
+                players.Add(new Player(
+                    new PlayerId(p.Id), p.Name, p.Nationality, (PlayerRole)p.Role, p.Age,
+                    FromData(p.Attributes), (byte)p.HiddenPotential));
+            }
+
+            return new Squad(players);
+        }
+
+        private static AttributesSaveData ToData(Attributes a)
+        {
+            return new AttributesSaveData
+            {
+                Finishing = a.Finishing, Technique = a.Technique, FirstTouch = a.FirstTouch, Dribbling = a.Dribbling,
+                Passing = a.Passing, Crossing = a.Crossing, Heading = a.Heading, LongShots = a.LongShots,
+                Marking = a.Marking, Tackling = a.Tackling, Penalties = a.Penalties, FreeKicks = a.FreeKicks,
+                Corners = a.Corners, LongThrows = a.LongThrows, Pace = a.Pace, Acceleration = a.Acceleration,
+                Stamina = a.Stamina, Strength = a.Strength, Agility = a.Agility, Jumping = a.Jumping,
+                Balance = a.Balance, Positioning = a.Positioning, Reflexes = a.Reflexes, Handling = a.Handling,
+                AerialReach = a.AerialReach, CommandOfArea = a.CommandOfArea, OneOnOnes = a.OneOnOnes,
+                Kicking = a.Kicking, GkPositioning = a.GkPositioning,
+            };
+        }
+
+        private static Attributes FromData(AttributesSaveData d)
+        {
+            return new Attributes
+            {
+                Finishing = d.Finishing, Technique = d.Technique, FirstTouch = d.FirstTouch, Dribbling = d.Dribbling,
+                Passing = d.Passing, Crossing = d.Crossing, Heading = d.Heading, LongShots = d.LongShots,
+                Marking = d.Marking, Tackling = d.Tackling, Penalties = d.Penalties, FreeKicks = d.FreeKicks,
+                Corners = d.Corners, LongThrows = d.LongThrows, Pace = d.Pace, Acceleration = d.Acceleration,
+                Stamina = d.Stamina, Strength = d.Strength, Agility = d.Agility, Jumping = d.Jumping,
+                Balance = d.Balance, Positioning = d.Positioning, Reflexes = d.Reflexes, Handling = d.Handling,
+                AerialReach = d.AerialReach, CommandOfArea = d.CommandOfArea, OneOnOnes = d.OneOnOnes,
+                Kicking = d.Kicking, GkPositioning = d.GkPositioning,
+            };
         }
     }
 }
