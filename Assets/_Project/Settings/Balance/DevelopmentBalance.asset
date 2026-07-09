@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2002f1d6e29f4249a0a9a2c8bfb2a637, type: 3}
+  m_Name: DevelopmentBalance
+  m_EditorClassIdentifier: Gaffer.Infrastructure::Gaffer.Infrastructure.Configuration.DevelopmentBalanceSO
+  growthRateTo20: 0.14
+  growthRateTo22: 0.1
+  growthRateTo24: 0.07
+  growthRateTo26: 0.045
+  growthRateTo29: 0.02
+  minSeasonVariance: 0.6
+  maxSeasonVariance: 1.4
+  keeperPeakAge: 34
+  centralPeakAge: 32
+  widePeakAge: 31
+  forwardPeakAge: 30
+  minDeclineAge: 30
+  declinePerYear: 0.9
+  maxDeclineYears: 6
+  generalDeclineFactor: 0.6
+  attributeFloor: 25
+  physicalFloor: 15

@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1b26cc6f6e104ab39d9de24a678dd4c4, type: 3}
+  m_Name: RenewalBalance
+  m_EditorClassIdentifier: Gaffer.Infrastructure::Gaffer.Infrastructure.Configuration.RenewalBalanceSO
+  keeperTwilightAge: 36
+  keeperHardAge: 43
+  outfielderTwilightAge: 33
+  outfielderHardAge: 40
+  retirementRatingEase: 0.4
+  gemCadenceSeasons: 5
+  gemMinAbility: 28
+  gemMaxAbility: 46
+  gemMinPotential: 86
+  gemMaxPotential: 96
+  youthMinAge: 16
+  youthMaxAge: 18
