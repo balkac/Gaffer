@@ -54,6 +54,15 @@ namespace Gaffer.Tests
             return new League("Test League", new List<Club>(clubs));
         }
 
+        // Renewal with the academy intake turned off, to isolate ageing/development/strength invariants from
+        // the extra youth that would otherwise change the squad's size and line averages.
+        private static RenewalSettings NoIntake()
+        {
+            var settings = RenewalSettings.Default;
+            settings.YouthIntakePerSeason = 0;
+            return settings;
+        }
+
         private static Club ClubWithSquad(int id, Squad squad)
         {
             return new Club(new ClubId(id), "Club " + id, squad, new EffectiveStrengthBuilder().Build(squad));
@@ -64,7 +73,7 @@ namespace Gaffer.Tests
         {
             League league = LeagueWith(ClubWithSquad(0, YoungSquad(50, 85)));
 
-            League next = new SeasonTransition().ToNextSeason(league, 1234UL, 2);
+            League next = new SeasonTransition(DevelopmentSettings.Default, NoIntake()).ToNextSeason(league, 1234UL, 2);
 
             IReadOnlyList<Player> before = league.Clubs[0].Squad.Players;
             IReadOnlyList<Player> after = next.Clubs[0].Squad.Players;
@@ -81,7 +90,7 @@ namespace Gaffer.Tests
         {
             League league = LeagueWith(ClubWithSquad(0, YoungSquad(50, 85)));
 
-            League next = new SeasonTransition().ToNextSeason(league, 1234UL, 2);
+            League next = new SeasonTransition(DevelopmentSettings.Default, NoIntake()).ToNextSeason(league, 1234UL, 2);
 
             TeamStrength before = league.Clubs[0].Strength;
             TeamStrength after = next.Clubs[0].Strength;
@@ -97,7 +106,7 @@ namespace Gaffer.Tests
             var settings = DevelopmentSettings.Default;
             settings.GrowthRateTo20 = 0.0;
 
-            League next = new SeasonTransition(settings).ToNextSeason(league, 1234UL, 2);
+            League next = new SeasonTransition(settings, NoIntake()).ToNextSeason(league, 1234UL, 2);
 
             // 18-year-olds with no growth rate and no retirements: the roster (and its strength) is unchanged.
             TeamStrength before = league.Clubs[0].Strength;
@@ -162,6 +171,26 @@ namespace Gaffer.Tests
             }
 
             Assert.That(anyDifferent, Is.True);
+        }
+
+        [Test]
+        public void ToNextSeason_AcademyIntake_GrowsTheSquadTowardTheCap()
+        {
+            League league = LeagueWith(ClubWithSquad(0, YoungSquad(50, 85)));
+            var transition = new SeasonTransition();
+
+            // Even with a young squad that never retires, the academy feeds a youth through every season, so the
+            // roster grows year on year until it reaches the cap — then holds.
+            int previous = league.Clubs[0].Squad.Players.Count;
+            for (int season = 2; season <= 6; season++)
+            {
+                league = transition.ToNextSeason(league, 1234UL, season);
+                int now = league.Clubs[0].Squad.Players.Count;
+                Assert.That(now, Is.EqualTo(previous + 1), "one academy youth joins each season below the cap");
+                previous = now;
+            }
+
+            Assert.That(league.Clubs[0].Squad.Players.Count, Is.LessThanOrEqualTo(RenewalSettings.Default.MaxSquadSize));
         }
 
         [Test]

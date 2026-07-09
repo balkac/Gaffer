@@ -40,22 +40,23 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void Renew_YoungSquad_NobodyRetiresOrJoins()
+        public void Renew_YoungSquad_NoRetirements_StillGetsAcademyIntake()
         {
             Squad squad = SquadOf(P(0, PlayerRole.CentreBack, 22), P(1, PlayerRole.Striker, 24), P(2, PlayerRole.Goalkeeper, 26));
             int nextId = 1000;
 
             Squad renewed = Renewal().Renew(squad, 99UL, 2, ref nextId);
 
-            Assert.That(renewed.Players.Count, Is.EqualTo(3));
-            Assert.That(nextId, Is.EqualTo(1000), "no retirements, so no new ids handed out");
-            var ids = new List<int>();
-            foreach (Player p in renewed.Players)
-            {
-                ids.Add(p.Id.Value);
-            }
+            // Nobody retires, but the academy still feeds one youth through (default YouthIntakePerSeason = 1).
+            Assert.That(renewed.Players.Count, Is.EqualTo(4));
+            Assert.That(nextId, Is.EqualTo(1001), "one academy youth → one fresh id handed out");
+            Assert.That(HasId(renewed, 0), Is.True);
+            Assert.That(HasId(renewed, 1), Is.True);
+            Assert.That(HasId(renewed, 2), Is.True);
 
-            Assert.That(ids, Is.EquivalentTo(new[] { 0, 1, 2 }));
+            Player youth = FindFresh(renewed);
+            Assert.That(youth, Is.Not.Null);
+            Assert.That(youth.Age, Is.LessThanOrEqualTo(18));
         }
 
         [Test]
@@ -66,13 +67,14 @@ namespace Gaffer.Tests
 
             Squad renewed = Renewal().Renew(squad, 99UL, 2, ref nextId);
 
-            Assert.That(renewed.Players.Count, Is.EqualTo(3), "one in for one out keeps the size fixed");
+            // The 40-year-old retires and a same-role youth replaces him, plus one academy intake on top.
+            Assert.That(renewed.Players.Count, Is.EqualTo(4));
             Assert.That(HasId(renewed, 0), Is.False, "the 40-year-old retired");
 
-            Player youth = FindFresh(renewed);
-            Assert.That(youth, Is.Not.Null);
-            Assert.That(youth.Role, Is.EqualTo(PlayerRole.CentreBack), "the intake fills the vacated role");
-            Assert.That(youth.Age, Is.LessThanOrEqualTo(18));
+            Player replacement = FindFresh(renewed);
+            Assert.That(replacement, Is.Not.Null);
+            Assert.That(replacement.Role, Is.EqualTo(PlayerRole.CentreBack), "the first intake fills the vacated role");
+            Assert.That(replacement.Age, Is.LessThanOrEqualTo(18));
         }
 
         [Test]
@@ -91,7 +93,8 @@ namespace Gaffer.Tests
                 }
             }
 
-            Assert.That(nextId, Is.EqualTo(502), "two retirees → two fresh ids consumed");
+            // Two retirees → two same-role replacements, plus one academy intake = three fresh ids.
+            Assert.That(nextId, Is.EqualTo(503));
         }
 
         [Test]
@@ -161,16 +164,47 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void Renew_GemSeedButNoVacancy_AddsNoOne()
+        public void Renew_GemSeed_NoRetirements_SeedsGemIntoTheAcademyIntake()
         {
-            // No retirements → no intake slot, so the gem seed has nowhere to land and the squad is unchanged.
+            // No retirements, but the guaranteed academy intake still runs — so the gem can arrive even in a
+            // quiet season (the fix to the old "only on a vacancy" gating).
             Squad squad = SquadOf(P(0, PlayerRole.Striker, 24, 60), P(1, PlayerRole.CentreBack, 25, 60));
             int nextId = 1000;
 
             Squad renewed = Renewal().Renew(squad, 99UL, 2, ref nextId, seedGem: true);
 
-            Assert.That(renewed.Players.Count, Is.EqualTo(2));
+            Assert.That(renewed.Players.Count, Is.EqualTo(3));
+            Player youth = FindFresh(renewed);
+            Assert.That(youth, Is.Not.Null);
+            Assert.That(youth.HiddenPotential, Is.GreaterThanOrEqualTo(86), "the academy intake is the seeded gem");
+        }
+
+        [Test]
+        public void Renew_AtMaxSquadSize_BringsNoExtraIntake()
+        {
+            var settings = RenewalSettings.Default;
+            settings.MaxSquadSize = 3;
+            Squad squad = SquadOf(P(0, PlayerRole.CentreBack, 22), P(1, PlayerRole.Striker, 24), P(2, PlayerRole.Goalkeeper, 26));
+            int nextId = 1000;
+
+            Squad renewed = new SquadRenewal(new PlayerGenerator(), settings).Renew(squad, 99UL, 2, ref nextId);
+
+            Assert.That(renewed.Players.Count, Is.EqualTo(3), "already at the cap — no academy intake");
             Assert.That(nextId, Is.EqualTo(1000));
+        }
+
+        [Test]
+        public void Renew_YouthIntakePerSeason_ControlsHowManyJoin()
+        {
+            var settings = RenewalSettings.Default;
+            settings.YouthIntakePerSeason = 2;
+            Squad squad = SquadOf(P(0, PlayerRole.CentreBack, 22), P(1, PlayerRole.Striker, 24), P(2, PlayerRole.Goalkeeper, 26));
+            int nextId = 1000;
+
+            Squad renewed = new SquadRenewal(new PlayerGenerator(), settings).Renew(squad, 99UL, 2, ref nextId);
+
+            Assert.That(renewed.Players.Count, Is.EqualTo(5), "two academy youths join on top of the three kept");
+            Assert.That(nextId, Is.EqualTo(1002));
         }
 
         [Test]

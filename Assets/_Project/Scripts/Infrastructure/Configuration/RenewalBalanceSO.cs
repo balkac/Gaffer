@@ -33,6 +33,12 @@ namespace Gaffer.Infrastructure.Configuration
         [SerializeField] private int youthMinAge = 16;
         [SerializeField] private int youthMaxAge = 18;
 
+        [Header("Academy intake — youth that join each season beyond replacing retirees")]
+        [Tooltip("How many academy youths join each season on top of replacements (0 disables it).")]
+        [SerializeField] private int youthIntakePerSeason = 1;
+        [Tooltip("The size the academy intake grows the squad toward and never pushes it past.")]
+        [SerializeField] private int maxSquadSize = 25;
+
         public RenewalSettings ToSettings()
         {
             return new RenewalSettings
@@ -49,6 +55,8 @@ namespace Gaffer.Infrastructure.Configuration
                 GemMaxPotential = gemMaxPotential,
                 YouthMinAge = youthMinAge,
                 YouthMaxAge = youthMaxAge,
+                YouthIntakePerSeason = youthIntakePerSeason,
+                MaxSquadSize = maxSquadSize,
             };
         }
     }

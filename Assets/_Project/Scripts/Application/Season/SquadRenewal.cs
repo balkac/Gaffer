@@ -9,13 +9,15 @@ namespace Gaffer.Application.Season
 {
     /// <summary>
     /// Turns a squad over between seasons: ageing veterans retire and a youth prospect of the same role
-    /// joins for each one, so a run's rosters stay viable instead of ageing into the ground. Retirement is
-    /// deterministic and believable — no one plays past a hard age (later for keepers), and in the twilight
-    /// years a fading, lower-rated player is likelier to hang up his boots than a star who plays on. Intake
-    /// keeps the squad size and the line balance fixed (one in for one out, same role) and draws each youth
-    /// from a band around the club's current level, so a strong club's academy stays strong — tier persists.
-    /// New players get fresh ids past every existing one. Guaranteed-gem seeding into the intake (the ongoing
-    /// discovery fantasy) is a later refinement; the starting pool already guarantees the first gems.
+    /// joins for each one, so a run's rosters stay viable instead of ageing into the ground. On top of that a
+    /// guaranteed academy intake joins every season — even one with no retirements — at the squad's thinnest
+    /// role, so a club's academy keeps feeding it, and the roster grows toward a cap (<see cref="RenewalSettings.MaxSquadSize"/>)
+    /// instead of holding fixed. Retirement is deterministic and believable — no one plays past a hard age
+    /// (later for keepers), and in the twilight years a fading, lower-rated player is likelier to hang up his
+    /// boots than a star who plays on. Youth are drawn from a band around the club's current level, so a strong
+    /// club's academy stays strong — tier persists. New players get fresh ids past every existing one. The
+    /// guaranteed academy gem (the ongoing discovery fantasy) seeds into that intake, so it can arrive even in a
+    /// season with no retirements.
     /// </summary>
     public sealed class SquadRenewal
     {
@@ -34,25 +36,26 @@ namespace Gaffer.Application.Season
         }
 
         /// <summary>
-        /// Retires the squad's veterans and brings in a same-role youth for each, advancing
-        /// <paramref name="nextPlayerId"/> past the ids it hands out. When <paramref name="seedGem"/> is set
-        /// and there is at least one vacancy, one of the intake youths is drawn from the gem context (low
-        /// visible ability, high hidden potential) — the season's guaranteed academy wonderkid, indistinguishable
-        /// from an ordinary prospect on ability alone, so only scouting or playing him reveals what he is.
-        /// The caller schedules this rarely (a per-club cadence), never as a per-player chance. Deterministic
-        /// in the season seed, the season number, and the player ids.
+        /// Retires the squad's veterans, brings in a same-role youth for each, and adds a guaranteed academy
+        /// intake on top (up to <see cref="RenewalSettings.MaxSquadSize"/>), advancing <paramref name="nextPlayerId"/>
+        /// past the ids it hands out. When <paramref name="seedGem"/> is set and any youth joins, the first
+        /// intake is drawn from the gem context (low visible ability, high hidden potential) — the season's
+        /// guaranteed academy wonderkid, indistinguishable from an ordinary prospect on ability alone, so only
+        /// scouting or playing him reveals what he is. The caller schedules the gem rarely (a per-club cadence),
+        /// never as a per-player chance. Deterministic in the season seed, the season number, and the player ids.
         /// </summary>
         public Squad Renew(Squad squad, ulong seasonSeed, int seasonNumber, ref int nextPlayerId, bool seedGem = false)
         {
             var kept = new List<Player>(squad.Players.Count);
-            var vacatedRoles = new List<PlayerRole>();
+            var intakeRoles = new List<PlayerRole>();
 
             foreach (Player player in squad.Players)
             {
                 var rng = new SplitMix64RandomNumberGenerator(RetireSeed(seasonSeed, player.Id.Value, seasonNumber));
                 if (Retires(player, rng))
                 {
-                    vacatedRoles.Add(player.Role);
+                    // A retiree is replaced by a youth of the same role — the line balance is preserved.
+                    intakeRoles.Add(player.Role);
                 }
                 else
                 {
@@ -60,19 +63,81 @@ namespace Gaffer.Application.Season
                 }
             }
 
-            if (vacatedRoles.Count > 0)
+            // The guaranteed academy intake, beyond replacing retirees: each new youth fills the squad's
+            // thinnest role, so even a season with no retirements brings talent through, and the roster grows
+            // toward the cap rather than holding fixed.
+            var pickRng = new SplitMix64RandomNumberGenerator(IntakeRoleSeed(seasonSeed, seasonNumber));
+            int projected = kept.Count + intakeRoles.Count;
+            for (int i = 0; i < _settings.YouthIntakePerSeason && projected < _settings.MaxSquadSize; i++)
+            {
+                intakeRoles.Add(ThinnestRole(kept, intakeRoles, pickRng));
+                projected++;
+            }
+
+            if (intakeRoles.Count > 0)
             {
                 GenerationContext youth = YouthContext(squad);
-                for (int i = 0; i < vacatedRoles.Count; i++)
+                for (int i = 0; i < intakeRoles.Count; i++)
                 {
                     int id = nextPlayerId++;
                     var rng = new SplitMix64RandomNumberGenerator(IntakeSeed(seasonSeed, id, seasonNumber));
                     GenerationContext context = seedGem && i == 0 ? GemContext() : youth;
-                    kept.Add(_generator.Generate(new PlayerId(id), context, vacatedRoles[i], rng));
+                    kept.Add(_generator.Generate(new PlayerId(id), context, intakeRoles[i], rng));
                 }
             }
 
             return new Squad(kept);
+        }
+
+        // Every specific role, so a thinnest-role search sees positions the squad has none of as well.
+        private static readonly PlayerRole[] AllRoles =
+        {
+            PlayerRole.Goalkeeper, PlayerRole.RightBack, PlayerRole.CentreBack, PlayerRole.LeftBack,
+            PlayerRole.DefensiveMidfield, PlayerRole.CentralMidfield, PlayerRole.AttackingMidfield,
+            PlayerRole.RightMidfield, PlayerRole.LeftMidfield, PlayerRole.RightWing, PlayerRole.LeftWing,
+            PlayerRole.Striker,
+        };
+
+        // The role the squad is thinnest in (counting the youths already planned this intake), so successive
+        // academy arrivals spread across the positions of need. Ties are broken by the deterministic pick rng,
+        // so a thin squad does not always fill the same role first and the choice still reproduces.
+        private static PlayerRole ThinnestRole(List<Player> kept, List<PlayerRole> planned, IRandom rng)
+        {
+            var counts = new Dictionary<PlayerRole, int>(AllRoles.Length);
+            foreach (PlayerRole role in AllRoles)
+            {
+                counts[role] = 0;
+            }
+
+            foreach (Player player in kept)
+            {
+                counts[player.Role]++;
+            }
+
+            foreach (PlayerRole role in planned)
+            {
+                counts[role]++;
+            }
+
+            int min = int.MaxValue;
+            foreach (PlayerRole role in AllRoles)
+            {
+                if (counts[role] < min)
+                {
+                    min = counts[role];
+                }
+            }
+
+            var candidates = new List<PlayerRole>();
+            foreach (PlayerRole role in AllRoles)
+            {
+                if (counts[role] == min)
+                {
+                    candidates.Add(role);
+                }
+            }
+
+            return candidates[rng.NextInt(candidates.Count)];
         }
 
         // Twilight is where retirement starts to bite and Hard is where it is certain — both later for
@@ -168,6 +233,13 @@ namespace Gaffer.Application.Season
         private static ulong IntakeSeed(ulong seasonSeed, int playerId, int seasonNumber)
         {
             return Mix(seasonSeed ^ 0x496E74616B6553UL, playerId, seasonNumber);
+        }
+
+        // Seeds the thinnest-role tie-break, once per squad per season (its own offset), independent of the
+        // per-youth generation rng.
+        private static ulong IntakeRoleSeed(ulong seasonSeed, int seasonNumber)
+        {
+            return Mix(seasonSeed ^ 0x526F6C655069636BUL, 0, seasonNumber);
         }
 
         private static ulong Mix(ulong seed, int playerId, int seasonNumber)
