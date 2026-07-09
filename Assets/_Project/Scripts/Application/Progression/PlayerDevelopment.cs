@@ -18,9 +18,11 @@ namespace Gaffer.Application.Progression
     /// </summary>
     public sealed class PlayerDevelopment
     {
-        // Growth as a fraction of the remaining ability gap, by age — steep for teenagers, tapering to zero
-        // by the late twenties. Applied to each of the role's rating attributes, so the role rating rises by
-        // about this fraction of the gap per season (the weights sum to 1) and never overshoots the ceiling.
+        // Growth as a fraction of the remaining ability gap, by age — steep for teenagers, tapering off
+        // through the mid-twenties, then a slow trickle into the late twenties for a late developer still
+        // short of an unrealised ceiling (CM 01/02: a player keeps inching toward his potential until ~30).
+        // Applied to each of the role's rating attributes, so the role rating rises by about this fraction
+        // of the gap per season (the weights sum to 1) and never overshoots the ceiling.
         private static double GrowthRate(int age)
         {
             if (age <= 20)
@@ -40,10 +42,26 @@ namespace Gaffer.Application.Progression
 
             if (age <= 26)
             {
-                return 0.035;
+                return 0.045;
+            }
+
+            if (age <= 29)
+            {
+                return 0.02;
             }
 
             return 0.0;
+        }
+
+        // A per-season multiplier so growth and decline are not a smooth mechanical curve: some seasons a
+        // player kicks on, some he stalls (CM 01/02's development feel). Centred on 1.0, drawn from the rng
+        // so it stays deterministic. The range never lets a single season's growth run past the ceiling.
+        private const double MinVariance = 0.6;
+        private const double MaxVariance = 1.4;
+
+        private static double SeasonVariance(IRandom rng)
+        {
+            return MinVariance + (rng.NextDouble() * (MaxVariance - MinVariance));
         }
 
         // Physical points lost per season once past the peak — nothing until 30, then rising with age.
@@ -86,7 +104,7 @@ namespace Gaffer.Application.Progression
                 {
                     // Raising each role attribute by this lifts the role rating by about the same amount
                     // (weights sum to 1); capping at the gap keeps the rating from overshooting potential.
-                    double perAttribute = Math.Min(growthRate * gap, gap);
+                    double perAttribute = Math.Min(growthRate * gap * SeasonVariance(rng), gap);
                     attributes = ApplyGrowth(attributes, player.Role, perAttribute, rng);
                 }
             }
@@ -94,7 +112,7 @@ namespace Gaffer.Application.Progression
             double decline = DeclineAmount(player.Age);
             if (decline > 0.0)
             {
-                attributes = ApplyDecline(attributes, decline, rng);
+                attributes = ApplyDecline(attributes, decline * SeasonVariance(rng), rng);
             }
 
             return new Player(player.Id, player.Name, player.Nationality, player.Role, player.Age + 1, attributes, player.HiddenPotential);

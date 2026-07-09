@@ -76,14 +76,29 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void Develop_PlayerInPrime_LeavesAbilityRoughlyFlat()
+        public void Develop_PlayerAtCeiling_StaysFlat()
         {
             var dev = new PlayerDevelopment();
-            Player before = Player(PlayerRole.CentralMidfield, 28, 70, 90);
+            // Already at his potential (ability == ceiling) and in his prime — nothing left to realise, no
+            // decline yet, so the rating holds.
+            Player before = Player(PlayerRole.CentralMidfield, 27, 78, 78);
 
             Player after = dev.Develop(before, Rng(3));
 
             Assert.That(PlayerRatings.ForRole(after), Is.EqualTo(PlayerRatings.ForRole(before)).Within(1e-9));
+        }
+
+        [Test]
+        public void Develop_PlayerPast25BelowPotential_StillGrows()
+        {
+            var dev = new PlayerDevelopment();
+            // A 26-year-old well short of his ceiling still develops (CM 01/02: 25+ is not a hard wall), just
+            // far slower than a teenager. The gap here is large enough that growth lands regardless of seed.
+            Player before = Player(PlayerRole.CentralMidfield, 26, 50, 88);
+
+            Player after = dev.Develop(before, Rng(3));
+
+            Assert.That(PlayerRatings.ForRole(after), Is.GreaterThan(PlayerRatings.ForRole(before)));
         }
 
         [Test]
