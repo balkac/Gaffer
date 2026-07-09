@@ -15,10 +15,11 @@ using Position = Gaffer.Domain.Players.Position;
 namespace Gaffer.Editor.SeasonPlayer
 {
     /// <summary>
-    /// An early playable demo: manage one club through a full league season on the real Application
-    /// core. Advance week by week, watch the table move, and get the board's verdict at the end —
-    /// promoted, retained, or sacked. Styled in the ART_STYLE broadcast identity. Not shipped; a
-    /// preview of the run the real UI (Faz 7) will present.
+    /// An early playable demo: manage one club through league seasons on the real Application core.
+    /// Advance week by week, watch the table move, and get the board's verdict at the end — promoted,
+    /// retained, or sacked — then Start Next Season to roll the whole league on a year (SeasonTransition
+    /// ages and develops every squad), so gems grow and veterans fade across a run. Styled in the
+    /// ART_STYLE broadcast identity. Not shipped; a preview of the run the real UI (Faz 7) will present.
     /// </summary>
     public sealed class SeasonPlayerWindow : EditorWindow
     {
@@ -54,6 +55,7 @@ namespace Gaffer.Editor.SeasonPlayer
         private MatchContext _context;
         private SeasonVerdict? _verdict;
         private WeekResult _lastWeek;
+        private int _seasonNumber = 1;
 
         private VisualElement _body;
 
@@ -78,7 +80,7 @@ namespace Gaffer.Editor.SeasonPlayer
             Label title = MakeLabel("SEASON PLAYER", 22, HarnessPalette.Chalk, bold: true);
             title.style.letterSpacing = 2f;
             page.Add(title);
-            page.Add(MakeLabel("Manage a club through one full season", 11, HarnessPalette.Muted));
+            page.Add(MakeLabel("Manage a club season after season — squads age and develop between them", 11, HarnessPalette.Muted));
 
             page.Add(BuildSetup());
 
@@ -137,6 +139,26 @@ namespace Gaffer.Editor.SeasonPlayer
             _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
             _managedClub = new ClubId(Mathf.Clamp(_managedIndex, 0, count - 1));
             _target = new BoardTarget(_promotionPosition, _survivalPosition);
+            _seasonNumber = 1;
+            AutoPickStarters();
+            _season.SetFormation(_managedClub, _formation);
+            _season.SetStarters(_managedClub, CurrentStarters());
+            _season.SetTactics(_managedClub, _tactics);
+            _verdict = null;
+            _lastWeek = null;
+
+            Refresh();
+        }
+
+        // Rolls the whole league on a year (SeasonTransition ages + develops every squad), then starts a
+        // fresh season with the same clubs — so you watch your gems grow and your veterans fade across a run,
+        // and the table's spread shifts. Formation, tactics, and board target carry over; the eleven is
+        // re-picked from the developed squad. The same seed keeps the run reproducible.
+        private void StartNextSeason()
+        {
+            _seasonNumber++;
+            _league = new SeasonTransition().ToNextSeason(_league, (ulong)_seed, _seasonNumber);
+            _season = new LeagueSeason(_league);
             AutoPickStarters();
             _season.SetFormation(_managedClub, _formation);
             _season.SetStarters(_managedClub, CurrentStarters());
@@ -386,7 +408,7 @@ namespace Gaffer.Editor.SeasonPlayer
             top.style.flexDirection = FlexDirection.Row;
             top.style.justifyContent = Justify.SpaceBetween;
             top.Add(MakeLabel("YOU MANAGE  " + managedName.ToUpperInvariant(), 13, HarnessPalette.Accent, bold: true));
-            top.Add(MakeLabel("Week " + _season.CurrentRound + " / " + _season.RoundCount, 12, HarnessPalette.Muted));
+            top.Add(MakeLabel("Season " + _seasonNumber + "  ·  Week " + _season.CurrentRound + " / " + _season.RoundCount, 12, HarnessPalette.Muted));
             header.Add(top);
             header.Add(MakeLabel(
                 "Board target: finish top " + _target.PromotionPosition + " to go up, stay above " +
@@ -419,6 +441,15 @@ namespace Gaffer.Editor.SeasonPlayer
             else
             {
                 _body.Add(BuildVerdictBanner());
+
+                var next = new Button(StartNextSeason) { text = "Start Next Season  →  age + develop every squad" };
+                next.style.backgroundColor = HarnessPalette.Accent;
+                next.style.color = HarnessPalette.Pitch;
+                next.style.unityFontStyleAndWeight = FontStyle.Bold;
+                next.style.height = 28;
+                next.style.marginTop = 8;
+                SetRadius(next, 6);
+                _body.Add(next);
             }
 
             _body.Add(BuildLineupCard());
