@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Gaffer.Application.Generation;
 using Gaffer.Domain.Clubs;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
@@ -8,18 +9,12 @@ namespace Gaffer.Editor.Harness
     /// <summary>Builds a league of teams with a believable quality spread, deterministically from the seed.</summary>
     public sealed class LeagueFactory
     {
-        private static readonly string[] ClubNames =
-        {
-            "Ashfield United", "Brackenmoor", "Coldharbour City", "Dunmore Athletic",
-            "Elmspur Rovers", "Fenwick Town", "Gravesend", "Harrowgate",
-            "Ironbridge", "Keswick Vale", "Langford City", "Marrowfield",
-            "Northcliff", "Oakhaven", "Pemberton", "Quarrydale",
-            "Redmarsh", "Stonebury", "Thornwood", "Uplyme United",
-            "Vardenfell", "Westgate Albion", "Yarmouth Bay", "Ravensden",
-        };
+        private readonly ClubNameGenerator _names = new ClubNameGenerator();
 
         public IReadOnlyList<TeamProfile> CreateTeams(HarnessConfig config, IRandom rng)
         {
+            IReadOnlyList<string> names = _names.GenerateDistinct(config.TeamCount, rng);
+
             var teams = new List<TeamProfile>(config.TeamCount);
             for (int rank = 0; rank < config.TeamCount; rank++)
             {
@@ -30,8 +25,7 @@ namespace Gaffer.Editor.Harness
                 double midfield = Jitter(baseQuality, config.AxisJitter, rng);
                 double defence = Jitter(baseQuality, config.AxisJitter, rng);
 
-                string name = ClubNames[rank % ClubNames.Length];
-                teams.Add(new TeamProfile(rank, name, baseQuality, new TeamStrength(attack, midfield, defence)));
+                teams.Add(new TeamProfile(rank, names[rank], baseQuality, new TeamStrength(attack, midfield, defence)));
             }
 
             return teams;
