@@ -7,10 +7,12 @@ namespace Gaffer.Application.Simulation
     /// <summary>
     /// Derives a match <see cref="TeamStrength"/> from the players who take the field — the bridge that
     /// connects the starting eleven to the simulation (BuildEffectiveStrength, TDD §6.1). Each axis is the
-    /// average of the relevant role rating over the players who man that line: attack from the forwards,
-    /// midfield from the midfielders, defence from the defenders and goalkeeper. An empty line falls back
-    /// to the whole-lineup average of that rating, so the result is always plausible and never divides by
-    /// zero. Tactics shift the axes; form and traits follow. The weights tune into a BalanceSO then.
+    /// average of each player's own role rating over the players who man that line: attack from the forwards,
+    /// midfield from the midfielders, defence from the defenders and goalkeeper. Because the rating is
+    /// role-specific (a full-back weighed on pace and crossing, a centre-back on marking and heading), an
+    /// attacking full-back and a stopper both lift the defence axis by what they are actually good at. An
+    /// empty line falls back to the whole-lineup average of that rating, so the result is always plausible
+    /// and never divides by zero. Tactics shift the axes; form and traits follow. Weights tune into a BalanceSO.
     /// </summary>
     public sealed class EffectiveStrengthBuilder
     {
@@ -31,49 +33,43 @@ namespace Gaffer.Application.Simulation
                 return new TeamStrength(0.0, 0.0, 0.0);
             }
 
-            double lineupAttack = 0.0;
-            double lineupMidfield = 0.0;
-            double lineupDefence = 0.0;
+            double lineupTotal = 0.0;
 
-            double forwardAttack = 0.0;
+            double forwardTotal = 0.0;
             int forwardCount = 0;
-            double midfielderMidfield = 0.0;
+            double midfielderTotal = 0.0;
             int midfielderCount = 0;
-            double defensiveDefence = 0.0;
+            double defensiveTotal = 0.0;
             int defensiveCount = 0;
 
             foreach (Player player in players)
             {
-                Attributes attributes = player.Attributes;
-                double attack = PlayerRatings.Attack(attributes);
-                double midfield = PlayerRatings.Midfield(attributes);
-                double defence = PlayerRatings.Defence(player.Position, attributes);
-
-                lineupAttack += attack;
-                lineupMidfield += midfield;
-                lineupDefence += defence;
+                // Each player is scored on his own role, then contributes that single rating to the axis of
+                // the line he mans — no cross-axis scoring, so a role's rating means the same thing everywhere.
+                double rating = PlayerRatings.ForRole(player);
+                lineupTotal += rating;
 
                 switch (player.Position)
                 {
                     case Position.Forward:
-                        forwardAttack += attack;
+                        forwardTotal += rating;
                         forwardCount++;
                         break;
                     case Position.Midfielder:
-                        midfielderMidfield += midfield;
+                        midfielderTotal += rating;
                         midfielderCount++;
                         break;
                     case Position.Defender:
                     case Position.Goalkeeper:
-                        defensiveDefence += defence;
+                        defensiveTotal += rating;
                         defensiveCount++;
                         break;
                 }
             }
 
-            double attackAxis = LineAverage(forwardAttack, forwardCount, lineupAttack, players.Count);
-            double midfieldAxis = LineAverage(midfielderMidfield, midfielderCount, lineupMidfield, players.Count);
-            double defenceAxis = LineAverage(defensiveDefence, defensiveCount, lineupDefence, players.Count);
+            double attackAxis = LineAverage(forwardTotal, forwardCount, lineupTotal, players.Count);
+            double midfieldAxis = LineAverage(midfielderTotal, midfielderCount, lineupTotal, players.Count);
+            double defenceAxis = LineAverage(defensiveTotal, defensiveCount, lineupTotal, players.Count);
 
             return ApplyTactics(attackAxis, midfieldAxis, defenceAxis, tactics);
         }

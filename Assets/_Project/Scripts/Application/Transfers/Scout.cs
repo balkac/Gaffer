@@ -23,7 +23,7 @@ namespace Gaffer.Application.Transfers
             int potentialHalf = HalfWidth(PotentialMaxWidth, clamped);
             Band(player.HiddenPotential, potentialHalf, Salt(player.Id.Value, 0), out int potLow, out int potHigh);
 
-            IReadOnlyList<AttributeKey> keys = RoleKeyAttributes.For(player.Position);
+            IReadOnlyList<AttributeKey> keys = RoleKeyAttributes.For(player.Role);
             var estimates = new List<AttributeEstimate>(keys.Count);
             int attributeHalf = HalfWidth(AttributeMaxWidth, clamped);
             for (int i = 0; i < keys.Count; i++)
