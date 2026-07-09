@@ -74,7 +74,9 @@ namespace Gaffer.Editor.Management
         private List<Player> _market;
         private readonly Scout _scout = new Scout();
         private string _transferStatus;
-        private Position? _marketFilter;
+        private PlayerRole? _marketRoleFilter;
+        private int _marketMinAge = 15;
+        private int _marketMaxAge = 40;
 
         private string _saveStatus;
         private SimulationBalanceSO _simulationBalance;
@@ -1464,20 +1466,52 @@ namespace Gaffer.Editor.Management
                 return card;
             }
 
-            // Filter the shortlist by position (broad line) — for now the one market filter.
-            var filterChoices = new List<string> { "All positions", "Goalkeepers", "Defenders", "Midfielders", "Forwards" };
-            var filter = new DropdownField("Position", filterChoices, FilterIndex());
-            filter.RegisterValueChangedCallback(e =>
+            // Filter the shortlist by specific role (left back, right back, …) and by an age range.
+            var roleChoices = new List<string> { "All positions" };
+            foreach (PlayerRole role in FilterRoles)
             {
-                _marketFilter = FilterFromIndex(filterChoices.IndexOf(e.newValue));
+                roleChoices.Add(RoleName(role));
+            }
+
+            var roleFilter = new DropdownField("Position", roleChoices, RoleFilterIndex());
+            roleFilter.RegisterValueChangedCallback(e =>
+            {
+                int index = roleChoices.IndexOf(e.newValue);
+                _marketRoleFilter = index <= 0 ? (PlayerRole?)null : FilterRoles[index - 1];
                 Refresh();
             });
-            card.Add(filter);
+            card.Add(roleFilter);
+
+            var ageRow = new VisualElement();
+            ageRow.style.flexDirection = FlexDirection.Row;
+            var minAge = new IntegerField("Min age") { value = _marketMinAge };
+            minAge.style.flexGrow = 1;
+            minAge.RegisterValueChangedCallback(e =>
+            {
+                _marketMinAge = e.newValue;
+                Refresh();
+            });
+            ageRow.Add(minAge);
+            var maxAge = new IntegerField("Max age") { value = _marketMaxAge };
+            maxAge.style.flexGrow = 1;
+            maxAge.style.marginLeft = 8;
+            maxAge.RegisterValueChangedCallback(e =>
+            {
+                _marketMaxAge = e.newValue;
+                Refresh();
+            });
+            ageRow.Add(maxAge);
+            card.Add(ageRow);
 
             int shown = 0;
             foreach (Player player in ByOverallDescending(_market))
             {
-                if (_marketFilter != null && player.Position != _marketFilter.Value)
+                if (_marketRoleFilter != null && player.Role != _marketRoleFilter.Value)
+                {
+                    continue;
+                }
+
+                if (player.Age < _marketMinAge || player.Age > _marketMaxAge)
                 {
                     continue;
                 }
@@ -1520,37 +1554,56 @@ namespace Gaffer.Editor.Management
 
             if (shown == 0)
             {
-                card.Add(MakeLabel("No prospects in this position.", 10, HarnessPalette.Muted));
+                card.Add(MakeLabel("No prospects match this filter.", 10, HarnessPalette.Muted));
             }
 
             return card;
         }
 
-        private int FilterIndex()
+        // The specific roles offered in the market filter, top to bottom of the pitch.
+        private static readonly PlayerRole[] FilterRoles =
         {
-            if (_marketFilter == null)
+            PlayerRole.Goalkeeper, PlayerRole.RightBack, PlayerRole.CentreBack, PlayerRole.LeftBack,
+            PlayerRole.DefensiveMidfield, PlayerRole.CentralMidfield, PlayerRole.AttackingMidfield,
+            PlayerRole.RightMidfield, PlayerRole.LeftMidfield, PlayerRole.RightWing, PlayerRole.LeftWing,
+            PlayerRole.Striker,
+        };
+
+        private int RoleFilterIndex()
+        {
+            if (_marketRoleFilter == null)
             {
                 return 0;
             }
 
-            switch (_marketFilter.Value)
+            for (int i = 0; i < FilterRoles.Length; i++)
             {
-                case Position.Goalkeeper: return 1;
-                case Position.Defender: return 2;
-                case Position.Midfielder: return 3;
-                default: return 4;
+                if (FilterRoles[i] == _marketRoleFilter.Value)
+                {
+                    return i + 1;
+                }
             }
+
+            return 0;
         }
 
-        private static Position? FilterFromIndex(int index)
+        private static string RoleName(PlayerRole role)
         {
-            switch (index)
+            switch (role)
             {
-                case 1: return Position.Goalkeeper;
-                case 2: return Position.Defender;
-                case 3: return Position.Midfielder;
-                case 4: return Position.Forward;
-                default: return null;
+                case PlayerRole.Goalkeeper: return "Goalkeeper";
+                case PlayerRole.RightBack: return "Right Back";
+                case PlayerRole.CentreBack: return "Centre Back";
+                case PlayerRole.LeftBack: return "Left Back";
+                case PlayerRole.DefensiveMidfield: return "Defensive Midfield";
+                case PlayerRole.CentralMidfield: return "Central Midfield";
+                case PlayerRole.AttackingMidfield: return "Attacking Midfield";
+                case PlayerRole.RightMidfield: return "Right Midfield";
+                case PlayerRole.LeftMidfield: return "Left Midfield";
+                case PlayerRole.RightWing: return "Right Wing";
+                case PlayerRole.LeftWing: return "Left Wing";
+                case PlayerRole.Striker: return "Striker";
+                default: return PlayerRoles.Abbrev(role);
             }
         }
 
