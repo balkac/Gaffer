@@ -24,6 +24,18 @@ namespace Gaffer.Application.Transfers
         public long WeeklyWageBill { get; }
 
         public long WageHeadroom => WeeklyWageBudget - WeeklyWageBill;
+
+        /// <summary>
+        /// Advances one match-week: the wage bill is paid out of transfer cash. This is what makes the economy
+        /// tense the CM 01/02 way — the wage budget is no longer a passive cap, it drains real money every week,
+        /// so a bloated wage bill bleeds the cash you need for signings. Cash may go negative (an overspend the
+        /// board will notice). Only the wages move; the budget and bill are unchanged. Income (gate receipts,
+        /// prize money) is a later slice (decision #18).
+        /// </summary>
+        public Finances PayWeeklyWages()
+        {
+            return new Finances(Cash - WeeklyWageBill, WeeklyWageBudget, WeeklyWageBill);
+        }
     }
 
     /// <summary>The finances and squad after a transfer, plus the fee that moved.</summary>

@@ -28,7 +28,7 @@
 | 0 | Kurulum + İnandırıcılık Çekirdeği | ✅ Tamam | **L** | ★ Gate A |
 | 1 | Tuning + Test Ağı | ✅ Tamam (Gate A geçildi) | M | ★ Gate A |
 | 2 | Sezon İskeleti | 🟡 Çekirdek bitti · JSON adapter kaldı | M | |
-| 3 | Yönetim Sistemleri | 🟡 Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO ✅ · devam | **L** | |
+| 3 | Yönetim Sistemleri | 🟡 Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO + **birleşik yönetim (canlı transfer + haftalık maaş gideri + transfer dönemleri)** ✅ · devam | **L** | |
 | 4 | Karakter + Dram | ⬜ | **L** | |
 | 5 | Hafıza + Anlatı | ⬜ | M | ★ Gate B |
 | 6 | Meta / Roguelike | ⬜ | M | |
