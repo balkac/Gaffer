@@ -1,12 +1,15 @@
 using System.Collections.Generic;
+using System.IO;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Season;
+using Gaffer.Application.Serialization;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
 using Gaffer.Domain.Players;
 using Gaffer.Editor.Harness;
+using Gaffer.Infrastructure.Persistence;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -58,8 +61,11 @@ namespace Gaffer.Editor.SeasonPlayer
         private int _seasonNumber = 1;
         private List<Player> _retired;
         private List<Player> _arrived;
+        private string _saveStatus;
 
         private VisualElement _body;
+
+        private static string SavePath => Path.Combine(Application.persistentDataPath, "gaffer-run.json");
 
         [MenuItem("Gaffer/Season Player")]
         public static void ShowWindow()
@@ -127,6 +133,12 @@ namespace Gaffer.Editor.SeasonPlayer
             SetRadius(start, 6);
             card.Add(start);
 
+            var load = new Button(LoadRun) { text = "Load Saved Run" };
+            load.style.height = 24;
+            load.style.marginTop = 6;
+            SetRadius(load, 5);
+            card.Add(load);
+
             return card;
         }
 
@@ -174,6 +186,75 @@ namespace Gaffer.Editor.SeasonPlayer
             _lastWeek = null;
 
             Refresh();
+        }
+
+        // Writes the whole run — every club's squad, the season number, the table, and the seed — to a JSON
+        // file through the real Infrastructure adapter (NewtonsoftJsonSerializer + JsonSaveStore), the same
+        // path the shipped game will use. Development and renewal survive a reload because the full rosters go
+        // to disk (save schema v3), not just strength.
+        private void SaveRun()
+        {
+            if (_season == null)
+            {
+                _saveStatus = "Start a season before saving.";
+                Refresh();
+                return;
+            }
+
+            SeasonSaveData data = new SeasonSaveMapper().Capture(_league, _season, (ulong)_seed, _seasonNumber);
+            Result result = SaveStore().Save(SavePath, data);
+            _saveStatus = result.IsSuccess ? "Saved run to " + SavePath : result.Error;
+            Refresh();
+        }
+
+        // Reads the run back, migrates it to the current schema, and rebuilds the league (with full squads),
+        // the resumed season, and the season number. Formation, tactics, and the board target are session
+        // settings, not saved, so they default from the current setup — the run state (rosters, table) is
+        // what persists.
+        private void LoadRun()
+        {
+            Result<SeasonSaveData> loaded = SaveStore().Load(SavePath);
+            if (loaded.IsFailure)
+            {
+                _saveStatus = loaded.Error;
+                Refresh();
+                return;
+            }
+
+            RestoredSeason restored = new SeasonSaveMapper().Restore(loaded.Value);
+            _league = restored.League;
+            _season = restored.Season;
+            _seasonNumber = restored.SeasonNumber < 1 ? 1 : restored.SeasonNumber;
+
+            EnsureRuntime();
+            _managedClub = new ClubId(Mathf.Clamp(_managedIndex, 0, _league.Clubs.Count - 1));
+            AutoPickStarters();
+            _season.SetFormation(_managedClub, _formation);
+            _season.SetStarters(_managedClub, CurrentStarters());
+            _season.SetTactics(_managedClub, _tactics);
+            _verdict = null;
+            _lastWeek = null;
+            _retired = null;
+            _arrived = null;
+            CheckComplete();
+            _saveStatus = "Loaded run from " + SavePath;
+            Refresh();
+        }
+
+        private static JsonSaveStore SaveStore()
+        {
+            return new JsonSaveStore(new NewtonsoftJsonSerializer(), new SaveMigrator());
+        }
+
+        // Establishes the sim, match context, and board target after a load (a load can happen before a
+        // Start Season would set them). Cheap to build, so just set them rather than null-guard structs.
+        private void EnsureRuntime()
+        {
+            _simulator = new MatchSimulator(
+                new PoissonChanceGenerator(MatchSimulationSettings.Default),
+                new QualityChanceResolver());
+            _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
+            _target = new BoardTarget(_promotionPosition, _survivalPosition);
         }
 
         // Diffs your squad across the summer by id: who is gone (retired) and who is new (came through the
@@ -455,6 +536,28 @@ namespace Gaffer.Editor.SeasonPlayer
             header.Add(MakeLabel(
                 "Board target: finish top " + _target.PromotionPosition + " to go up, stay above " +
                 _target.SurvivalPosition + " to keep your job.", 11, HarnessPalette.Muted));
+
+            var saveRow = new VisualElement();
+            saveRow.style.flexDirection = FlexDirection.Row;
+            saveRow.style.marginTop = 8;
+            var save = new Button(SaveRun) { text = "Save Run" };
+            save.style.height = 22;
+            save.style.flexGrow = 1;
+            SetRadius(save, 5);
+            saveRow.Add(save);
+            var reload = new Button(LoadRun) { text = "Load Run" };
+            reload.style.height = 22;
+            reload.style.flexGrow = 1;
+            reload.style.marginLeft = 6;
+            SetRadius(reload, 5);
+            saveRow.Add(reload);
+            header.Add(saveRow);
+
+            if (!string.IsNullOrEmpty(_saveStatus))
+            {
+                header.Add(MakeLabel(_saveStatus, 10, HarnessPalette.Muted));
+            }
+
             _body.Add(header);
 
             if (!_season.IsComplete)

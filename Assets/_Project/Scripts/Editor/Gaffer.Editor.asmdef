@@ -5,6 +5,7 @@
         "Gaffer.Common",
         "Gaffer.Domain",
         "Gaffer.Application",
+        "Gaffer.Infrastructure",
         "Gaffer.Presentation"
     ],
     "includePlatforms": [
