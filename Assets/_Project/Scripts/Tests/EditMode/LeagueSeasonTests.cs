@@ -5,6 +5,7 @@ using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
+using Gaffer.Domain.Players;
 using NUnit.Framework;
 
 namespace Gaffer.Tests
@@ -129,6 +130,83 @@ namespace Gaffer.Tests
             }
 
             Assert.That(comparedWithout, Is.GreaterThan(0), "Expected some matches not involving the tweaked club.");
+        }
+
+        private static Squad CreateStrongSquad(int idBase)
+        {
+            var squadGen = new SquadGenerator(new PlayerGenerator());
+            var genRng = new SplitMix64RandomNumberGenerator(99UL);
+            var context = new GenerationContext { MinAbility = 90, MaxAbility = 99, MinAge = 24, MaxAge = 28 };
+            return squadGen.Generate(idBase, context, genRng);
+        }
+
+        [Test]
+        public void SquadOf_ForSquadClub_ReturnsRoster()
+        {
+            var season = new LeagueSeason(CreateSquadLeague());
+
+            Squad squad = season.SquadOf(new ClubId(0));
+
+            Assert.That(squad, Is.Not.Null);
+            Assert.That(squad.Count, Is.EqualTo(SquadGenerator.SquadSize));
+        }
+
+        [Test]
+        public void UpdateSquad_SwapsRoster_ReflectedBySquadOf()
+        {
+            var season = new LeagueSeason(CreateSquadLeague());
+            var club = new ClubId(0);
+            Squad original = season.SquadOf(club);
+            PlayerId sold = original.Players[0].Id;
+
+            season.UpdateSquad(club, original.Remove(sold));
+
+            Squad after = season.SquadOf(club);
+            Assert.That(after.Count, Is.EqualTo(original.Count - 1));
+            Assert.That(after.Contains(sold), Is.False);
+        }
+
+        [Test]
+        public void UpdateSquad_SquadlessClub_IsNoOp()
+        {
+            var season = new LeagueSeason(CreateLeague());
+
+            Assert.That(season.SquadOf(new ClubId(0)), Is.Null);
+            Assert.DoesNotThrow(() => season.UpdateSquad(new ClubId(0), CreateStrongSquad(100000)));
+            Assert.That(season.SquadOf(new ClubId(0)), Is.Null);
+        }
+
+        [Test]
+        public void UpdateSquad_ToStrongerRoster_ImprovesThatClubsResults()
+        {
+            const ulong seed = 555UL;
+            var club = new ClubId(0);
+
+            var baseline = new LeagueSeason(CreateSquadLeague());
+            PlayWholeSeason(baseline, seed);
+            int basePoints = PointsOf(baseline, club);
+
+            var upgraded = new LeagueSeason(CreateSquadLeague());
+            upgraded.UpdateSquad(club, CreateStrongSquad(100000));
+            PlayWholeSeason(upgraded, seed);
+            int upgradedPoints = PointsOf(upgraded, club);
+
+            // A live roster swap must re-derive the club's strength from the new eleven, so a maxed-out
+            // squad clearly outperforms the mid-table one it replaced — the signing takes effect on the pitch.
+            Assert.That(upgradedPoints, Is.GreaterThan(basePoints));
+        }
+
+        private static int PointsOf(LeagueSeason season, ClubId club)
+        {
+            foreach (LeagueTableRow row in season.Table.Ordered())
+            {
+                if (row.Club.Value == club.Value)
+                {
+                    return row.Points;
+                }
+            }
+
+            return -1;
         }
 
         [Test]

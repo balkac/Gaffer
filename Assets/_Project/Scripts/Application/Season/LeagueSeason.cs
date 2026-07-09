@@ -77,6 +77,29 @@ namespace Gaffer.Application.Season
             _startersByClub[club] = starters;
         }
 
+        /// <summary>
+        /// Replaces a club's roster mid-season (a signing or a sale). The club is rebuilt immutably around the
+        /// new squad and any pinned lineup is dropped, so the next <see cref="AdvanceWeek"/> re-picks the eleven
+        /// and re-derives the club's strength from the new roster — the change takes effect live, the same week
+        /// it is made. No-op for a squad-less (strength-only) club.
+        /// </summary>
+        public void UpdateSquad(ClubId club, Squad squad)
+        {
+            if (!_clubsById.TryGetValue(club, out Club current) || current.Squad == null)
+            {
+                return;
+            }
+
+            _clubsById[club] = new Club(current.Id, current.Name, squad, current.Strength);
+            _startersByClub.Remove(club);
+        }
+
+        /// <summary>The club's current roster, or <c>null</c> for a squad-less (strength-only) club.</summary>
+        public Squad SquadOf(ClubId club)
+        {
+            return _clubsById.TryGetValue(club, out Club found) ? found.Squad : null;
+        }
+
         public int CurrentRound => _currentRound;
 
         public int RoundCount => _fixturesByRound.Count;
