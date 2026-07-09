@@ -74,6 +74,7 @@ namespace Gaffer.Editor.Management
         private List<Player> _market;
         private readonly Scout _scout = new Scout();
         private string _transferStatus;
+        private Position? _marketFilter;
 
         private string _saveStatus;
         private SimulationBalanceSO _simulationBalance;
@@ -260,8 +261,10 @@ namespace Gaffer.Editor.Management
             Refresh();
         }
 
-        // A free-agent market to scout and sign from — a pool with a few guaranteed gems (TDD §5), its ids
-        // offset well clear of the league's so a signing never clashes with a player already in the squad.
+        // A free-agent market to scout and sign from — a pool with a few guaranteed gems (TDD §5). Both the
+        // generation seed and the id range are shifted by the season number, so each season shows a genuinely
+        // fresh set of prospects (not the same names again) and a player signed from an earlier season's market
+        // can never share an id with a current one. The base offset keeps every market id clear of the league's.
         private List<Player> GenerateMarket()
         {
             var gem = new GenerationContext
@@ -270,12 +273,13 @@ namespace Gaffer.Editor.Management
             };
             IReadOnlyList<Player> pool = new PlayerPoolGenerator(new PlayerGenerator()).GeneratePool(
                 Mathf.Max(1, _marketSize), Mathf.Max(0, _gems), new GenerationContext(), gem,
-                new SplitMix64RandomNumberGenerator((ulong)_seed ^ 0xA5A5A5UL));
+                new SplitMix64RandomNumberGenerator(((ulong)_seed ^ 0xA5A5A5UL) + (ulong)_seasonNumber * 0x9E3779B97F4A7C15UL));
 
+            int idBase = MarketIdBase + (_seasonNumber * 100_000);
             var market = new List<Player>(pool.Count);
             foreach (Player p in pool)
             {
-                market.Add(WithId(p, p.Id.Value + MarketIdBase));
+                market.Add(WithId(p, idBase + p.Id.Value));
             }
 
             return market;
@@ -1460,8 +1464,25 @@ namespace Gaffer.Editor.Management
                 return card;
             }
 
+            // Filter the shortlist by position (broad line) — for now the one market filter.
+            var filterChoices = new List<string> { "All positions", "Goalkeepers", "Defenders", "Midfielders", "Forwards" };
+            var filter = new DropdownField("Position", filterChoices, FilterIndex());
+            filter.RegisterValueChangedCallback(e =>
+            {
+                _marketFilter = FilterFromIndex(filterChoices.IndexOf(e.newValue));
+                Refresh();
+            });
+            card.Add(filter);
+
+            int shown = 0;
             foreach (Player player in ByOverallDescending(_market))
             {
+                if (_marketFilter != null && player.Position != _marketFilter.Value)
+                {
+                    continue;
+                }
+
+                shown++;
                 ScoutReport report = _scout.Observe(player, _accuracy);
 
                 var row = new VisualElement();
@@ -1497,7 +1518,40 @@ namespace Gaffer.Editor.Management
                 card.Add(row);
             }
 
+            if (shown == 0)
+            {
+                card.Add(MakeLabel("No prospects in this position.", 10, HarnessPalette.Muted));
+            }
+
             return card;
+        }
+
+        private int FilterIndex()
+        {
+            if (_marketFilter == null)
+            {
+                return 0;
+            }
+
+            switch (_marketFilter.Value)
+            {
+                case Position.Goalkeeper: return 1;
+                case Position.Defender: return 2;
+                case Position.Midfielder: return 3;
+                default: return 4;
+            }
+        }
+
+        private static Position? FilterFromIndex(int index)
+        {
+            switch (index)
+            {
+                case 1: return Position.Goalkeeper;
+                case 2: return Position.Defender;
+                case 3: return Position.Midfielder;
+                case 4: return Position.Forward;
+                default: return null;
+            }
         }
 
         private static List<Player> ByOverallDescending(IReadOnlyList<Player> players)
