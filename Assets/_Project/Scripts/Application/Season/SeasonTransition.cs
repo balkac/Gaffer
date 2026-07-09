@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Gaffer.Application.Generation;
 using Gaffer.Application.Progression;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
@@ -10,17 +11,19 @@ namespace Gaffer.Application.Season
 {
     /// <summary>
     /// Rolls a league on to the next season: every club's squad ages a year and develops
-    /// (<see cref="PlayerDevelopment"/>), and each club's strength is re-derived from the grown roster. This
-    /// is what makes the discover-grow-sell flip real in a run — a scouted teenager only pays off across
-    /// seasons, and rivals age too, so the table's spread shifts year on year. Deterministic: each player
-    /// develops through his own rng seeded from the season seed, his id, and the season number, so a run
-    /// reproduces exactly and one player's growth never perturbs another's. Squad-less clubs (strength-only)
-    /// pass through untouched. Retirement and youth intake are a later slice; for now the same names age on.
+    /// (<see cref="PlayerDevelopment"/>), its veterans retire and same-role youth come through
+    /// (<see cref="SquadRenewal"/>), and each club's strength is re-derived from the renewed roster. This is
+    /// what makes the discover-grow-sell flip real in a run — a scouted teenager only pays off across seasons,
+    /// rivals age too, and rosters renew instead of ageing into the ground, so the table's spread shifts year
+    /// on year. Deterministic: each player develops and retires through his own rng seeded from the season
+    /// seed, his id, and the season number, and new youth get fresh ids past every existing one, so a run
+    /// reproduces exactly and one club's changes never perturb another's. Squad-less clubs pass through untouched.
     /// </summary>
     public sealed class SeasonTransition
     {
         private readonly PlayerDevelopment _development = new PlayerDevelopment();
         private readonly EffectiveStrengthBuilder _strengthBuilder = new EffectiveStrengthBuilder();
+        private readonly SquadRenewal _renewal = new SquadRenewal(new PlayerGenerator());
 
         /// <summary>
         /// Returns a new league for <paramref name="nextSeasonNumber"/> with every squad aged and developed.
@@ -28,6 +31,10 @@ namespace Gaffer.Application.Season
         /// </summary>
         public League ToNextSeason(League league, ulong seasonSeed, int nextSeasonNumber)
         {
+            // New youth are handed ids past every player already in the league, so intake never collides with
+            // an existing id (across clubs or across earlier seasons' arrivals).
+            int nextPlayerId = MaxPlayerId(league) + 1;
+
             var clubs = new List<Club>(league.Clubs.Count);
             foreach (Club club in league.Clubs)
             {
@@ -38,11 +45,34 @@ namespace Gaffer.Application.Season
                 }
 
                 Squad developed = DevelopSquad(club.Squad, seasonSeed, nextSeasonNumber);
-                TeamStrength strength = _strengthBuilder.Build(developed);
-                clubs.Add(new Club(club.Id, club.Name, developed, strength));
+                Squad renewed = _renewal.Renew(developed, seasonSeed, nextSeasonNumber, ref nextPlayerId);
+                TeamStrength strength = _strengthBuilder.Build(renewed);
+                clubs.Add(new Club(club.Id, club.Name, renewed, strength));
             }
 
             return new League(league.Name, clubs);
+        }
+
+        private static int MaxPlayerId(League league)
+        {
+            int max = -1;
+            foreach (Club club in league.Clubs)
+            {
+                if (club.Squad == null)
+                {
+                    continue;
+                }
+
+                foreach (Player player in club.Squad.Players)
+                {
+                    if (player.Id.Value > max)
+                    {
+                        max = player.Id.Value;
+                    }
+                }
+            }
+
+            return max;
         }
 
         private Squad DevelopSquad(Squad squad, ulong seasonSeed, int seasonNumber)
