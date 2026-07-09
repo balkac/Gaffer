@@ -29,6 +29,9 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="NUnit" Version="3.14.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+    <!-- Same JSON library the Unity build uses (com.unity.nuget.newtonsoft-json), so the save
+         round-trip test exercises the exact serializer the game ships, headless. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
 </Project>
