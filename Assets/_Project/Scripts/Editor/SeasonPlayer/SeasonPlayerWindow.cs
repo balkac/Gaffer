@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using Gaffer.Application.Generation;
+using Gaffer.Application.Progression;
 using Gaffer.Application.Season;
 using Gaffer.Application.Serialization;
 using Gaffer.Application.Simulation;
@@ -9,8 +10,10 @@ using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
 using Gaffer.Domain.Players;
 using Gaffer.Editor.Harness;
+using Gaffer.Infrastructure.Configuration;
 using Gaffer.Infrastructure.Persistence;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Position = Gaffer.Domain.Players.Position;
@@ -54,6 +57,9 @@ namespace Gaffer.Editor.SeasonPlayer
         private List<Player> _retired;
         private List<Player> _arrived;
         private string _saveStatus;
+        private SimulationBalanceSO _simulationBalance;
+        private DevelopmentBalanceSO _developmentBalance;
+        private RenewalBalanceSO _renewalBalance;
 
         private VisualElement _body;
 
@@ -116,6 +122,19 @@ namespace Gaffer.Editor.SeasonPlayer
             survival.RegisterValueChangedCallback(e => _survivalPosition = e.newValue);
             card.Add(survival);
 
+            // Optional balance assets — assign a Balance SO to retune the run, leave empty for the calibrated
+            // defaults. Simulation applies on Start Season; development and renewal apply on Start Next Season.
+            card.Add(MakeLabel("Balance (optional — assign a Gaffer/Balance SO to retune)", 10, HarnessPalette.Muted));
+            var simField = new ObjectField("Simulation balance") { objectType = typeof(SimulationBalanceSO), value = _simulationBalance };
+            simField.RegisterValueChangedCallback(e => _simulationBalance = e.newValue as SimulationBalanceSO);
+            card.Add(simField);
+            var devField = new ObjectField("Development balance") { objectType = typeof(DevelopmentBalanceSO), value = _developmentBalance };
+            devField.RegisterValueChangedCallback(e => _developmentBalance = e.newValue as DevelopmentBalanceSO);
+            card.Add(devField);
+            var renewField = new ObjectField("Renewal balance") { objectType = typeof(RenewalBalanceSO), value = _renewalBalance };
+            renewField.RegisterValueChangedCallback(e => _renewalBalance = e.newValue as RenewalBalanceSO);
+            card.Add(renewField);
+
             var start = new Button(StartSeason) { text = "Start Season" };
             start.style.backgroundColor = HarnessPalette.Accent;
             start.style.color = HarnessPalette.Pitch;
@@ -134,13 +153,30 @@ namespace Gaffer.Editor.SeasonPlayer
             return card;
         }
 
+        // The balance the run reads — from an assigned config asset, or the calibrated default. Assign a
+        // Balance SO in the setup to retune scoring, development, or renewal and watch the run respond.
+        private MatchSimulationSettings SimSettings()
+        {
+            return _simulationBalance != null ? _simulationBalance.ToSettings() : MatchSimulationSettings.Default;
+        }
+
+        private DevelopmentSettings DevSettings()
+        {
+            return _developmentBalance != null ? _developmentBalance.ToSettings() : DevelopmentSettings.Default;
+        }
+
+        private RenewalSettings RenewSettings()
+        {
+            return _renewalBalance != null ? _renewalBalance.ToSettings() : RenewalSettings.Default;
+        }
+
         private void StartSeason()
         {
             int count = Mathf.Clamp(_teamCount, 4, MaxTeams);
             _league = BuildLeague(count);
             _season = new LeagueSeason(_league);
             _simulator = new MatchSimulator(
-                new PoissonChanceGenerator(MatchSimulationSettings.Default),
+                new PoissonChanceGenerator(SimSettings()),
                 new QualityChanceResolver());
             _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
             _managedClub = new ClubId(Mathf.Clamp(_managedIndex, 0, count - 1));
@@ -167,7 +203,7 @@ namespace Gaffer.Editor.SeasonPlayer
             IReadOnlyList<Player> before = ManagedSquad().Players;
 
             _seasonNumber++;
-            _league = new SeasonTransition().ToNextSeason(_league, (ulong)_seed, _seasonNumber);
+            _league = new SeasonTransition(DevSettings(), RenewSettings()).ToNextSeason(_league, (ulong)_seed, _seasonNumber);
             _season = new LeagueSeason(_league);
             ComputeSummer(before, ManagedSquad().Players);
             AutoPickStarters();
@@ -243,7 +279,7 @@ namespace Gaffer.Editor.SeasonPlayer
         private void EnsureRuntime()
         {
             _simulator = new MatchSimulator(
-                new PoissonChanceGenerator(MatchSimulationSettings.Default),
+                new PoissonChanceGenerator(SimSettings()),
                 new QualityChanceResolver());
             _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
             _target = new BoardTarget(_promotionPosition, _survivalPosition);

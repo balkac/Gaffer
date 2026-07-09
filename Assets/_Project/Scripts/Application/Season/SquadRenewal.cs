@@ -20,10 +20,17 @@ namespace Gaffer.Application.Season
     public sealed class SquadRenewal
     {
         private readonly PlayerGenerator _generator;
+        private readonly RenewalSettings _settings;
 
         public SquadRenewal(PlayerGenerator generator)
+            : this(generator, RenewalSettings.Default)
+        {
+        }
+
+        public SquadRenewal(PlayerGenerator generator, RenewalSettings settings)
         {
             _generator = generator;
+            _settings = settings;
         }
 
         /// <summary>
@@ -60,7 +67,7 @@ namespace Gaffer.Application.Season
                 {
                     int id = nextPlayerId++;
                     var rng = new SplitMix64RandomNumberGenerator(IntakeSeed(seasonSeed, id, seasonNumber));
-                    GenerationContext context = seedGem && i == 0 ? GemContext : youth;
+                    GenerationContext context = seedGem && i == 0 ? GemContext() : youth;
                     kept.Add(_generator.Generate(new PlayerId(id), context, vacatedRoles[i], rng));
                 }
             }
@@ -71,11 +78,11 @@ namespace Gaffer.Application.Season
         // Twilight is where retirement starts to bite and Hard is where it is certain — both later for
         // keepers, who play on longest. Between them the odds climb with age and ease for a higher rating,
         // so a star lingers while a fading squad player calls it a day.
-        private static bool Retires(Player player, IRandom rng)
+        private bool Retires(Player player, IRandom rng)
         {
             bool keeper = player.Role == PlayerRole.Goalkeeper;
-            int twilight = keeper ? 36 : 33;
-            int hard = keeper ? 43 : 40;
+            int twilight = keeper ? _settings.KeeperTwilightAge : _settings.OutfielderTwilightAge;
+            int hard = keeper ? _settings.KeeperHardAge : _settings.OutfielderHardAge;
 
             if (player.Age >= hard)
             {
@@ -89,32 +96,35 @@ namespace Gaffer.Application.Season
 
             double progress = (double)(player.Age - twilight) / (hard - twilight);
             double rating = PlayerRatings.ForRole(player);
-            double chance = progress * (1.0 - (0.4 * (rating / 100.0)));
+            double chance = progress * (1.0 - (_settings.RetirementRatingEase * (rating / 100.0)));
             return rng.NextDouble() < chance;
         }
 
         // The guaranteed academy gem (TDD §5): low visible ability — no higher than an ordinary prospect, so
         // he hides in plain sight — but a high, rare ceiling. Fixed, not tier-scaled: an undervalued gem is
         // the point, whatever the club. Cheap to buy on scouted potential, worth a fortune once he grows.
-        private static readonly GenerationContext GemContext = new GenerationContext
+        private GenerationContext GemContext()
         {
-            MinAge = 16,
-            MaxAge = 18,
-            MinAbility = 28,
-            MaxAbility = 46,
-            MinPotential = 86,
-            MaxPotential = 96,
-        };
+            return new GenerationContext
+            {
+                MinAge = _settings.YouthMinAge,
+                MaxAge = _settings.YouthMaxAge,
+                MinAbility = _settings.GemMinAbility,
+                MaxAbility = _settings.GemMaxAbility,
+                MinPotential = _settings.GemMinPotential,
+                MaxPotential = _settings.GemMaxPotential,
+            };
+        }
 
         // Youth arrive raw but with a ceiling, drawn from a band around the club's current level — so a
         // strong squad's intake is stronger and its best prospects can climb past today's first team.
-        private static GenerationContext YouthContext(Squad squad)
+        private GenerationContext YouthContext(Squad squad)
         {
             int average = AverageRating(squad);
             return new GenerationContext
             {
-                MinAge = 16,
-                MaxAge = 18,
+                MinAge = _settings.YouthMinAge,
+                MaxAge = _settings.YouthMaxAge,
                 MinAbility = (byte)Clamp(average - 25, 25, 60),
                 MaxAbility = (byte)Clamp(average - 8, 35, 72),
                 MinPotential = (byte)Clamp(average - 3, 45, 85),

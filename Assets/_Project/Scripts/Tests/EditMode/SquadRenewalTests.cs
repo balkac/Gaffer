@@ -173,6 +173,41 @@ namespace Gaffer.Tests
             Assert.That(nextId, Is.EqualTo(1000));
         }
 
+        [Test]
+        public void Renew_LowerRetirementHardAge_RetiresAPlayerTheDefaultWouldKeep()
+        {
+            // At 33 a centre-back sits exactly on the default twilight, so by default he is certain to stay;
+            // drop the hard age below 33 and he must retire. Only the balance differs.
+            Squad squad = SquadOf(P(0, PlayerRole.CentreBack, 33, 60), P(1, PlayerRole.Striker, 24, 60));
+
+            int defId = 1000;
+            Squad byDefault = new SquadRenewal(new PlayerGenerator()).Renew(squad, 99UL, 2, ref defId);
+            Assert.That(HasId(byDefault, 0), Is.True, "default keeps a 33-year-old on the twilight threshold");
+
+            var settings = RenewalSettings.Default;
+            settings.OutfielderTwilightAge = 30;
+            settings.OutfielderHardAge = 32;
+            int cutId = 2000;
+            Squad tuned = new SquadRenewal(new PlayerGenerator(), settings).Renew(squad, 99UL, 2, ref cutId);
+            Assert.That(HasId(tuned, 0), Is.False, "a lower hard age forces the 33-year-old out");
+        }
+
+        [Test]
+        public void Renew_HigherGemPotentialSettings_RaiseTheGemCeiling()
+        {
+            var settings = RenewalSettings.Default;
+            settings.GemMinPotential = 95;
+            settings.GemMaxPotential = 96;
+            Squad squad = SquadOf(P(0, PlayerRole.Striker, 40, 60), P(1, PlayerRole.CentreBack, 24, 60));
+            int nextId = 1000;
+
+            Squad renewed = new SquadRenewal(new PlayerGenerator(), settings).Renew(squad, 99UL, 2, ref nextId, seedGem: true);
+
+            Player youth = FindFresh(renewed);
+            Assert.That(youth, Is.Not.Null);
+            Assert.That(youth.HiddenPotential, Is.GreaterThanOrEqualTo(95));
+        }
+
         private static bool HasId(Squad squad, int id)
         {
             foreach (Player p in squad.Players)
