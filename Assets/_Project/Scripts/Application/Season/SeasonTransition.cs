@@ -23,18 +23,26 @@ namespace Gaffer.Application.Season
     {
         private readonly PlayerDevelopment _development;
         private readonly EffectiveStrengthBuilder _strengthBuilder = new EffectiveStrengthBuilder();
-        private readonly SquadRenewal _renewal = new SquadRenewal(new PlayerGenerator());
+        private readonly SquadRenewal _renewal;
+        private readonly int _gemCadenceSeasons;
 
         public SeasonTransition()
-            : this(DevelopmentSettings.Default)
+            : this(DevelopmentSettings.Default, RenewalSettings.Default)
         {
         }
 
-        /// <summary>Rolls seasons on with a specific development balance (from a config asset), so tuning the
-        /// numbers changes how every squad grows and ages across a run.</summary>
         public SeasonTransition(DevelopmentSettings developmentSettings)
+            : this(developmentSettings, RenewalSettings.Default)
+        {
+        }
+
+        /// <summary>Rolls seasons on with specific development and renewal balance (from config assets), so
+        /// tuning the numbers changes how every squad grows, ages, retires, and brings youth through a run.</summary>
+        public SeasonTransition(DevelopmentSettings developmentSettings, RenewalSettings renewalSettings)
         {
             _development = new PlayerDevelopment(developmentSettings);
+            _renewal = new SquadRenewal(new PlayerGenerator(), renewalSettings);
+            _gemCadenceSeasons = renewalSettings.GemCadenceSeasons;
         }
 
         /// <summary>
@@ -66,15 +74,12 @@ namespace Gaffer.Application.Season
             return new League(league.Name, clubs);
         }
 
-        // How often a club's academy yields a gem — a rare, guaranteed cadence, never a per-player chance,
-        // so the discovery fantasy stays certain (it will happen) yet special (it is uncommon). CM 01/02.
-        private const int GemCadenceSeasons = 5;
-
-        // True when this club is due its academy gem this season. Phase-shifted by the club id so clubs do
-        // not all produce in the same year — gems trickle across the league, one club at a time.
-        private static bool IsGemSeason(int clubId, int seasonNumber)
+        // True when this club is due its academy gem this season, on the settings' rare guaranteed cadence
+        // (never a per-player chance). Phase-shifted by the club id so clubs do not all produce in the same
+        // year — gems trickle across the league, one club at a time.
+        private bool IsGemSeason(int clubId, int seasonNumber)
         {
-            return (seasonNumber + clubId) % GemCadenceSeasons == 0;
+            return (seasonNumber + clubId) % _gemCadenceSeasons == 0;
         }
 
         private static int MaxPlayerId(League league)
