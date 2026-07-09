@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Progression;
+using Gaffer.Application.Simulation;
 using Gaffer.Application.Transfers;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
@@ -280,14 +281,17 @@ namespace Gaffer.Editor.TransferMarket
             VisualElement card = Card();
             card.Add(Text("YOUR SQUAD", 11, HarnessPalette.Muted, bold: true));
 
+            card.Add(Text("Your own players — true overall (OVR) and full attributes. Advance a season to watch the young ones grow.", 10, HarnessPalette.Muted));
+
             foreach (Player player in _squad.Players)
             {
                 var row = Row();
-                var line = LineWithName(player);
+                var line = LineWithName(player, showRating: true);
                 var sell = new Button(() => Sell(player)) { text = "Sell " + FormatValue(TransferService.Fee(player)) };
                 StyleActionButton(sell, HarnessPalette.Loss);
                 line.Add(sell);
                 row.Add(line);
+                row.Add(Text(AllAttributesText(player), 10, HarnessPalette.Muted));
                 card.Add(row);
             }
 
@@ -307,7 +311,7 @@ namespace Gaffer.Editor.TransferMarket
                 ScoutReport report = _scout.Observe(player, _accuracy);
 
                 var row = Row();
-                var line = LineWithName(player);
+                var line = LineWithName(player, showRating: _reveal);
                 var sign = new Button(() => Sign(player)) { text = "Sign " + FormatValue(TransferService.Fee(player)) };
                 StyleActionButton(sign, HarnessPalette.Accent);
                 line.Add(sign);
@@ -327,7 +331,7 @@ namespace Gaffer.Editor.TransferMarket
             return card;
         }
 
-        private static VisualElement LineWithName(Player player)
+        private static VisualElement LineWithName(Player player, bool showRating)
         {
             var line = new VisualElement();
             line.style.flexDirection = FlexDirection.Row;
@@ -336,9 +340,42 @@ namespace Gaffer.Editor.TransferMarket
             var name = Text(player.Name + "  ·  " + PlayerRoles.Abbrev(player.Role) + "  ·  " + player.Age, 12, HarnessPalette.Chalk, bold: true);
             name.style.flexGrow = 1;
             line.Add(name);
+            if (showRating)
+            {
+                // General rating for the role — the number that moves as a player develops. Masked in the
+                // market (only shown with Reveal on), always shown for your own squad.
+                int rating = Mathf.RoundToInt((float)PlayerRatings.ForRole(player));
+                line.Add(Text("OVR " + rating + "   ", 12, HarnessPalette.Accent, bold: true));
+            }
+
             var worth = Text(FormatValue(PlayerValuation.Value(player)) + " · " + FormatValue(PlayerWage.Weekly(player)) + "/wk   ", 11, HarnessPalette.Muted);
             line.Add(worth);
             return line;
+        }
+
+        // Every attribute, grouped, for a player you own — full transparency (the scout mask only applies to
+        // the market). The goalkeeping block is shown only for keepers, where it is the meaningful group.
+        private static string AllAttributesText(Player player)
+        {
+            Attributes a = player.Attributes;
+            string technical =
+                "TEC  FIN " + a.Finishing + "  TEC " + a.Technique + "  FIR " + a.FirstTouch + "  DRI " + a.Dribbling +
+                "  PAS " + a.Passing + "  CRO " + a.Crossing + "  HEA " + a.Heading + "  LON " + a.LongShots +
+                "  MAR " + a.Marking + "  TKL " + a.Tackling;
+            string setPiece =
+                "SET  PEN " + a.Penalties + "  FRK " + a.FreeKicks + "  COR " + a.Corners + "  THR " + a.LongThrows;
+            string physical =
+                "PHY  PAC " + a.Pace + "  ACC " + a.Acceleration + "  STA " + a.Stamina + "  STR " + a.Strength +
+                "  AGI " + a.Agility + "  JMP " + a.Jumping + "  BAL " + a.Balance + "  POS " + a.Positioning;
+            string text = technical + "\n" + setPiece + "\n" + physical;
+
+            if (player.Role == PlayerRole.Goalkeeper)
+            {
+                text += "\nGK   REF " + a.Reflexes + "  HAN " + a.Handling + "  AER " + a.AerialReach +
+                    "  CMD " + a.CommandOfArea + "  1v1 " + a.OneOnOnes + "  KIC " + a.Kicking + "  GKP " + a.GkPositioning;
+            }
+
+            return text;
         }
 
         private static void StyleActionButton(Button button, Color color)
