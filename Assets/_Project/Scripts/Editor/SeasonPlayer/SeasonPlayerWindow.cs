@@ -65,7 +65,7 @@ namespace Gaffer.Editor.SeasonPlayer
 
         private VisualElement _body;
 
-        private static string SavePath => Path.Combine(Application.persistentDataPath, "gaffer-run.json");
+        private static string SavePath => Path.Combine(UnityEngine.Application.persistentDataPath, "gaffer-run.json");
 
         [MenuItem("Gaffer/Season Player")]
         public static void ShowWindow()
