@@ -40,6 +40,15 @@ namespace Gaffer.Application.Season
 
         public int YouthMaxAge { get; set; } = 18;
 
+        /// <summary>
+        /// How many academy youths join each season beyond replacing retirees — so a club's academy feeds the
+        /// squad every year, not only when a veteran leaves. Held to <see cref="MaxSquadSize"/>. 0 disables it.
+        /// </summary>
+        public int YouthIntakePerSeason { get; set; } = 1;
+
+        /// <summary>The size the academy intake grows the squad toward and never pushes it past.</summary>
+        public int MaxSquadSize { get; set; } = 25;
+
         public static RenewalSettings Default => new RenewalSettings();
     }
 }
