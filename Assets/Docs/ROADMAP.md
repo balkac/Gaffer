@@ -8,7 +8,7 @@
 
 ## 📍 Güncel durum (2026-07-09)
 
-**Faz 0 ✅ · Faz 1 ✅ (★ Gate A geçildi) · Faz 2 🟡 · Faz 3 🟡** — bir lig sezonu uçtan uca oynanıyor (headless + Season Player demo), kaydet/yükle + deterministik oyuncu üreteci (garanti wonderkid) + kadro→güç köprüsü + gruplu FM-benzeri attribute modeli + **rol-özel rating** + **oyuncu gelişimi + sezon-entegrasyonu** (çok-sezonlu run; keşfet-büyüt-sat flip'i gerçek lig loop'unda kapandı) hazır, **131 dotnet testi yeşil**. Ayrıntı + alınan kararlar: **[`PROGRESS.md`](PROGRESS.md)**.
+**Faz 0 ✅ · Faz 1 ✅ (★ Gate A geçildi) · Faz 2 🟡 · Faz 3 🟡** — bir lig sezonu uçtan uca oynanıyor (headless + Season Player demo), kaydet/yükle + deterministik oyuncu üreteci (garanti wonderkid) + kadro→güç köprüsü + gruplu FM-benzeri attribute modeli + **rol-özel rating** + **oyuncu gelişimi + sezon-entegrasyonu** (çok-sezonlu run; keşfet-büyüt-sat flip'i gerçek lig loop'unda kapandı) hazır, **134 dotnet testi yeşil**. Ayrıntı + alınan kararlar: **[`PROGRESS.md`](PROGRESS.md)**.
 
 ---
 
