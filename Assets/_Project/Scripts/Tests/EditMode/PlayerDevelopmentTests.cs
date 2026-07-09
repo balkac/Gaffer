@@ -1,0 +1,127 @@
+using Gaffer.Application.Progression;
+using Gaffer.Application.Simulation;
+using Gaffer.Common;
+using Gaffer.Domain.Players;
+using NUnit.Framework;
+
+namespace Gaffer.Tests
+{
+    public sealed class PlayerDevelopmentTests
+    {
+        private static Attributes Uniform(byte stat)
+        {
+            return new Attributes
+            {
+                Finishing = stat, Technique = stat, FirstTouch = stat, Dribbling = stat, Passing = stat,
+                Crossing = stat, Heading = stat, LongShots = stat, Marking = stat, Tackling = stat,
+                Penalties = stat, FreeKicks = stat, Corners = stat, LongThrows = stat,
+                Pace = stat, Acceleration = stat, Stamina = stat, Strength = stat, Agility = stat,
+                Jumping = stat, Balance = stat, Positioning = stat,
+                Reflexes = stat, Handling = stat, AerialReach = stat, CommandOfArea = stat,
+                OneOnOnes = stat, Kicking = stat, GkPositioning = stat,
+            };
+        }
+
+        private static Player Player(PlayerRole role, int age, byte ability, byte potential)
+        {
+            return new Player(new PlayerId(1), "Test", "England", role, age, Uniform(ability), potential);
+        }
+
+        private static IRandom Rng(ulong seed)
+        {
+            return new SplitMix64RandomNumberGenerator(seed);
+        }
+
+        [Test]
+        public void Develop_AgesThePlayerByOneSeason()
+        {
+            var dev = new PlayerDevelopment();
+            Player before = Player(PlayerRole.CentralMidfield, 20, 55, 80);
+
+            Player after = dev.Develop(before, Rng(1));
+
+            Assert.That(after.Age, Is.EqualTo(21));
+            Assert.That(after.Id, Is.EqualTo(before.Id));
+            Assert.That(after.HiddenPotential, Is.EqualTo(before.HiddenPotential));
+        }
+
+        [Test]
+        public void Develop_YoungGemBelowPotential_RaisesRoleRatingOneSeason()
+        {
+            var dev = new PlayerDevelopment();
+            Player before = Player(PlayerRole.Striker, 18, 50, 85);
+
+            Player after = dev.Develop(before, Rng(7));
+
+            Assert.That(PlayerRatings.ForRole(after), Is.GreaterThan(PlayerRatings.ForRole(before)));
+        }
+
+        [Test]
+        public void Develop_YoungGemOverManySeasons_ClimbsTowardPotentialWithoutExceedingIt()
+        {
+            var dev = new PlayerDevelopment();
+            const byte potential = 85;
+            Player player = Player(PlayerRole.Striker, 17, 50, potential);
+            double start = PlayerRatings.ForRole(player);
+            IRandom rng = Rng(42);
+
+            for (int season = 0; season < 10; season++)
+            {
+                player = dev.Develop(player, rng);
+            }
+
+            double end = PlayerRatings.ForRole(player);
+            Assert.That(end, Is.GreaterThan(start + 12.0), "a young gem should grow substantially over a decade");
+            Assert.That(end, Is.LessThanOrEqualTo(potential + 1.0), "growth must not run past the potential ceiling");
+        }
+
+        [Test]
+        public void Develop_PlayerInPrime_LeavesAbilityRoughlyFlat()
+        {
+            var dev = new PlayerDevelopment();
+            Player before = Player(PlayerRole.CentralMidfield, 28, 70, 90);
+
+            Player after = dev.Develop(before, Rng(3));
+
+            Assert.That(PlayerRatings.ForRole(after), Is.EqualTo(PlayerRatings.ForRole(before)).Within(1e-9));
+        }
+
+        [Test]
+        public void Develop_Veteran_LowersRoleRating()
+        {
+            var dev = new PlayerDevelopment();
+            Player before = Player(PlayerRole.RightWing, 34, 75, 80);
+
+            Player after = dev.Develop(before, Rng(9));
+
+            Assert.That(PlayerRatings.ForRole(after), Is.LessThan(PlayerRatings.ForRole(before)));
+        }
+
+        [Test]
+        public void Develop_Veteran_PaceBoundRoleDeclinesMoreThanPositionalRole()
+        {
+            var dev = new PlayerDevelopment();
+            // Same attribute sheet and seed, so the physical decline is identical — only the role differs.
+            Player winger = Player(PlayerRole.RightWing, 34, 75, 80);
+            Player centreBack = Player(PlayerRole.CentreBack, 34, 75, 80);
+
+            double wingDrop = PlayerRatings.ForRole(winger) - PlayerRatings.ForRole(dev.Develop(winger, Rng(11)));
+            double backDrop = PlayerRatings.ForRole(centreBack) - PlayerRatings.ForRole(dev.Develop(centreBack, Rng(11)));
+
+            Assert.That(wingDrop, Is.GreaterThan(backDrop));
+        }
+
+        [Test]
+        public void Develop_SameSeed_IsDeterministic()
+        {
+            var dev = new PlayerDevelopment();
+            Player before = Player(PlayerRole.LeftBack, 19, 48, 82);
+
+            Player a = dev.Develop(before, Rng(123));
+            Player b = dev.Develop(before, Rng(123));
+
+            Assert.That(a.Attributes, Is.EqualTo(b.Attributes));
+            Assert.That(a.Age, Is.EqualTo(b.Age));
+        }
+    }
+}

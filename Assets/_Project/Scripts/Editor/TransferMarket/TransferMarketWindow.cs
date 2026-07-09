@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Gaffer.Application.Generation;
+using Gaffer.Application.Progression;
 using Gaffer.Application.Transfers;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
@@ -14,9 +15,10 @@ namespace Gaffer.Editor.TransferMarket
     /// <summary>
     /// An early transfer bench: you have a squad, a tight budget, and a market to scout. Browse the pool
     /// through the scout mask (drag accuracy to sharpen the bands), sign a prospect on a hunch, and sell
-    /// from your squad — the low-friction, tense economy in miniature (GDD §4.4). Buying pays a premium and
-    /// selling takes a discount, so churning bleeds cash. Not shipped; a preview of the Faz 7 transfer UI.
-    /// Reveal is a dev aid. Player growth (the "grow" of discover-grow-sell) lands in a later step.
+    /// from your squad — the low-friction, tense economy in miniature (GDD §4.4). Advance a season to age
+    /// and develop everyone (PlayerDevelopment): a scouted teenager grows toward his potential and his value
+    /// climbs, so the whole discover-grow-sell flip is visible in one window — scout cheap, grow, sell high.
+    /// Not shipped; a preview of the Faz 7 transfer UI. Reveal is a dev aid.
     /// </summary>
     public sealed class TransferMarketWindow : EditorWindow
     {
@@ -27,6 +29,8 @@ namespace Gaffer.Editor.TransferMarket
         private long _wageBudget = 160_000L;
         private float _accuracy = 0.3f;
         private bool _reveal;
+        private int _season;
+        private readonly PlayerDevelopment _development = new PlayerDevelopment();
 
         private IReadOnlyList<Player> _pool;
         private List<Player> _market;
@@ -137,8 +141,48 @@ namespace Gaffer.Editor.TransferMarket
             _market = new List<Player>(_pool);
 
             _finances = new Finances(_startingCash, _wageBudget, TotalWages(_squad));
+            _season = 0;
             _status = null;
             Render();
+        }
+
+        // Ages and develops every player one season — the "grow" half of discover-grow-sell. Each player
+        // develops through his own deterministic rng (seed, id, season), so a run reproduces and one player's
+        // growth does not perturb another's. Wages are recomputed as abilities move.
+        private void AdvanceSeason()
+        {
+            if (_squad == null)
+            {
+                return;
+            }
+
+            _season++;
+            _squad = new Squad(DevelopAll(_squad.Players));
+            _market = DevelopAll(_market);
+            _finances = new Finances(_finances.Cash, _finances.WeeklyWageBudget, TotalWages(_squad));
+            _status = "Advanced to season " + _season + " — a year of growth and decline.";
+            Render();
+        }
+
+        private List<Player> DevelopAll(IReadOnlyList<Player> players)
+        {
+            var developed = new List<Player>(players.Count);
+            foreach (Player player in players)
+            {
+                ulong seed = Mix((ulong)_seed, (ulong)(uint)player.Id.Value, (ulong)_season);
+                developed.Add(_development.Develop(player, new SplitMix64RandomNumberGenerator(seed)));
+            }
+
+            return developed;
+        }
+
+        // SplitMix64 finalizer over the combined inputs — a cheap, well-mixed per-player season seed.
+        private static ulong Mix(ulong seed, ulong id, ulong season)
+        {
+            ulong z = seed ^ (id * 0x9E3779B97F4A7C15UL) ^ (season * 0xD1B54A32D192ED03UL);
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+            z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+            return z ^ (z >> 31);
         }
 
         private static long TotalWages(Squad squad)
@@ -201,8 +245,17 @@ namespace Gaffer.Editor.TransferMarket
             top.style.flexDirection = FlexDirection.Row;
             top.style.justifyContent = Justify.SpaceBetween;
             top.Add(Text("CASH  " + FormatValue(_finances.Cash), 15, HarnessPalette.Accent, bold: true));
-            top.Add(Text(_squad.Count + " in squad · accuracy " + Mathf.RoundToInt(_accuracy * 100f) + "%", 12, HarnessPalette.Muted));
+            top.Add(Text("Season " + _season + " · " + _squad.Count + " in squad · accuracy " + Mathf.RoundToInt(_accuracy * 100f) + "%", 12, HarnessPalette.Muted));
             header.Add(top);
+
+            var advance = new Button(AdvanceSeason) { text = "Advance Season (age + develop)" };
+            advance.style.backgroundColor = HarnessPalette.PitchLine;
+            advance.style.color = HarnessPalette.Chalk;
+            advance.style.unityFontStyleAndWeight = FontStyle.Bold;
+            advance.style.height = 24;
+            advance.style.marginTop = 8;
+            SetRadius(advance, 5);
+            header.Add(advance);
 
             bool overWages = _finances.WageHeadroom < 0;
             Color wageColor = overWages ? HarnessPalette.Loss : HarnessPalette.Muted;
