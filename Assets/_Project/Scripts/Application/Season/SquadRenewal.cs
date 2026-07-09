@@ -28,10 +28,14 @@ namespace Gaffer.Application.Season
 
         /// <summary>
         /// Retires the squad's veterans and brings in a same-role youth for each, advancing
-        /// <paramref name="nextPlayerId"/> past the ids it hands out. Deterministic in the season seed,
-        /// the season number, and the player ids.
+        /// <paramref name="nextPlayerId"/> past the ids it hands out. When <paramref name="seedGem"/> is set
+        /// and there is at least one vacancy, one of the intake youths is drawn from the gem context (low
+        /// visible ability, high hidden potential) — the season's guaranteed academy wonderkid, indistinguishable
+        /// from an ordinary prospect on ability alone, so only scouting or playing him reveals what he is.
+        /// The caller schedules this rarely (a per-club cadence), never as a per-player chance. Deterministic
+        /// in the season seed, the season number, and the player ids.
         /// </summary>
-        public Squad Renew(Squad squad, ulong seasonSeed, int seasonNumber, ref int nextPlayerId)
+        public Squad Renew(Squad squad, ulong seasonSeed, int seasonNumber, ref int nextPlayerId, bool seedGem = false)
         {
             var kept = new List<Player>(squad.Players.Count);
             var vacatedRoles = new List<PlayerRole>();
@@ -52,11 +56,12 @@ namespace Gaffer.Application.Season
             if (vacatedRoles.Count > 0)
             {
                 GenerationContext youth = YouthContext(squad);
-                foreach (PlayerRole role in vacatedRoles)
+                for (int i = 0; i < vacatedRoles.Count; i++)
                 {
                     int id = nextPlayerId++;
                     var rng = new SplitMix64RandomNumberGenerator(IntakeSeed(seasonSeed, id, seasonNumber));
-                    kept.Add(_generator.Generate(new PlayerId(id), youth, role, rng));
+                    GenerationContext context = seedGem && i == 0 ? GemContext : youth;
+                    kept.Add(_generator.Generate(new PlayerId(id), context, vacatedRoles[i], rng));
                 }
             }
 
@@ -87,6 +92,19 @@ namespace Gaffer.Application.Season
             double chance = progress * (1.0 - (0.4 * (rating / 100.0)));
             return rng.NextDouble() < chance;
         }
+
+        // The guaranteed academy gem (TDD §5): low visible ability — no higher than an ordinary prospect, so
+        // he hides in plain sight — but a high, rare ceiling. Fixed, not tier-scaled: an undervalued gem is
+        // the point, whatever the club. Cheap to buy on scouted potential, worth a fortune once he grows.
+        private static readonly GenerationContext GemContext = new GenerationContext
+        {
+            MinAge = 16,
+            MaxAge = 18,
+            MinAbility = 28,
+            MaxAbility = 46,
+            MinPotential = 86,
+            MaxPotential = 96,
+        };
 
         // Youth arrive raw but with a ceiling, drawn from a band around the club's current level — so a
         // strong squad's intake is stronger and its best prospects can climb past today's first team.

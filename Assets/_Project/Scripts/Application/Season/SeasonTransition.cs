@@ -45,12 +45,24 @@ namespace Gaffer.Application.Season
                 }
 
                 Squad developed = DevelopSquad(club.Squad, seasonSeed, nextSeasonNumber);
-                Squad renewed = _renewal.Renew(developed, seasonSeed, nextSeasonNumber, ref nextPlayerId);
+                bool seedGem = IsGemSeason(club.Id.Value, nextSeasonNumber);
+                Squad renewed = _renewal.Renew(developed, seasonSeed, nextSeasonNumber, ref nextPlayerId, seedGem);
                 TeamStrength strength = _strengthBuilder.Build(renewed);
                 clubs.Add(new Club(club.Id, club.Name, renewed, strength));
             }
 
             return new League(league.Name, clubs);
+        }
+
+        // How often a club's academy yields a gem — a rare, guaranteed cadence, never a per-player chance,
+        // so the discovery fantasy stays certain (it will happen) yet special (it is uncommon). CM 01/02.
+        private const int GemCadenceSeasons = 5;
+
+        // True when this club is due its academy gem this season. Phase-shifted by the club id so clubs do
+        // not all produce in the same year — gems trickle across the league, one club at a time.
+        private static bool IsGemSeason(int clubId, int seasonNumber)
+        {
+            return (seasonNumber + clubId) % GemCadenceSeasons == 0;
         }
 
         private static int MaxPlayerId(League league)

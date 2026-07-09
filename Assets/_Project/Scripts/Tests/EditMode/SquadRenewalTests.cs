@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Season;
+using Gaffer.Application.Simulation;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
 using NUnit.Framework;
@@ -128,6 +129,48 @@ namespace Gaffer.Tests
                 Assert.That(a.Players[i].Age, Is.EqualTo(b.Players[i].Age));
                 Assert.That(a.Players[i].Attributes, Is.EqualTo(b.Players[i].Attributes));
             }
+        }
+
+        [Test]
+        public void Renew_WithGemSeed_IntakeIncludesAHiddenGem()
+        {
+            // One forced retiree → one intake slot; with the gem seed on, that youth is a hidden gem:
+            // low visible ability (no better than an ordinary prospect) but a rare, high ceiling.
+            Squad squad = SquadOf(P(0, PlayerRole.Striker, 40, 60), P(1, PlayerRole.CentreBack, 24, 60));
+            int nextId = 1000;
+
+            Squad renewed = Renewal().Renew(squad, 99UL, 2, ref nextId, seedGem: true);
+
+            Player youth = FindFresh(renewed);
+            Assert.That(youth, Is.Not.Null);
+            Assert.That(youth.HiddenPotential, Is.GreaterThanOrEqualTo(86), "the gem carries a rare high ceiling");
+            Assert.That(PlayerRatings.ForRole(youth), Is.LessThan(55.0), "but hides behind a low current ability");
+        }
+
+        [Test]
+        public void Renew_WithoutGemSeed_IntakeIsOrdinary()
+        {
+            Squad squad = SquadOf(P(0, PlayerRole.Striker, 40, 60), P(1, PlayerRole.CentreBack, 24, 60));
+            int nextId = 1000;
+
+            Squad renewed = Renewal().Renew(squad, 99UL, 2, ref nextId, seedGem: false);
+
+            Player youth = FindFresh(renewed);
+            Assert.That(youth, Is.Not.Null);
+            Assert.That(youth.HiddenPotential, Is.LessThan(86), "an ordinary prospect tops out below gem territory");
+        }
+
+        [Test]
+        public void Renew_GemSeedButNoVacancy_AddsNoOne()
+        {
+            // No retirements → no intake slot, so the gem seed has nowhere to land and the squad is unchanged.
+            Squad squad = SquadOf(P(0, PlayerRole.Striker, 24, 60), P(1, PlayerRole.CentreBack, 25, 60));
+            int nextId = 1000;
+
+            Squad renewed = Renewal().Renew(squad, 99UL, 2, ref nextId, seedGem: true);
+
+            Assert.That(renewed.Players.Count, Is.EqualTo(2));
+            Assert.That(nextId, Is.EqualTo(1000));
         }
 
         private static bool HasId(Squad squad, int id)
