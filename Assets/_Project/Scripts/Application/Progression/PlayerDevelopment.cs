@@ -14,40 +14,53 @@ namespace Gaffer.Application.Progression
     /// guaranteed. Past the peak, age bites the physical attributes (pace, acceleration, agility, stamina,
     /// jumping), so a pace-bound winger or full-back declines far more than a positional centre-back or a
     /// keeper — the ratings fall out of that naturally. Deterministic through the injected rng: the same
-    /// player and seed develop identically. Constants tune into a BalanceSO later.
+    /// player and seed develop identically. All the balance numbers come from an injected
+    /// <see cref="DevelopmentSettings"/> (data-driven, NON-NEGOTIABLE #3); the default is the calibrated one.
     /// </summary>
     public sealed class PlayerDevelopment
     {
+        private readonly DevelopmentSettings _settings;
+
+        public PlayerDevelopment()
+            : this(DevelopmentSettings.Default)
+        {
+        }
+
+        public PlayerDevelopment(DevelopmentSettings settings)
+        {
+            _settings = settings;
+        }
+
         // Growth as a fraction of the remaining ability gap, by age — steep for teenagers, tapering off
         // through the mid-twenties, then a slow trickle into the late twenties for a late developer still
         // short of an unrealised ceiling (CM 01/02: a player keeps inching toward his potential until ~30).
         // Applied to each of the role's rating attributes, so the role rating rises by about this fraction
         // of the gap per season (the weights sum to 1) and never overshoots the ceiling.
-        private static double GrowthRate(int age)
+        private double GrowthRate(int age)
         {
             if (age <= 20)
             {
-                return 0.14;
+                return _settings.GrowthRateTo20;
             }
 
             if (age <= 22)
             {
-                return 0.10;
+                return _settings.GrowthRateTo22;
             }
 
             if (age <= 24)
             {
-                return 0.07;
+                return _settings.GrowthRateTo24;
             }
 
             if (age <= 26)
             {
-                return 0.045;
+                return _settings.GrowthRateTo26;
             }
 
             if (age <= 29)
             {
-                return 0.02;
+                return _settings.GrowthRateTo29;
             }
 
             return 0.0;
@@ -56,35 +69,32 @@ namespace Gaffer.Application.Progression
         // A per-season multiplier so growth and decline are not a smooth mechanical curve: some seasons a
         // player kicks on, some he stalls (CM 01/02's development feel). Centred on 1.0, drawn from the rng
         // so it stays deterministic. The range never lets a single season's growth run past the ceiling.
-        private const double MinVariance = 0.6;
-        private const double MaxVariance = 1.4;
-
-        private static double SeasonVariance(IRandom rng)
+        private double SeasonVariance(IRandom rng)
         {
-            return MinVariance + (rng.NextDouble() * (MaxVariance - MinVariance));
+            return _settings.MinSeasonVariance + (rng.NextDouble() * (_settings.MaxSeasonVariance - _settings.MinSeasonVariance));
         }
 
         // The age a role tends to peak at, before decline sets in — not one number for everyone (CM 01/02):
         // a pacey winger or striker fades first, a positional midfielder or centre-back holds longer, and a
         // keeper lasts longest of all. A per-player offset (below) then shifts this a few years either way.
-        private static int RolePeakAge(PlayerRole role)
+        private int RolePeakAge(PlayerRole role)
         {
             switch (role)
             {
                 case PlayerRole.Goalkeeper:
-                    return 34;
+                    return _settings.KeeperPeakAge;
                 case PlayerRole.CentreBack:
                 case PlayerRole.DefensiveMidfield:
                 case PlayerRole.CentralMidfield:
                 case PlayerRole.AttackingMidfield:
-                    return 32;
+                    return _settings.CentralPeakAge;
                 case PlayerRole.RightBack:
                 case PlayerRole.LeftBack:
                 case PlayerRole.RightMidfield:
                 case PlayerRole.LeftMidfield:
-                    return 31;
+                    return _settings.WidePeakAge;
                 default: // wingers and strikers — the most pace-dependent, so the first to go
-                    return 30;
+                    return _settings.ForwardPeakAge;
             }
         }
 
@@ -100,26 +110,12 @@ namespace Gaffer.Application.Progression
             return (int)(z % 5UL) - 2;
         }
 
-        // When this player, in this role, starts to decline — never before 30 (physical decline is real by
-        // then even for the latest bloomers), otherwise the role peak shifted by his personal offset.
-        private static int DeclineOnsetAge(Player player)
+        // When this player, in this role, starts to decline — never before the settings' floor (physical
+        // decline is real by then even for the latest bloomers), otherwise the role peak shifted by his offset.
+        private int DeclineOnsetAge(Player player)
         {
-            return Math.Max(30, RolePeakAge(player.Role) + PeakAgeOffset(player.Id));
+            return Math.Max(_settings.MinDeclineAge, RolePeakAge(player.Role) + PeakAgeOffset(player.Id));
         }
-
-        // Points of ability lost per season past the peak, accelerating with age (capped), so decline is
-        // gentle at first and steeper into the mid-thirties.
-        private const double DeclinePerYear = 0.9;
-        private const int MaxDeclineYears = 6;
-
-        private const byte PhysicalFloor = 15;
-
-        // Floor for the role's rating attributes as age erodes them — an old pro loses a step, not his craft.
-        private const byte AttributeFloor = 25;
-
-        // How much of a season's decline hits the role's own attributes (general ability slip) versus the
-        // athletic erosion on top. Below 1 so a positional player fades gently and a keeper ages the slowest.
-        private const double GeneralDeclineFactor = 0.6;
 
         /// <summary>
         /// Returns the player one season on: age incremented, and attributes grown toward potential (if
@@ -146,12 +142,12 @@ namespace Gaffer.Application.Progression
             int yearsPastPeak = player.Age - DeclineOnsetAge(player);
             if (yearsPastPeak > 0)
             {
-                double amount = DeclinePerYear * Math.Min(yearsPastPeak, MaxDeclineYears) * SeasonVariance(rng);
+                double amount = _settings.DeclinePerYear * Math.Min(yearsPastPeak, _settings.MaxDeclineYears) * SeasonVariance(rng);
 
                 // Two-part decline so the OVR actually falls once past this player's own peak, hardest for
                 // the pace-reliant. (1) A general erosion of the role's own rating attributes — his overall
                 // quality slips, so the role rating drops for every role, keeper or striker.
-                attributes = AdjustRoleAttributes(attributes, player.Role, -amount * GeneralDeclineFactor, rng);
+                attributes = AdjustRoleAttributes(attributes, player.Role, -amount * _settings.GeneralDeclineFactor, rng);
                 // (2) An extra athletic erosion on the raw physical attributes. Pace and stamina feed the
                 // wide and forward ratings, so wingers and full-backs fall off far faster than a positional
                 // centre-back or a keeper, whose ratings barely touch them.
@@ -164,7 +160,7 @@ namespace Gaffer.Application.Progression
         // Adjusts exactly the attributes the role is scored on (mirrors PlayerRatings.ForRole) by a signed
         // amount, so both growth (positive) and the general age erosion (negative) move the role rating and
         // the scout's key stats — not numbers no one reads.
-        private static Attributes AdjustRoleAttributes(Attributes a, PlayerRole role, double amount, IRandom rng)
+        private Attributes AdjustRoleAttributes(Attributes a, PlayerRole role, double amount, IRandom rng)
         {
             switch (role)
             {
@@ -243,7 +239,7 @@ namespace Gaffer.Application.Progression
 
         // Age wears the athletic attributes; technical and positional stay, which is why a keeper or a
         // reading-the-game centre-back ages gracefully while a winger who lived on pace falls off a cliff.
-        private static Attributes ApplyDecline(Attributes a, double amount, IRandom rng)
+        private Attributes ApplyDecline(Attributes a, double amount, IRandom rng)
         {
             a.Pace = Lower(a.Pace, amount, rng);
             a.Acceleration = Lower(a.Acceleration, amount, rng);
@@ -256,7 +252,7 @@ namespace Gaffer.Application.Progression
         // Applies a signed amount to an attribute: its magnitude becomes a whole-number step (the rng
         // decides the leftover fraction, so change is rng-varied), added when growing or subtracted when
         // eroding. Capped at 99 on the way up and floored on the way down.
-        private static byte Adjust(byte value, double amount, IRandom rng)
+        private byte Adjust(byte value, double amount, IRandom rng)
         {
             int step = WholeStep(Math.Abs(amount), rng);
             int result = amount >= 0.0 ? value + step : value - step;
@@ -265,19 +261,19 @@ namespace Gaffer.Application.Progression
                 result = 99;
             }
 
-            if (result < AttributeFloor)
+            if (result < _settings.AttributeFloor)
             {
-                result = AttributeFloor;
+                result = _settings.AttributeFloor;
             }
 
             return (byte)result;
         }
 
-        private static byte Lower(byte value, double amount, IRandom rng)
+        private byte Lower(byte value, double amount, IRandom rng)
         {
             int step = WholeStep(amount, rng);
             int lowered = value - step;
-            return (byte)(lowered < PhysicalFloor ? PhysicalFloor : lowered);
+            return (byte)(lowered < _settings.PhysicalFloor ? _settings.PhysicalFloor : lowered);
         }
 
         private static int WholeStep(double amount, IRandom rng)

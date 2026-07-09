@@ -33,6 +33,68 @@ namespace Gaffer.Tests
         }
 
         [Test]
+        public void Settings_DefaultExposesTheCalibratedValues()
+        {
+            // A lock on the shipped balance, so an accidental edit to a default is caught here.
+            DevelopmentSettings s = DevelopmentSettings.Default;
+            Assert.That(s.GrowthRateTo20, Is.EqualTo(0.14));
+            Assert.That(s.ForwardPeakAge, Is.EqualTo(30));
+            Assert.That(s.KeeperPeakAge, Is.EqualTo(34));
+            Assert.That(s.DeclinePerYear, Is.EqualTo(0.9));
+        }
+
+        [Test]
+        public void Develop_ZeroGrowthSettings_YoungPlayerStaysFlat()
+        {
+            var settings = DevelopmentSettings.Default;
+            settings.GrowthRateTo20 = 0.0;
+            settings.GrowthRateTo22 = 0.0;
+            settings.GrowthRateTo24 = 0.0;
+            settings.GrowthRateTo26 = 0.0;
+            settings.GrowthRateTo29 = 0.0;
+            var dev = new PlayerDevelopment(settings);
+            Player before = Player(PlayerRole.Striker, 18, 50, 88);
+
+            Player after = dev.Develop(before, Rng(7));
+
+            Assert.That(PlayerRatings.ForRole(after), Is.EqualTo(PlayerRatings.ForRole(before)).Within(1e-9),
+                "no growth rate means a young player below potential does not improve");
+        }
+
+        [Test]
+        public void Develop_HigherDeclineSettings_DropMoreThanDefault()
+        {
+            Player before = Player(PlayerRole.RightWing, 34, 75, 80);
+            double start = PlayerRatings.ForRole(before);
+
+            double defaultDrop = start - PlayerRatings.ForRole(new PlayerDevelopment().Develop(before, Rng(11)));
+
+            var steep = DevelopmentSettings.Default;
+            steep.DeclinePerYear = 2.0;
+            double steepDrop = start - PlayerRatings.ForRole(new PlayerDevelopment(steep).Develop(before, Rng(11)));
+
+            Assert.That(steepDrop, Is.GreaterThan(defaultDrop), "a bigger decline-per-year wears a veteran down faster");
+        }
+
+        [Test]
+        public void Develop_LowerPeakSettings_DeclineStartsEarlier()
+        {
+            // At 29 a striker is below the default peak (>=30 for any offset) and already at his ceiling, so by
+            // default he holds; drop the peak below his age and he declines. Same player, same seed.
+            Player player = Player(PlayerRole.Striker, 29, 70, 70);
+
+            var early = DevelopmentSettings.Default;
+            early.ForwardPeakAge = 26;
+            early.MinDeclineAge = 26;
+
+            double defaultAfter = PlayerRatings.ForRole(new PlayerDevelopment().Develop(player, Rng(4)));
+            double earlyAfter = PlayerRatings.ForRole(new PlayerDevelopment(early).Develop(player, Rng(4)));
+
+            Assert.That(defaultAfter, Is.EqualTo(70.0).Within(1e-9), "default: at his ceiling and below peak, he holds");
+            Assert.That(earlyAfter, Is.LessThan(defaultAfter), "an earlier peak means he is already declining at 29");
+        }
+
+        [Test]
         public void Develop_AgesThePlayerByOneSeason()
         {
             var dev = new PlayerDevelopment();
