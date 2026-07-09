@@ -283,7 +283,7 @@ namespace Gaffer.Editor.TransferMarket
 
             card.Add(Text("Your own players — true overall (OVR) and full attributes. Advance a season to watch the young ones grow.", 10, HarnessPalette.Muted));
 
-            foreach (Player player in _squad.Players)
+            foreach (Player player in ByOverallDescending(_squad.Players))
             {
                 var row = Row();
                 var line = LineWithName(player, showRating: true);
@@ -303,15 +303,15 @@ namespace Gaffer.Editor.TransferMarket
             VisualElement card = Card();
             card.Add(Text("MARKET — " + _market.Count + " PROSPECTS", 11, HarnessPalette.Muted, bold: true));
             card.Add(Text(
-                _reveal ? "Revealing true potential (dev)." : "Potential is masked — trust the band, take the punt.",
+                _reveal ? "Revealing true potential (dev)." : "OVR is his current ability (visible); potential is masked — trust the band, take the punt.",
                 10, HarnessPalette.Muted));
 
-            foreach (Player player in _market)
+            foreach (Player player in ByOverallDescending(_market))
             {
                 ScoutReport report = _scout.Observe(player, _accuracy);
 
                 var row = Row();
-                var line = LineWithName(player, showRating: _reveal);
+                var line = LineWithName(player, showRating: true);
                 var sign = new Button(() => Sign(player)) { text = "Sign " + FormatValue(TransferService.Fee(player)) };
                 StyleActionButton(sign, HarnessPalette.Accent);
                 line.Add(sign);
@@ -331,6 +331,19 @@ namespace Gaffer.Editor.TransferMarket
             return card;
         }
 
+        // Strongest first, by current overall rating — the natural way to read a squad or a shortlist. Ties
+        // break on the lower player id so the order is stable across renders.
+        private static List<Player> ByOverallDescending(IReadOnlyList<Player> players)
+        {
+            var sorted = new List<Player>(players);
+            sorted.Sort((a, b) =>
+            {
+                int byRating = PlayerRatings.ForRole(b).CompareTo(PlayerRatings.ForRole(a));
+                return byRating != 0 ? byRating : a.Id.Value.CompareTo(b.Id.Value);
+            });
+            return sorted;
+        }
+
         private static VisualElement LineWithName(Player player, bool showRating)
         {
             var line = new VisualElement();
@@ -342,8 +355,8 @@ namespace Gaffer.Editor.TransferMarket
             line.Add(name);
             if (showRating)
             {
-                // General rating for the role — the number that moves as a player develops. Masked in the
-                // market (only shown with Reveal on), always shown for your own squad.
+                // General rating for the role (current ability) — the number that moves as a player
+                // develops. Shown for both your squad and the market; only potential stays scout-masked.
                 int rating = Mathf.RoundToInt((float)PlayerRatings.ForRole(player));
                 line.Add(Text("OVR " + rating + "   ", 12, HarnessPalette.Accent, bold: true));
             }

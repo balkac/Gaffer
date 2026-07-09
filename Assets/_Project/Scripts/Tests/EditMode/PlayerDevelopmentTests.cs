@@ -113,6 +113,25 @@ namespace Gaffer.Tests
         }
 
         [Test]
+        public void Develop_VeteranPositionalPlayerOverSeasons_VisiblyDeclines()
+        {
+            var dev = new PlayerDevelopment();
+            // A centre-back's rating uses none of the raw athletic attributes, so age must still erode his
+            // general ability — otherwise a 35-year-old reads identical to his prime. Several seasons should
+            // move the OVR clearly, not by a rounding wobble.
+            Player player = Player(PlayerRole.CentreBack, 32, 78, 80);
+            double start = PlayerRatings.ForRole(player);
+            IRandom rng = Rng(5);
+
+            for (int season = 0; season < 3; season++)
+            {
+                player = dev.Develop(player, rng);
+            }
+
+            Assert.That(PlayerRatings.ForRole(player), Is.LessThan(start - 2.0));
+        }
+
+        [Test]
         public void Develop_Veteran_PaceBoundRoleDeclinesMoreThanPositionalRole()
         {
             var dev = new PlayerDevelopment();

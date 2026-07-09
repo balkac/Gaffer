@@ -87,6 +87,13 @@ namespace Gaffer.Application.Progression
 
         private const byte PhysicalFloor = 15;
 
+        // Floor for the role's rating attributes as age erodes them — an old pro loses a step, not his craft.
+        private const byte AttributeFloor = 25;
+
+        // How much of a season's decline hits the role's own attributes (general ability slip) versus the
+        // athletic erosion on top. Below 1 so a positional player fades gently and a keeper ages the slowest.
+        private const double GeneralDeclineFactor = 0.6;
+
         /// <summary>
         /// Returns the player one season on: age incremented, and attributes grown toward potential (if
         /// still young and below the ceiling) or worn down physically (if past the peak). Never mutates the
@@ -105,92 +112,102 @@ namespace Gaffer.Application.Progression
                     // Raising each role attribute by this lifts the role rating by about the same amount
                     // (weights sum to 1); capping at the gap keeps the rating from overshooting potential.
                     double perAttribute = Math.Min(growthRate * gap * SeasonVariance(rng), gap);
-                    attributes = ApplyGrowth(attributes, player.Role, perAttribute, rng);
+                    attributes = AdjustRoleAttributes(attributes, player.Role, perAttribute, rng);
                 }
             }
 
             double decline = DeclineAmount(player.Age);
             if (decline > 0.0)
             {
-                attributes = ApplyDecline(attributes, decline * SeasonVariance(rng), rng);
+                double amount = decline * SeasonVariance(rng);
+
+                // Two-part decline so the OVR actually falls for everyone, hardest for the pace-reliant.
+                // (1) A general erosion of the role's own rating attributes — the aging player's overall
+                // quality slips, so the role rating drops by about this for every role, keeper or striker.
+                attributes = AdjustRoleAttributes(attributes, player.Role, -amount * GeneralDeclineFactor, rng);
+                // (2) An extra athletic erosion on the raw physical attributes. Pace and stamina feed the
+                // wide and forward ratings, so wingers and full-backs fall off far faster than a positional
+                // centre-back or a keeper, whose ratings barely touch them.
+                attributes = ApplyDecline(attributes, amount, rng);
             }
 
             return new Player(player.Id, player.Name, player.Nationality, player.Role, player.Age + 1, attributes, player.HiddenPotential);
         }
 
-        // Grows exactly the attributes the role is scored on (mirrors PlayerRatings.ForRole), so improvement
-        // shows up in the role rating and in the scout's key stats, not in numbers no one reads.
-        private static Attributes ApplyGrowth(Attributes a, PlayerRole role, double amount, IRandom rng)
+        // Adjusts exactly the attributes the role is scored on (mirrors PlayerRatings.ForRole) by a signed
+        // amount, so both growth (positive) and the general age erosion (negative) move the role rating and
+        // the scout's key stats — not numbers no one reads.
+        private static Attributes AdjustRoleAttributes(Attributes a, PlayerRole role, double amount, IRandom rng)
         {
             switch (role)
             {
                 case PlayerRole.Goalkeeper:
-                    a.Reflexes = Raise(a.Reflexes, amount, rng);
-                    a.Handling = Raise(a.Handling, amount, rng);
-                    a.OneOnOnes = Raise(a.OneOnOnes, amount, rng);
-                    a.CommandOfArea = Raise(a.CommandOfArea, amount, rng);
-                    a.AerialReach = Raise(a.AerialReach, amount, rng);
-                    a.GkPositioning = Raise(a.GkPositioning, amount, rng);
+                    a.Reflexes = Adjust(a.Reflexes, amount, rng);
+                    a.Handling = Adjust(a.Handling, amount, rng);
+                    a.OneOnOnes = Adjust(a.OneOnOnes, amount, rng);
+                    a.CommandOfArea = Adjust(a.CommandOfArea, amount, rng);
+                    a.AerialReach = Adjust(a.AerialReach, amount, rng);
+                    a.GkPositioning = Adjust(a.GkPositioning, amount, rng);
                     break;
                 case PlayerRole.CentreBack:
-                    a.Marking = Raise(a.Marking, amount, rng);
-                    a.Tackling = Raise(a.Tackling, amount, rng);
-                    a.Heading = Raise(a.Heading, amount, rng);
-                    a.Strength = Raise(a.Strength, amount, rng);
-                    a.Positioning = Raise(a.Positioning, amount, rng);
+                    a.Marking = Adjust(a.Marking, amount, rng);
+                    a.Tackling = Adjust(a.Tackling, amount, rng);
+                    a.Heading = Adjust(a.Heading, amount, rng);
+                    a.Strength = Adjust(a.Strength, amount, rng);
+                    a.Positioning = Adjust(a.Positioning, amount, rng);
                     break;
                 case PlayerRole.RightBack:
                 case PlayerRole.LeftBack:
-                    a.Pace = Raise(a.Pace, amount, rng);
-                    a.Crossing = Raise(a.Crossing, amount, rng);
-                    a.Tackling = Raise(a.Tackling, amount, rng);
-                    a.Marking = Raise(a.Marking, amount, rng);
-                    a.Stamina = Raise(a.Stamina, amount, rng);
-                    a.Positioning = Raise(a.Positioning, amount, rng);
+                    a.Pace = Adjust(a.Pace, amount, rng);
+                    a.Crossing = Adjust(a.Crossing, amount, rng);
+                    a.Tackling = Adjust(a.Tackling, amount, rng);
+                    a.Marking = Adjust(a.Marking, amount, rng);
+                    a.Stamina = Adjust(a.Stamina, amount, rng);
+                    a.Positioning = Adjust(a.Positioning, amount, rng);
                     break;
                 case PlayerRole.DefensiveMidfield:
-                    a.Tackling = Raise(a.Tackling, amount, rng);
-                    a.Marking = Raise(a.Marking, amount, rng);
-                    a.Positioning = Raise(a.Positioning, amount, rng);
-                    a.Passing = Raise(a.Passing, amount, rng);
-                    a.Stamina = Raise(a.Stamina, amount, rng);
+                    a.Tackling = Adjust(a.Tackling, amount, rng);
+                    a.Marking = Adjust(a.Marking, amount, rng);
+                    a.Positioning = Adjust(a.Positioning, amount, rng);
+                    a.Passing = Adjust(a.Passing, amount, rng);
+                    a.Stamina = Adjust(a.Stamina, amount, rng);
                     break;
                 case PlayerRole.CentralMidfield:
-                    a.Passing = Raise(a.Passing, amount, rng);
-                    a.Technique = Raise(a.Technique, amount, rng);
-                    a.FirstTouch = Raise(a.FirstTouch, amount, rng);
-                    a.Positioning = Raise(a.Positioning, amount, rng);
-                    a.Stamina = Raise(a.Stamina, amount, rng);
+                    a.Passing = Adjust(a.Passing, amount, rng);
+                    a.Technique = Adjust(a.Technique, amount, rng);
+                    a.FirstTouch = Adjust(a.FirstTouch, amount, rng);
+                    a.Positioning = Adjust(a.Positioning, amount, rng);
+                    a.Stamina = Adjust(a.Stamina, amount, rng);
                     break;
                 case PlayerRole.AttackingMidfield:
-                    a.Passing = Raise(a.Passing, amount, rng);
-                    a.Technique = Raise(a.Technique, amount, rng);
-                    a.Dribbling = Raise(a.Dribbling, amount, rng);
-                    a.FirstTouch = Raise(a.FirstTouch, amount, rng);
-                    a.LongShots = Raise(a.LongShots, amount, rng);
+                    a.Passing = Adjust(a.Passing, amount, rng);
+                    a.Technique = Adjust(a.Technique, amount, rng);
+                    a.Dribbling = Adjust(a.Dribbling, amount, rng);
+                    a.FirstTouch = Adjust(a.FirstTouch, amount, rng);
+                    a.LongShots = Adjust(a.LongShots, amount, rng);
                     break;
                 case PlayerRole.RightMidfield:
                 case PlayerRole.LeftMidfield:
-                    a.Crossing = Raise(a.Crossing, amount, rng);
-                    a.Pace = Raise(a.Pace, amount, rng);
-                    a.Stamina = Raise(a.Stamina, amount, rng);
-                    a.Passing = Raise(a.Passing, amount, rng);
-                    a.Dribbling = Raise(a.Dribbling, amount, rng);
+                    a.Crossing = Adjust(a.Crossing, amount, rng);
+                    a.Pace = Adjust(a.Pace, amount, rng);
+                    a.Stamina = Adjust(a.Stamina, amount, rng);
+                    a.Passing = Adjust(a.Passing, amount, rng);
+                    a.Dribbling = Adjust(a.Dribbling, amount, rng);
                     break;
                 case PlayerRole.RightWing:
                 case PlayerRole.LeftWing:
-                    a.Pace = Raise(a.Pace, amount, rng);
-                    a.Dribbling = Raise(a.Dribbling, amount, rng);
-                    a.Crossing = Raise(a.Crossing, amount, rng);
-                    a.Technique = Raise(a.Technique, amount, rng);
-                    a.Finishing = Raise(a.Finishing, amount, rng);
+                    a.Pace = Adjust(a.Pace, amount, rng);
+                    a.Dribbling = Adjust(a.Dribbling, amount, rng);
+                    a.Crossing = Adjust(a.Crossing, amount, rng);
+                    a.Technique = Adjust(a.Technique, amount, rng);
+                    a.Finishing = Adjust(a.Finishing, amount, rng);
                     break;
                 default: // Striker
-                    a.Finishing = Raise(a.Finishing, amount, rng);
-                    a.Positioning = Raise(a.Positioning, amount, rng);
-                    a.Pace = Raise(a.Pace, amount, rng);
-                    a.Technique = Raise(a.Technique, amount, rng);
-                    a.Heading = Raise(a.Heading, amount, rng);
+                    a.Finishing = Adjust(a.Finishing, amount, rng);
+                    a.Positioning = Adjust(a.Positioning, amount, rng);
+                    a.Pace = Adjust(a.Pace, amount, rng);
+                    a.Technique = Adjust(a.Technique, amount, rng);
+                    a.Heading = Adjust(a.Heading, amount, rng);
                     break;
             }
 
@@ -209,13 +226,24 @@ namespace Gaffer.Application.Progression
             return a;
         }
 
-        // A fractional amount becomes a whole-number step, with the rng deciding the leftover fraction — so
-        // growth is rng-varied yet never negative (each role attribute is non-decreasing → the rating grows).
-        private static byte Raise(byte value, double amount, IRandom rng)
+        // Applies a signed amount to an attribute: its magnitude becomes a whole-number step (the rng
+        // decides the leftover fraction, so change is rng-varied), added when growing or subtracted when
+        // eroding. Capped at 99 on the way up and floored on the way down.
+        private static byte Adjust(byte value, double amount, IRandom rng)
         {
-            int step = WholeStep(amount, rng);
-            int raised = value + step;
-            return (byte)(raised > 99 ? 99 : raised);
+            int step = WholeStep(Math.Abs(amount), rng);
+            int result = amount >= 0.0 ? value + step : value - step;
+            if (result > 99)
+            {
+                result = 99;
+            }
+
+            if (result < AttributeFloor)
+            {
+                result = AttributeFloor;
+            }
+
+            return (byte)result;
         }
 
         private static byte Lower(byte value, double amount, IRandom rng)
