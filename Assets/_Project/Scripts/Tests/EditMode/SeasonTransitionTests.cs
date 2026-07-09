@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Gaffer.Application.Progression;
 using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
 using Gaffer.Domain.Clubs;
@@ -87,6 +88,22 @@ namespace Gaffer.Tests
             Assert.That(after.Attack, Is.GreaterThan(before.Attack));
             Assert.That(after.Midfield, Is.GreaterThan(before.Midfield));
             Assert.That(after.Defence, Is.GreaterThan(before.Defence));
+        }
+
+        [Test]
+        public void ToNextSeason_ZeroGrowthSettings_YoungSquadDoesNotStrengthen()
+        {
+            League league = LeagueWith(ClubWithSquad(0, YoungSquad(50, 85)));
+            var settings = DevelopmentSettings.Default;
+            settings.GrowthRateTo20 = 0.0;
+
+            League next = new SeasonTransition(settings).ToNextSeason(league, 1234UL, 2);
+
+            // 18-year-olds with no growth rate and no retirements: the roster (and its strength) is unchanged.
+            TeamStrength before = league.Clubs[0].Strength;
+            TeamStrength after = next.Clubs[0].Strength;
+            Assert.That(after.Attack, Is.EqualTo(before.Attack).Within(1e-9));
+            Assert.That(after.Defence, Is.EqualTo(before.Defence).Within(1e-9));
         }
 
         [Test]

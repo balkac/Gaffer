@@ -7,7 +7,9 @@ using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
 using Gaffer.Editor.Harness;
+using Gaffer.Infrastructure.Configuration;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -31,7 +33,8 @@ namespace Gaffer.Editor.TransferMarket
         private float _accuracy = 0.3f;
         private bool _reveal;
         private int _season;
-        private readonly PlayerDevelopment _development = new PlayerDevelopment();
+        private PlayerDevelopment _development = new PlayerDevelopment();
+        private DevelopmentBalanceSO _balance;
 
         private IReadOnlyList<Player> _pool;
         private List<Player> _market;
@@ -114,6 +117,12 @@ namespace Gaffer.Editor.TransferMarket
             });
             card.Add(reveal);
 
+            // Optional development-balance asset: assign a DevelopmentBalanceSO to retune how players grow and
+            // age (used by Advance Season). Leave empty to use the calibrated defaults.
+            var balance = new ObjectField("Development balance (SO)") { objectType = typeof(DevelopmentBalanceSO), value = _balance };
+            balance.RegisterValueChangedCallback(e => _balance = e.newValue as DevelopmentBalanceSO);
+            card.Add(balance);
+
             var generate = new Button(Generate) { text = "Generate Market" };
             generate.style.backgroundColor = HarnessPalette.Accent;
             generate.style.color = HarnessPalette.Pitch;
@@ -156,6 +165,10 @@ namespace Gaffer.Editor.TransferMarket
             {
                 return;
             }
+
+            // Rebuild the developer from the assigned balance asset (or the calibrated default), so tuning the
+            // SO in the Inspector changes how this season's growth and decline play out.
+            _development = _balance != null ? new PlayerDevelopment(_balance.ToSettings()) : new PlayerDevelopment();
 
             _season++;
             _squad = new Squad(DevelopAll(_squad.Players));

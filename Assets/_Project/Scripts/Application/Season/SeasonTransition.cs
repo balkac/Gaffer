@@ -21,9 +21,21 @@ namespace Gaffer.Application.Season
     /// </summary>
     public sealed class SeasonTransition
     {
-        private readonly PlayerDevelopment _development = new PlayerDevelopment();
+        private readonly PlayerDevelopment _development;
         private readonly EffectiveStrengthBuilder _strengthBuilder = new EffectiveStrengthBuilder();
         private readonly SquadRenewal _renewal = new SquadRenewal(new PlayerGenerator());
+
+        public SeasonTransition()
+            : this(DevelopmentSettings.Default)
+        {
+        }
+
+        /// <summary>Rolls seasons on with a specific development balance (from a config asset), so tuning the
+        /// numbers changes how every squad grows and ages across a run.</summary>
+        public SeasonTransition(DevelopmentSettings developmentSettings)
+        {
+            _development = new PlayerDevelopment(developmentSettings);
+        }
 
         /// <summary>
         /// Returns a new league for <paramref name="nextSeasonNumber"/> with every squad aged and developed.
