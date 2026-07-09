@@ -56,6 +56,8 @@ namespace Gaffer.Editor.SeasonPlayer
         private SeasonVerdict? _verdict;
         private WeekResult _lastWeek;
         private int _seasonNumber = 1;
+        private List<Player> _retired;
+        private List<Player> _arrived;
 
         private VisualElement _body;
 
@@ -140,6 +142,8 @@ namespace Gaffer.Editor.SeasonPlayer
             _managedClub = new ClubId(Mathf.Clamp(_managedIndex, 0, count - 1));
             _target = new BoardTarget(_promotionPosition, _survivalPosition);
             _seasonNumber = 1;
+            _retired = null;
+            _arrived = null;
             AutoPickStarters();
             _season.SetFormation(_managedClub, _formation);
             _season.SetStarters(_managedClub, CurrentStarters());
@@ -156,9 +160,12 @@ namespace Gaffer.Editor.SeasonPlayer
         // re-picked from the developed squad. The same seed keeps the run reproducible.
         private void StartNextSeason()
         {
+            IReadOnlyList<Player> before = ManagedSquad().Players;
+
             _seasonNumber++;
             _league = new SeasonTransition().ToNextSeason(_league, (ulong)_seed, _seasonNumber);
             _season = new LeagueSeason(_league);
+            ComputeSummer(before, ManagedSquad().Players);
             AutoPickStarters();
             _season.SetFormation(_managedClub, _formation);
             _season.SetStarters(_managedClub, CurrentStarters());
@@ -167,6 +174,41 @@ namespace Gaffer.Editor.SeasonPlayer
             _lastWeek = null;
 
             Refresh();
+        }
+
+        // Diffs your squad across the summer by id: who is gone (retired) and who is new (came through the
+        // youth intake). Surfaced as a transient card so a run reads like a story — names leaving, names arriving.
+        private void ComputeSummer(IReadOnlyList<Player> before, IReadOnlyList<Player> after)
+        {
+            var afterIds = new HashSet<int>();
+            foreach (Player p in after)
+            {
+                afterIds.Add(p.Id.Value);
+            }
+
+            var beforeIds = new HashSet<int>();
+            foreach (Player p in before)
+            {
+                beforeIds.Add(p.Id.Value);
+            }
+
+            _retired = new List<Player>();
+            foreach (Player p in before)
+            {
+                if (!afterIds.Contains(p.Id.Value))
+                {
+                    _retired.Add(p);
+                }
+            }
+
+            _arrived = new List<Player>();
+            foreach (Player p in after)
+            {
+                if (!beforeIds.Contains(p.Id.Value))
+                {
+                    _arrived.Add(p);
+                }
+            }
         }
 
         private Squad ManagedSquad()
@@ -452,6 +494,11 @@ namespace Gaffer.Editor.SeasonPlayer
                 _body.Add(next);
             }
 
+            if (_retired != null && (_retired.Count > 0 || _arrived.Count > 0))
+            {
+                _body.Add(BuildSummerCard());
+            }
+
             _body.Add(BuildLineupCard());
             _body.Add(BuildTacticsCard());
             _body.Add(BuildSquadCard());
@@ -461,6 +508,38 @@ namespace Gaffer.Editor.SeasonPlayer
             {
                 _body.Add(BuildLastWeekCard());
             }
+        }
+
+        // The summer's comings and goings for your club — who retired, who came through the academy.
+        private VisualElement BuildSummerCard()
+        {
+            VisualElement card = MakeCard();
+            card.Add(MakeLabel("SUMMER " + _seasonNumber, 11, HarnessPalette.Muted, bold: true));
+
+            if (_retired.Count > 0)
+            {
+                var outLine = new List<string>();
+                foreach (Player p in _retired)
+                {
+                    outLine.Add(p.Name + " (" + PlayerRoles.Abbrev(p.Role) + " " + p.Age + ")");
+                }
+
+                card.Add(MakeLabel("Retired:  " + string.Join(",   ", outLine), 11, HarnessPalette.Loss));
+            }
+
+            if (_arrived.Count > 0)
+            {
+                var inLine = new List<string>();
+                foreach (Player p in _arrived)
+                {
+                    int ovr = Mathf.RoundToInt((float)PlayerRatings.ForRole(p));
+                    inLine.Add(p.Name + " (" + PlayerRoles.Abbrev(p.Role) + " " + p.Age + ", OVR " + ovr + ")");
+                }
+
+                card.Add(MakeLabel("Youth in:  " + string.Join(",   ", inLine), 11, HarnessPalette.Accent));
+            }
+
+            return card;
         }
 
         private VisualElement BuildLineupCard()
