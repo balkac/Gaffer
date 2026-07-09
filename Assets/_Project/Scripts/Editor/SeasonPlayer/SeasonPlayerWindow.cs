@@ -601,6 +601,7 @@ namespace Gaffer.Editor.SeasonPlayer
                 SetBorder(chip, HarnessPalette.PitchLine, 1);
                 SetRadius(chip, 6);
                 chip.Add(MakeLabel(PlayerRoles.Abbrev(player.Role) + " " + Surname(player.Name), 10, HarnessPalette.Muted));
+                chip.Add(MakeLabel("  " + Mathf.RoundToInt((float)PlayerRatings.ForRole(player)), 10, HarnessPalette.Accent, bold: true));
 
                 RegisterDrag(chip, -1, player.Id.Value);
                 row.Add(chip);
@@ -974,6 +975,12 @@ namespace Gaffer.Editor.SeasonPlayer
                     starting ? HarnessPalette.Chalk : HarnessPalette.Muted);
                 left.style.flexGrow = 1;
                 row.Add(left);
+
+                // General rating (OVR) beside the name — the number that moves as a player develops or ages.
+                var ovr = MakeLabel("OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(player)), 11, HarnessPalette.Accent, bold: true);
+                ovr.style.marginRight = 8;
+                row.Add(ovr);
+
                 row.Add(BuildKeyStats(player));
 
                 card.Add(row);
