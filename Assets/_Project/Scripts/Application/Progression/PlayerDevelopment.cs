@@ -64,26 +64,53 @@ namespace Gaffer.Application.Progression
             return MinVariance + (rng.NextDouble() * (MaxVariance - MinVariance));
         }
 
-        // Physical points lost per season once past the peak — nothing until 30, then rising with age.
-        private static double DeclineAmount(int age)
+        // The age a role tends to peak at, before decline sets in — not one number for everyone (CM 01/02):
+        // a pacey winger or striker fades first, a positional midfielder or centre-back holds longer, and a
+        // keeper lasts longest of all. A per-player offset (below) then shifts this a few years either way.
+        private static int RolePeakAge(PlayerRole role)
         {
-            if (age <= 29)
+            switch (role)
             {
-                return 0.0;
+                case PlayerRole.Goalkeeper:
+                    return 34;
+                case PlayerRole.CentreBack:
+                case PlayerRole.DefensiveMidfield:
+                case PlayerRole.CentralMidfield:
+                case PlayerRole.AttackingMidfield:
+                    return 32;
+                case PlayerRole.RightBack:
+                case PlayerRole.LeftBack:
+                case PlayerRole.RightMidfield:
+                case PlayerRole.LeftMidfield:
+                    return 31;
+                default: // wingers and strikers — the most pace-dependent, so the first to go
+                    return 30;
             }
-
-            if (age <= 31)
-            {
-                return 1.5;
-            }
-
-            if (age <= 33)
-            {
-                return 2.5;
-            }
-
-            return 3.5;
         }
+
+        // A stable per-player shift to the peak age, in [-2, +2] — so two players in the same role do not
+        // decline on the same birthday; some last, a few fade early. Derived from the id (a SplitMix64
+        // finalizer), not the season rng, so it is the same every season and fully deterministic (and spreads
+        // evenly across a pool). A real driver (professionalism / personality) replaces this proxy in Faz 4.
+        private static int PeakAgeOffset(PlayerId id)
+        {
+            ulong z = (ulong)(uint)id.Value * 0x9E3779B97F4A7C15UL;
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+            z ^= z >> 27;
+            return (int)(z % 5UL) - 2;
+        }
+
+        // When this player, in this role, starts to decline — never before 30 (physical decline is real by
+        // then even for the latest bloomers), otherwise the role peak shifted by his personal offset.
+        private static int DeclineOnsetAge(Player player)
+        {
+            return Math.Max(30, RolePeakAge(player.Role) + PeakAgeOffset(player.Id));
+        }
+
+        // Points of ability lost per season past the peak, accelerating with age (capped), so decline is
+        // gentle at first and steeper into the mid-thirties.
+        private const double DeclinePerYear = 0.9;
+        private const int MaxDeclineYears = 6;
 
         private const byte PhysicalFloor = 15;
 
@@ -116,14 +143,14 @@ namespace Gaffer.Application.Progression
                 }
             }
 
-            double decline = DeclineAmount(player.Age);
-            if (decline > 0.0)
+            int yearsPastPeak = player.Age - DeclineOnsetAge(player);
+            if (yearsPastPeak > 0)
             {
-                double amount = decline * SeasonVariance(rng);
+                double amount = DeclinePerYear * Math.Min(yearsPastPeak, MaxDeclineYears) * SeasonVariance(rng);
 
-                // Two-part decline so the OVR actually falls for everyone, hardest for the pace-reliant.
-                // (1) A general erosion of the role's own rating attributes — the aging player's overall
-                // quality slips, so the role rating drops by about this for every role, keeper or striker.
+                // Two-part decline so the OVR actually falls once past this player's own peak, hardest for
+                // the pace-reliant. (1) A general erosion of the role's own rating attributes — his overall
+                // quality slips, so the role rating drops for every role, keeper or striker.
                 attributes = AdjustRoleAttributes(attributes, player.Role, -amount * GeneralDeclineFactor, rng);
                 // (2) An extra athletic erosion on the raw physical attributes. Pace and stamina feed the
                 // wide and forward ratings, so wingers and full-backs fall off far faster than a positional

@@ -113,13 +113,27 @@ namespace Gaffer.Tests
         }
 
         [Test]
+        public void Develop_KeeperAtThirty_DoesNotDeclineYet()
+        {
+            var dev = new PlayerDevelopment();
+            // Not every player declines at 30 (CM 01/02): a keeper peaks late, so at 30 his rating holds —
+            // no growth left, no decline yet.
+            Player before = Player(PlayerRole.Goalkeeper, 30, 75, 78);
+
+            Player after = dev.Develop(before, Rng(4));
+
+            Assert.That(PlayerRatings.ForRole(after), Is.EqualTo(PlayerRatings.ForRole(before)).Within(1e-9));
+        }
+
+        [Test]
         public void Develop_VeteranPositionalPlayerOverSeasons_VisiblyDeclines()
         {
             var dev = new PlayerDevelopment();
             // A centre-back's rating uses none of the raw athletic attributes, so age must still erode his
-            // general ability — otherwise a 35-year-old reads identical to his prime. Several seasons should
-            // move the OVR clearly, not by a rounding wobble.
-            Player player = Player(PlayerRole.CentreBack, 32, 78, 80);
+            // general ability — otherwise a 38-year-old reads identical to his prime. Well past any peak (a
+            // centre-back's onset lands by ~35 even with the latest offset), several seasons move the OVR
+            // clearly, not by a rounding wobble.
+            Player player = Player(PlayerRole.CentreBack, 36, 78, 80);
             double start = PlayerRatings.ForRole(player);
             IRandom rng = Rng(5);
 
