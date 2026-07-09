@@ -6,6 +6,7 @@ using Gaffer.Application.Transfers;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
+using Gaffer.Editor.Balance;
 using Gaffer.Editor.Harness;
 using Gaffer.Infrastructure.Configuration;
 using UnityEditor;
@@ -55,6 +56,9 @@ namespace Gaffer.Editor.TransferMarket
 
         public void CreateGUI()
         {
+            // Pre-assign the default development-balance asset (created on first use), so the field is filled.
+            _balance = _balance != null ? _balance : BalanceAssets.Development();
+
             var scroll = new ScrollView();
             scroll.style.backgroundColor = HarnessPalette.Pitch;
             rootVisualElement.Add(scroll);

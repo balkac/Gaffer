@@ -9,6 +9,7 @@ using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
 using Gaffer.Domain.Players;
+using Gaffer.Editor.Balance;
 using Gaffer.Editor.Harness;
 using Gaffer.Infrastructure.Configuration;
 using Gaffer.Infrastructure.Persistence;
@@ -75,6 +76,12 @@ namespace Gaffer.Editor.SeasonPlayer
 
         public void CreateGUI()
         {
+            // Pre-assign the default balance assets (created on first use), so the Balance fields come filled
+            // in and every knob is editable without hand-creating an SO.
+            _simulationBalance = _simulationBalance != null ? _simulationBalance : BalanceAssets.Simulation();
+            _developmentBalance = _developmentBalance != null ? _developmentBalance : BalanceAssets.Development();
+            _renewalBalance = _renewalBalance != null ? _renewalBalance : BalanceAssets.Renewal();
+
             var scroll = new ScrollView();
             scroll.style.backgroundColor = HarnessPalette.Pitch;
             rootVisualElement.Add(scroll);
