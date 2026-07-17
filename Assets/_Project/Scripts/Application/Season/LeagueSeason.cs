@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Gaffer.Application.Drama;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
@@ -57,7 +58,15 @@ namespace Gaffer.Application.Season
             _lineupSelector = new LineupSelector();
             _table = new LeagueTable(clubIds);
             _playedResults = new List<MatchResult>();
+            Morale = new MoraleLedger();
         }
+
+        /// <summary>
+        /// The season's live morale state — drama effects land here and the weekly strength
+        /// derivation reads it, so a resolved event is felt in the coming weeks' results and fades
+        /// on schedule. Transient (not yet persisted in a save — like tactics and the economy).
+        /// </summary>
+        public MoraleLedger Morale { get; }
 
         /// <summary>Sets a club's tactics; its match strength is re-derived from its lineup each round.</summary>
         public void SetTactics(ClubId club, Tactics tactics)
@@ -154,6 +163,8 @@ namespace Gaffer.Application.Season
             }
 
             _playedResults.AddRange(matches);
+            // The played week ages morale one step — a wound (or a high) from drama fades on schedule.
+            Morale.TickWeek();
             int round = _currentRound;
             _currentRound++;
             return new WeekResult(round, matches);
@@ -188,7 +199,7 @@ namespace Gaffer.Application.Season
                 return club.Strength;
             }
 
-            return _strengthBuilder.Build(StartersOf(club), TacticsOf(club.Id), context);
+            return _strengthBuilder.Build(StartersOf(club), TacticsOf(club.Id), context, Morale);
         }
 
         private IReadOnlyList<Player> StartersOf(Club club)

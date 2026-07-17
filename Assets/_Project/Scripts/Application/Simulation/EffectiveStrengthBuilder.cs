@@ -48,6 +48,13 @@ namespace Gaffer.Application.Simulation
 
         public TeamStrength Build(IReadOnlyList<Player> players, Tactics tactics, MatchContext context)
         {
+            return Build(players, tactics, context, null);
+        }
+
+        /// <summary>Builds with a per-player condition source (morale today, form later) scaling each
+        /// rating — how off-pitch drama is felt on the pitch. Null means everyone at 1.0.</summary>
+        public TeamStrength Build(IReadOnlyList<Player> players, Tactics tactics, MatchContext context, IPlayerConditionSource condition)
+        {
             if (players.Count == 0)
             {
                 return new TeamStrength(0.0, 0.0, 0.0);
@@ -76,7 +83,8 @@ namespace Gaffer.Application.Simulation
                 // the line he mans — no cross-axis scoring, so a role's rating means the same thing everywhere.
                 double rating = PlayerRatings.ForRole(player)
                     * ContextMultiplier(player, context)
-                    * (lineupAura / AuraOf(player));
+                    * (lineupAura / AuraOf(player))
+                    * (condition?.RatingMultiplierOf(player.Id) ?? 1.0);
                 lineupTotal += rating;
 
                 switch (player.Position)

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using Gaffer.Application.Drama;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Progression;
 using Gaffer.Application.Season;
@@ -82,6 +83,10 @@ namespace Gaffer.Editor.Management
         private SimulationBalanceSO _simulationBalance;
         private DevelopmentBalanceSO _developmentBalance;
         private RenewalBalanceSO _renewalBalance;
+
+        private DramaEngine _drama;
+        private PendingDrama _pendingDrama;
+        private string _dramaStatus;
 
         private VisualElement _body;
 
@@ -253,6 +258,10 @@ namespace Gaffer.Editor.Management
             _market = GenerateMarket();
             _transferStatus = null;
 
+            _drama = new DramaEngine();
+            _pendingDrama = null;
+            _dramaStatus = null;
+
             AutoPickStarters();
             _season.SetFormation(_managedClub, _formation);
             _season.SetStarters(_managedClub, CurrentStarters());
@@ -324,6 +333,10 @@ namespace Gaffer.Editor.Management
             _market = GenerateMarket();
             _transferStatus = null;
 
+            _drama?.StartSeason();
+            _pendingDrama = null;
+            _dramaStatus = null;
+
             AutoPickStarters();
             _season.SetFormation(_managedClub, _formation);
             _season.SetStarters(_managedClub, CurrentStarters());
@@ -390,6 +403,11 @@ namespace Gaffer.Editor.Management
             _finances = new Finances(_startingCash, _wageBudget, TotalWages(ManagedSquad()));
             _market = GenerateMarket();
             _transferStatus = null;
+
+            // Drama engine state (cooldowns, budget) is transient like the economy — a reload starts quiet.
+            _drama = new DramaEngine();
+            _pendingDrama = null;
+            _dramaStatus = null;
 
             AutoPickStarters();
             _season.SetFormation(_managedClub, _formation);
@@ -680,20 +698,21 @@ namespace Gaffer.Editor.Management
 
         private void AdvanceOneWeek()
         {
-            if (_season == null || _season.IsComplete)
+            if (_season == null || _season.IsComplete || _pendingDrama != null)
             {
                 return;
             }
 
             _lastWeek = _season.AdvanceWeek(_simulator, _context, (ulong)_seed);
             _finances = _finances.PayWeeklyWages();
+            TickDrama();
             CheckComplete();
             Refresh();
         }
 
         private void PlayToEnd()
         {
-            if (_season == null)
+            if (_season == null || _pendingDrama != null)
             {
                 return;
             }
@@ -709,10 +728,200 @@ namespace Gaffer.Editor.Management
                 }
 
                 guard++;
+
+                // Drama demands a decision — the fast-forward stops where the story does.
+                TickDrama();
+                if (_pendingDrama != null)
+                {
+                    break;
+                }
             }
 
             CheckComplete();
             Refresh();
+        }
+
+        // ----- Drama ---------------------------------------------------------------------------------------
+
+        // The weekly drama tick (TDD §8) for the managed club: hand the engine this week's snapshot —
+        // roster, eleven, table position, form, window — and let it decide, on its own seeded stream
+        // (independent of the match streams), whether a story surfaces.
+        private void TickDrama()
+        {
+            if (_drama == null || _season == null || _season.IsComplete)
+            {
+                return;
+            }
+
+            Squad squad = ManagedSquad();
+            if (squad == null)
+            {
+                return;
+            }
+
+            var context = new DramaWeekContext(
+                squad.Players,
+                CurrentStarters(),
+                TablePositionOfManaged(),
+                LossStreakOfManaged(),
+                WindowOpen());
+            var rng = new SplitMix64RandomNumberGenerator(DramaSeed());
+            _pendingDrama = _drama.TickWeek(context, rng);
+        }
+
+        private ulong DramaSeed()
+        {
+            unchecked
+            {
+                ulong z = (ulong)_seed ^ 0xD7A3AD7A3AUL;
+                z ^= (ulong)(uint)_seasonNumber * 0x9E3779B97F4A7C15UL;
+                z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+                z ^= (ulong)(uint)_season.CurrentRound * 0x94D049BB133111EBUL;
+                return z ^ (z >> 31);
+            }
+        }
+
+        private int TablePositionOfManaged()
+        {
+            IReadOnlyList<LeagueTableRow> rows = _season.Table.Ordered();
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (rows[i].Club == _managedClub)
+                {
+                    return i + 1;
+                }
+            }
+
+            return 0;
+        }
+
+        private int LossStreakOfManaged()
+        {
+            int streak = 0;
+            IReadOnlyList<MatchResult> results = _season.PlayedResults;
+            for (int i = results.Count - 1; i >= 0; i--)
+            {
+                MatchResult match = results[i];
+                bool home = match.Home == _managedClub;
+                bool away = match.Away == _managedClub;
+                if (!home && !away)
+                {
+                    continue;
+                }
+
+                bool lost = home ? match.HomeGoals < match.AwayGoals : match.AwayGoals < match.HomeGoals;
+                if (!lost)
+                {
+                    break;
+                }
+
+                streak++;
+            }
+
+            return streak;
+        }
+
+        private void ResolveDrama(int choiceIndex)
+        {
+            Result<DramaOutcome> result = _drama.Resolve(_pendingDrama, choiceIndex, _season.Morale, _finances.Cash);
+            if (result.IsFailure)
+            {
+                _dramaStatus = result.Error;
+                Refresh();
+                return;
+            }
+
+            DramaOutcome outcome = result.Value;
+            string title = Humanize(_pendingDrama.Event.Id.Value);
+            _dramaStatus = title + " — resolved.";
+
+            if (outcome.CashDelta != 0)
+            {
+                _finances = new Finances(_finances.Cash + outcome.CashDelta, _finances.WeeklyWageBudget, _finances.WeeklyWageBill);
+                _dramaStatus += " Cash " + (outcome.CashDelta > 0 ? "+" : "") + FormatValue(outcome.CashDelta) + ".";
+            }
+
+            if (outcome.PlayerToSell != null)
+            {
+                Result<TransferResult> sale = TransferService.Sell(_finances, ManagedSquad(), outcome.PlayerToSell);
+                if (sale.IsSuccess)
+                {
+                    _finances = sale.Value.Finances;
+                    _season.UpdateSquad(_managedClub, sale.Value.Squad);
+                    _market.Add(outcome.PlayerToSell);
+                    SyncLeague();
+                    AutoPickStarters();
+                    _season.SetStarters(_managedClub, CurrentStarters());
+                    _dramaStatus += " " + outcome.PlayerToSell.Name + " sold for " + FormatValue(sale.Value.Fee) + ".";
+                }
+                else
+                {
+                    _dramaStatus += " Sale failed: " + sale.Error;
+                }
+            }
+
+            _pendingDrama = null;
+            Refresh();
+        }
+
+        // Dev-tool copy: the shipped UI reads localized text through the event's keys; the workbench
+        // humanizes the slugs so the loop is playable today.
+        private static string Humanize(string slug)
+        {
+            string spaced = slug.Replace('-', ' ').Replace('_', ' ');
+            return spaced.Length == 0 ? spaced : char.ToUpperInvariant(spaced[0]) + spaced.Substring(1);
+        }
+
+        private static string ChoiceLabel(string labelKey)
+        {
+            int lastDot = labelKey.LastIndexOf('.');
+            return Humanize(lastDot >= 0 ? labelKey.Substring(lastDot + 1) : labelKey);
+        }
+
+        private VisualElement BuildDramaCard()
+        {
+            VisualElement card = MakeCard();
+            card.style.borderLeftWidth = 3;
+            card.style.borderLeftColor = HarnessPalette.Accent;
+
+            card.Add(MakeLabel("DRAMA · WEEK " + _season.CurrentRound, 11, HarnessPalette.Accent, bold: true));
+            card.Add(MakeLabel(Humanize(_pendingDrama.Event.Id.Value).ToUpperInvariant(), 15, HarnessPalette.Chalk, bold: true));
+
+            if (_pendingDrama.Subject != null)
+            {
+                Player subject = _pendingDrama.Subject;
+                var line = new VisualElement();
+                line.style.flexDirection = FlexDirection.Row;
+                line.style.alignItems = Align.Center;
+                line.Add(MakeLabel(
+                    subject.Name + "  ·  " + PlayerRoles.Abbrev(subject.Role) + "  ·  " + subject.Age +
+                    "  ·  OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(subject)), 11, HarnessPalette.Chalk));
+                line.Add(TraitBadges(subject));
+                card.Add(line);
+            }
+
+            card.Add(MakeLabel("The decision is yours — it will be felt on the pitch and in the books.", 10, HarnessPalette.Muted));
+
+            var buttons = new VisualElement();
+            buttons.style.flexDirection = FlexDirection.Row;
+            buttons.style.marginTop = 8;
+            for (int i = 0; i < _pendingDrama.Event.Choices.Count; i++)
+            {
+                int index = i;
+                var choice = new Button(() => ResolveDrama(index)) { text = ChoiceLabel(_pendingDrama.Event.Choices[i].LabelKey) };
+                choice.style.flexGrow = 1;
+                choice.style.height = 26;
+                if (i > 0)
+                {
+                    choice.style.marginLeft = 6;
+                }
+
+                StyleActionButton(choice, HarnessPalette.Accent);
+                buttons.Add(choice);
+            }
+
+            card.Add(buttons);
+            return card;
         }
 
         private void CheckComplete()
@@ -782,7 +991,12 @@ namespace Gaffer.Editor.Management
 
             _body.Add(header);
 
-            if (!_season.IsComplete)
+            if (_pendingDrama != null)
+            {
+                // A raised event blocks the week until answered — drama is a decision, not a notification.
+                _body.Add(BuildDramaCard());
+            }
+            else if (!_season.IsComplete)
             {
                 var controls = new VisualElement();
                 controls.style.flexDirection = FlexDirection.Row;
@@ -817,6 +1031,13 @@ namespace Gaffer.Editor.Management
                 next.style.marginTop = 8;
                 SetRadius(next, 6);
                 _body.Add(next);
+            }
+
+            if (!string.IsNullOrEmpty(_dramaStatus) && _pendingDrama == null)
+            {
+                Label dramaNote = MakeLabel(_dramaStatus, 10, HarnessPalette.Draw);
+                dramaNote.style.marginTop = 4;
+                _body.Add(dramaNote);
             }
 
             if (_retired != null && (_retired.Count > 0 || _arrived.Count > 0))

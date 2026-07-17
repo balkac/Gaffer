@@ -34,8 +34,10 @@ namespace Gaffer.Domain.Traits
 
         /// <summary>
         /// The built-in catalog: four match-context traits (GDD §4.2's canonical pair plus the crowd
-        /// and the dressing room) and three development traits (the real per-player driver decisions
-        /// #21/#23 deferred to this phase). Numbers are starting calibration; the asset layer tunes them.
+        /// and the dressing room), three development traits (the real per-player driver decisions
+        /// #21/#23 deferred to this phase), and two drama-bias traits whose mechanics live in the
+        /// event weights that reference them (loyal shrinks a transfer request, a press magnet feeds
+        /// the scandal pages). Numbers are starting calibration; the asset layer tunes them.
         /// </summary>
         public static TraitCatalog Default { get; } = new TraitCatalog(new[]
         {
@@ -65,6 +67,10 @@ namespace Gaffer.Domain.Traits
                 new TraitId("glass-man"), "trait.glass_man.name", 0.8,
                 declineOnsetShift: -3,
                 declineRateMultiplier: 1.5),
+            new Trait(
+                new TraitId("loyal"), "trait.loyal.name", 1.2),
+            new Trait(
+                new TraitId("press-magnet"), "trait.press_magnet.name", 0.6),
         });
     }
 }
