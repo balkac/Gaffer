@@ -154,7 +154,7 @@ namespace Gaffer.Application.Progression
                 attributes = ApplyDecline(attributes, amount, rng);
             }
 
-            return new Player(player.Id, player.Name, player.Nationality, player.Role, player.Age + 1, attributes, player.HiddenPotential);
+            return new Player(player.Id, player.Name, player.Nationality, player.Role, player.Age + 1, attributes, player.HiddenPotential, player.Traits);
         }
 
         // Adjusts exactly the attributes the role is scored on (mirrors PlayerRatings.ForRole) by a signed

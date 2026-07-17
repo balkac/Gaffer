@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
+using Gaffer.Domain.Traits;
 
 namespace Gaffer.Application.Simulation
 {
@@ -12,25 +13,52 @@ namespace Gaffer.Application.Simulation
     /// role-specific (a full-back weighed on pace and crossing, a centre-back on marking and heading), an
     /// attacking full-back and a stopper both lift the defence axis by what they are actually good at. An
     /// empty line falls back to the whole-lineup average of that rating, so the result is always plausible
-    /// and never divides by zero. Tactics shift the axes; form and traits follow. Weights tune into a BalanceSO.
+    /// and never divides by zero. Traits modulate each player's rating here — the step that binds character
+    /// to the match (TDD §6): a context trait answers the stakes in the <see cref="MatchContext"/>, and a
+    /// leader's aura lifts every teammate. Tactics shift the axes; form follows. Weights tune into a BalanceSO.
     /// </summary>
     public sealed class EffectiveStrengthBuilder
     {
+        private readonly TraitCatalog _traits;
+
+        public EffectiveStrengthBuilder()
+            : this(TraitCatalog.Default)
+        {
+        }
+
+        public EffectiveStrengthBuilder(TraitCatalog traits)
+        {
+            _traits = traits;
+        }
+
         public TeamStrength Build(Squad squad)
         {
-            return Build(squad.Players, Tactics.Balanced);
+            return Build(squad.Players, Tactics.Balanced, default);
         }
 
         public TeamStrength Build(Squad squad, Tactics tactics)
         {
-            return Build(squad.Players, tactics);
+            return Build(squad.Players, tactics, default);
         }
 
         public TeamStrength Build(IReadOnlyList<Player> players, Tactics tactics)
         {
+            return Build(players, tactics, default);
+        }
+
+        public TeamStrength Build(IReadOnlyList<Player> players, Tactics tactics, MatchContext context)
+        {
             if (players.Count == 0)
             {
                 return new TeamStrength(0.0, 0.0, 0.0);
+            }
+
+            // A leader's aura reaches his teammates, not himself: the combined product over the lineup is
+            // divided back out per player, so fielding the leader is felt by the other ten.
+            double lineupAura = 1.0;
+            foreach (Player player in players)
+            {
+                lineupAura *= AuraOf(player);
             }
 
             double lineupTotal = 0.0;
@@ -46,7 +74,9 @@ namespace Gaffer.Application.Simulation
             {
                 // Each player is scored on his own role, then contributes that single rating to the axis of
                 // the line he mans — no cross-axis scoring, so a role's rating means the same thing everywhere.
-                double rating = PlayerRatings.ForRole(player);
+                double rating = PlayerRatings.ForRole(player)
+                    * ContextMultiplier(player, context)
+                    * (lineupAura / AuraOf(player));
                 lineupTotal += rating;
 
                 switch (player.Position)
@@ -93,6 +123,82 @@ namespace Gaffer.Application.Simulation
         private static double LineAverage(double lineTotal, int lineCount, double lineupTotal, int lineupCount)
         {
             return lineCount > 0 ? lineTotal / lineCount : lineupTotal / lineupCount;
+        }
+
+        // The product of this player's context-conditional trait multipliers for these stakes — a derby
+        // beast over 1, a bottler under, everyone exactly 1.0 in a plain fixture, so a trait is inert
+        // where its occasion is absent and measurably real where it is (NON-NEGOTIABLE #7).
+        private double ContextMultiplier(Player player, in MatchContext context)
+        {
+            double multiplier = 1.0;
+            foreach (TraitId id in player.Traits)
+            {
+                Trait trait = _traits.Find(id);
+                if (trait != null && Applies(trait.Match, context))
+                {
+                    multiplier *= trait.Match.Multiplier;
+                }
+            }
+
+            return multiplier;
+        }
+
+        // Evaluates the pure stake flags against the sim's context here, in the application layer, so the
+        // domain's trait data never references simulation types (arrows point inward).
+        private static bool Applies(in MatchTraitModifier modifier, in MatchContext context)
+        {
+            MatchStakes stakes = modifier.Stakes;
+            if (stakes == MatchStakes.None)
+            {
+                return false;
+            }
+
+            if ((stakes & MatchStakes.Derby) != 0 && context.Importance == MatchImportance.Derby)
+            {
+                return true;
+            }
+
+            if ((stakes & MatchStakes.Final) != 0 && context.Importance == MatchImportance.Final)
+            {
+                return true;
+            }
+
+            if ((stakes & MatchStakes.RelegationSixPointer) != 0 && context.Importance == MatchImportance.RelegationSixPointer)
+            {
+                return true;
+            }
+
+            if ((stakes & MatchStakes.Rivalry) != 0 && context.IsRivalry)
+            {
+                return true;
+            }
+
+            if ((stakes & MatchStakes.TitleDecider) != 0 && context.IsTitleDecider)
+            {
+                return true;
+            }
+
+            if ((stakes & MatchStakes.BigCrowd) != 0 && modifier.BigCrowdThreshold > 0 && context.CrowdSize >= modifier.BigCrowdThreshold)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private double AuraOf(Player player)
+        {
+            double aura = 1.0;
+            foreach (TraitId id in player.Traits)
+            {
+                Trait trait = _traits.Find(id);
+                if (trait != null)
+                {
+                    aura *= trait.TeammateAura;
+                }
+            }
+
+            return aura;
         }
     }
 }

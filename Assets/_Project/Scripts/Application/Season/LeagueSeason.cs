@@ -137,7 +137,7 @@ namespace Gaffer.Application.Season
                 Club home = _clubsById[fixture.Home];
                 Club away = _clubsById[fixture.Away];
                 var command = new MatchCommand(
-                    StrengthOf(home), StrengthOf(away),
+                    StrengthOf(home, context), StrengthOf(away, context),
                     home.Squad, away.Squad,
                     ProfileOf(home.Id), ProfileOf(away.Id),
                     context);
@@ -178,16 +178,17 @@ namespace Gaffer.Application.Season
 
         // A club with a squad fields an eleven — the manager's explicit lineup, or the best auto-pick for its
         // formation — and its strength is derived fresh from that eleven + tactics each round, so a change
-        // takes effect the next week. A squad-less club (restored, or a strength-only fixture) keeps its
-        // precomputed strength.
-        private TeamStrength StrengthOf(Club club)
+        // takes effect the next week. The match context is threaded through so context-sensitive traits fire
+        // on the occasion, not in every fixture. A squad-less club (restored, or a strength-only fixture)
+        // keeps its precomputed strength.
+        private TeamStrength StrengthOf(Club club, MatchContext context)
         {
             if (club.Squad == null)
             {
                 return club.Strength;
             }
 
-            return _strengthBuilder.Build(StartersOf(club), TacticsOf(club.Id));
+            return _strengthBuilder.Build(StartersOf(club), TacticsOf(club.Id), context);
         }
 
         private IReadOnlyList<Player> StartersOf(Club club)

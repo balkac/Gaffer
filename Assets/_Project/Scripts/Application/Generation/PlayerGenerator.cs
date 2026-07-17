@@ -1,13 +1,17 @@
+using System;
+using System.Collections.Generic;
 using Gaffer.Common;
 using Gaffer.Domain.Players;
+using Gaffer.Domain.Traits;
 
 namespace Gaffer.Application.Generation
 {
     /// <summary>
-    /// Generates a plausible player: a name, nationality, position, age, visible attributes, and a
-    /// hidden-potential ceiling — each drawn from the context's bands through the rng, so the same
-    /// seed reproduces the same player. The guaranteed-wonderkid pass (low visible value, high hidden
-    /// potential, lower-league, cheap) is a squad/pool-level step layered on this (TDD §5).
+    /// Generates a plausible player: a name, nationality, position, age, visible attributes, a
+    /// hidden-potential ceiling, and a weighted-rare trait draw — each drawn from the context's bands
+    /// through the rng, so the same seed reproduces the same player. The guaranteed-wonderkid pass
+    /// (low visible value, high hidden potential, lower-league, cheap) is a squad/pool-level step
+    /// layered on this (TDD §5). Trait definitions come from the injected catalog (data, not code).
     /// </summary>
     public sealed class PlayerGenerator : IPlayerGenerator
     {
@@ -19,6 +23,17 @@ namespace Gaffer.Application.Generation
         private const int RoleCount = 12;
 
         private readonly PlayerNameGenerator _names = new PlayerNameGenerator();
+        private readonly TraitCatalog _traits;
+
+        public PlayerGenerator()
+            : this(TraitCatalog.Default)
+        {
+        }
+
+        public PlayerGenerator(TraitCatalog traits)
+        {
+            _traits = traits;
+        }
 
         public Player Generate(PlayerId id, GenerationContext context, IRandom rng)
         {
@@ -53,8 +68,82 @@ namespace Gaffer.Application.Generation
         {
             Attributes attributes = GenerateAttributes(context, PlayerRoles.Line(role), rng);
             byte hiddenPotential = (byte)rng.NextInt(context.MinPotential, context.MaxPotential + 1);
+            IReadOnlyList<TraitId> traits = DrawTraits(context, rng);
 
-            return new Player(id, name, nationality, role, age, attributes, hiddenPotential);
+            return new Player(id, name, nationality, role, age, attributes, hiddenPotential, traits);
+        }
+
+        // Draws this player's traits: rare (most players carry none), weighted by each trait's authored
+        // rarity, at most two. Always consumes exactly four rng values whatever the outcome, so the draw
+        // count stays fixed and a shared-stream pool reproduces identically seed for seed.
+        private IReadOnlyList<TraitId> DrawTraits(GenerationContext context, IRandom rng)
+        {
+            double hasAny = rng.NextDouble();
+            double firstPick = rng.NextDouble();
+            double hasSecond = rng.NextDouble();
+            double secondPick = rng.NextDouble();
+
+            IReadOnlyList<Trait> pool = _traits.Traits;
+            if (pool.Count == 0 || hasAny >= context.TraitChance)
+            {
+                return Array.Empty<TraitId>();
+            }
+
+            Trait first = PickWeighted(pool, firstPick);
+            if (hasSecond >= context.SecondTraitChance)
+            {
+                return new[] { first.Id };
+            }
+
+            Trait second = PickWeighted(pool, secondPick);
+            if (second == first)
+            {
+                // Step to the next definition instead of redrawing, so the draw count stays fixed; with a
+                // single-trait catalog there is no distinct second to give.
+                if (pool.Count == 1)
+                {
+                    return new[] { first.Id };
+                }
+
+                second = pool[(IndexOf(pool, first) + 1) % pool.Count];
+            }
+
+            return new[] { first.Id, second.Id };
+        }
+
+        private static Trait PickWeighted(IReadOnlyList<Trait> pool, double roll)
+        {
+            double total = 0.0;
+            foreach (Trait trait in pool)
+            {
+                total += trait.AssignmentWeight;
+            }
+
+            double target = roll * total;
+            double cumulative = 0.0;
+            foreach (Trait trait in pool)
+            {
+                cumulative += trait.AssignmentWeight;
+                if (target < cumulative)
+                {
+                    return trait;
+                }
+            }
+
+            return pool[pool.Count - 1];
+        }
+
+        private static int IndexOf(IReadOnlyList<Trait> pool, Trait trait)
+        {
+            for (int i = 0; i < pool.Count; i++)
+            {
+                if (pool[i] == trait)
+                {
+                    return i;
+                }
+            }
+
+            return 0;
         }
 
         /// <summary>

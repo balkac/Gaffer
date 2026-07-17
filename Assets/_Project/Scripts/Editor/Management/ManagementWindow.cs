@@ -1373,6 +1373,7 @@ namespace Gaffer.Editor.Management
                 ovr.style.marginRight = 8;
                 row.Add(ovr);
 
+                row.Add(TraitBadges(player));
                 row.Add(BuildKeyStats(player));
 
                 // Selling is only possible in an open window — the squad is otherwise locked for the season.
@@ -1400,6 +1401,34 @@ namespace Gaffer.Editor.Management
                 Label chip = MakeLabel(key.Label + " " + value, 10, AttributeColor(value), value >= 85);
                 chip.style.marginLeft = 10;
                 wrap.Add(chip);
+            }
+
+            return wrap;
+        }
+
+        // Small badge chips for the player's traits — the character layer made visible on the roster
+        // (dev-tool labels from the id slug; the shipped UI will read localized names off the catalog).
+        private static VisualElement TraitBadges(Player player)
+        {
+            var wrap = new VisualElement();
+            wrap.style.flexDirection = FlexDirection.Row;
+
+            foreach (Gaffer.Domain.Traits.TraitId id in player.Traits)
+            {
+                Label badge = MakeLabel(id.Value.Replace('-', ' ').ToUpperInvariant(), 9, HarnessPalette.Draw, bold: true);
+                badge.style.marginLeft = 8;
+                badge.style.paddingLeft = 4;
+                badge.style.paddingRight = 4;
+                badge.style.borderLeftWidth = 1;
+                badge.style.borderRightWidth = 1;
+                badge.style.borderTopWidth = 1;
+                badge.style.borderBottomWidth = 1;
+                badge.style.borderLeftColor = HarnessPalette.Draw;
+                badge.style.borderRightColor = HarnessPalette.Draw;
+                badge.style.borderTopColor = HarnessPalette.Draw;
+                badge.style.borderBottomColor = HarnessPalette.Draw;
+                SetRadius(badge, 3);
+                wrap.Add(badge);
             }
 
             return wrap;
@@ -1532,6 +1561,7 @@ namespace Gaffer.Editor.Management
                 var name = MakeLabel(player.Name + "  ·  " + PlayerRoles.Abbrev(player.Role) + "  ·  " + player.Age, 12, HarnessPalette.Chalk, bold: true);
                 name.style.flexGrow = 1;
                 line.Add(name);
+                line.Add(TraitBadges(player));
                 line.Add(MakeLabel("OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(player)) + "   ", 12, HarnessPalette.Accent, bold: true));
                 line.Add(MakeLabel(FormatValue(PlayerValuation.Value(player)) + " · " + FormatValue(PlayerWage.Weekly(player)) + "/wk   ", 11, HarnessPalette.Muted));
 
