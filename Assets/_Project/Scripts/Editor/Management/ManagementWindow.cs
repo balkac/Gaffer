@@ -87,6 +87,9 @@ namespace Gaffer.Editor.Management
         private DramaEngine _drama;
         private PendingDrama _pendingDrama;
         private string _dramaStatus;
+        private DramaBalanceSO _dramaBalance;
+        private TraitCatalogSO _traitCatalog;
+        private DramaCatalogSO _dramaCatalog;
 
         private VisualElement _body;
 
@@ -105,6 +108,7 @@ namespace Gaffer.Editor.Management
             _simulationBalance = _simulationBalance != null ? _simulationBalance : BalanceAssets.Simulation();
             _developmentBalance = _developmentBalance != null ? _developmentBalance : BalanceAssets.Development();
             _renewalBalance = _renewalBalance != null ? _renewalBalance : BalanceAssets.Renewal();
+            _dramaBalance = _dramaBalance != null ? _dramaBalance : BalanceAssets.Drama();
 
             var scroll = new ScrollView();
             scroll.style.backgroundColor = HarnessPalette.Pitch;
@@ -205,6 +209,17 @@ namespace Gaffer.Editor.Management
             var renewField = new ObjectField("Renewal balance") { objectType = typeof(RenewalBalanceSO), value = _renewalBalance };
             renewField.RegisterValueChangedCallback(e => _renewalBalance = e.newValue as RenewalBalanceSO);
             card.Add(renewField);
+            var dramaBalanceField = new ObjectField("Drama balance") { objectType = typeof(DramaBalanceSO), value = _dramaBalance };
+            dramaBalanceField.RegisterValueChangedCallback(e => _dramaBalance = e.newValue as DramaBalanceSO);
+            card.Add(dramaBalanceField);
+
+            card.Add(MakeLabel("Content (optional — assign Gaffer/Content catalogs to override the built-ins)", 10, HarnessPalette.Muted));
+            var traitCatalogField = new ObjectField("Trait catalog") { objectType = typeof(TraitCatalogSO), value = _traitCatalog };
+            traitCatalogField.RegisterValueChangedCallback(e => _traitCatalog = e.newValue as TraitCatalogSO);
+            card.Add(traitCatalogField);
+            var dramaCatalogField = new ObjectField("Drama catalog") { objectType = typeof(DramaCatalogSO), value = _dramaCatalog };
+            dramaCatalogField.RegisterValueChangedCallback(e => _dramaCatalog = e.newValue as DramaCatalogSO);
+            card.Add(dramaCatalogField);
 
             var start = new Button(StartSeason) { text = "Start Season" };
             start.style.backgroundColor = HarnessPalette.Accent;
@@ -239,11 +254,26 @@ namespace Gaffer.Editor.Management
             return _renewalBalance != null ? _renewalBalance.ToSettings() : RenewalSettings.Default;
         }
 
+        private DramaSettings DramaBalance()
+        {
+            return _dramaBalance != null ? _dramaBalance.ToSettings() : DramaSettings.Default;
+        }
+
+        private Gaffer.Domain.Traits.TraitCatalog Traits()
+        {
+            return _traitCatalog != null ? _traitCatalog.ToCatalog() : Gaffer.Domain.Traits.TraitCatalog.Default;
+        }
+
+        private Gaffer.Domain.Drama.DramaCatalog DramaEvents()
+        {
+            return _dramaCatalog != null ? _dramaCatalog.ToCatalog() : Gaffer.Domain.Drama.DramaCatalog.Default;
+        }
+
         private void StartSeason()
         {
             int count = Mathf.Clamp(_teamCount, 4, MaxTeams);
             _league = BuildLeague(count);
-            _season = new LeagueSeason(_league);
+            _season = new LeagueSeason(_league, Traits());
             _simulator = new MatchSimulator(
                 new PoissonChanceGenerator(SimSettings()),
                 new QualityChanceResolver());
@@ -258,7 +288,7 @@ namespace Gaffer.Editor.Management
             _market = GenerateMarket();
             _transferStatus = null;
 
-            _drama = new DramaEngine();
+            _drama = new DramaEngine(DramaEvents(), DramaBalance());
             _pendingDrama = null;
             _dramaStatus = null;
 
@@ -282,7 +312,7 @@ namespace Gaffer.Editor.Management
             {
                 MinAge = 16, MaxAge = 19, MinAbility = 35, MaxAbility = 52, MinPotential = 84, MaxPotential = 95,
             };
-            IReadOnlyList<Player> pool = new PlayerPoolGenerator(new PlayerGenerator()).GeneratePool(
+            IReadOnlyList<Player> pool = new PlayerPoolGenerator(new PlayerGenerator(Traits())).GeneratePool(
                 Mathf.Max(1, _marketSize), Mathf.Max(0, _gems), new GenerationContext(), gem,
                 new SplitMix64RandomNumberGenerator(((ulong)_seed ^ 0xA5A5A5UL) + (ulong)_seasonNumber * 0x9E3779B97F4A7C15UL));
 
@@ -325,8 +355,8 @@ namespace Gaffer.Editor.Management
             IReadOnlyList<Player> before = ManagedSquad().Players;
 
             _seasonNumber++;
-            _league = new SeasonTransition(DevSettings(), RenewSettings()).ToNextSeason(_league, (ulong)_seed, _seasonNumber);
-            _season = new LeagueSeason(_league);
+            _league = new SeasonTransition(DevSettings(), RenewSettings(), Traits()).ToNextSeason(_league, (ulong)_seed, _seasonNumber);
+            _season = new LeagueSeason(_league, Traits());
             ComputeSummer(before, ManagedSquad().Players);
 
             _finances = new Finances(_finances.Cash, _wageBudget, TotalWages(ManagedSquad()));
@@ -392,7 +422,7 @@ namespace Gaffer.Editor.Management
                 return;
             }
 
-            RestoredSeason restored = new SeasonSaveMapper().Restore(loaded.Value);
+            RestoredSeason restored = new SeasonSaveMapper().Restore(loaded.Value, Traits());
             _league = restored.League;
             _season = restored.Season;
             _seasonNumber = restored.SeasonNumber < 1 ? 1 : restored.SeasonNumber;
@@ -405,7 +435,7 @@ namespace Gaffer.Editor.Management
             _transferStatus = null;
 
             // Drama engine state (cooldowns, budget) is transient like the economy — a reload starts quiet.
-            _drama = new DramaEngine();
+            _drama = new DramaEngine(DramaEvents(), DramaBalance());
             _pendingDrama = null;
             _dramaStatus = null;
 
@@ -689,7 +719,7 @@ namespace Gaffer.Editor.Management
 
         private League BuildLeague(int count)
         {
-            var generator = new LeagueGenerator(new SquadGenerator(new PlayerGenerator()));
+            var generator = new LeagueGenerator(new SquadGenerator(new PlayerGenerator(Traits())));
             var genRng = new SplitMix64RandomNumberGenerator((ulong)_seed ^ 0x5EEDD5EEDUL);
             return generator.Generate(count, genRng);
         }
@@ -858,6 +888,20 @@ namespace Gaffer.Editor.Management
                 {
                     _dramaStatus += " Sale failed: " + sale.Error;
                 }
+            }
+
+            if (outcome.TraitGrantTarget != null)
+            {
+                // The player is immutable — the heir is rebuilt with his new trait and swapped into the
+                // live squad, so the aura is real from the next lineup on.
+                Player target = outcome.TraitGrantTarget;
+                var traits = new List<Gaffer.Domain.Traits.TraitId>(target.Traits) { outcome.GrantedTrait };
+                var reborn = new Player(target.Id, target.Name, target.Nationality, target.Role, target.Age, target.Attributes, target.HiddenPotential, traits);
+                _season.UpdateSquad(_managedClub, ManagedSquad().Remove(target.Id).Add(reborn));
+                SyncLeague();
+                AutoPickStarters();
+                _season.SetStarters(_managedClub, CurrentStarters());
+                _dramaStatus += " " + target.Name + " is now a " + Humanize(outcome.GrantedTrait.Value) + ".";
             }
 
             _pendingDrama = null;

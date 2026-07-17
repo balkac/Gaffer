@@ -25,19 +25,32 @@ namespace Gaffer.Domain.Drama
 
         /// <summary>The subject is sold at his market fee — the caller executes the transfer it owns.</summary>
         SellSubject,
+
+        /// <summary>The trait in <see cref="DramaEffect.Trait"/> passes to the subject's heir apparent —
+        /// the retiring captain anoints a successor (the resolver picks him deterministically).</summary>
+        GrantTraitToSuccessor,
     }
 
     /// <summary>One concrete consequence of a drama choice. Immutable data.</summary>
     public readonly struct DramaEffect
     {
         public DramaEffect(DramaEffectKind kind, double magnitude = 0.0, int durationWeeks = 0)
+            : this(kind, default(Gaffer.Domain.Traits.TraitId), magnitude, durationWeeks)
+        {
+        }
+
+        public DramaEffect(DramaEffectKind kind, Gaffer.Domain.Traits.TraitId trait, double magnitude = 0.0, int durationWeeks = 0)
         {
             Kind = kind;
+            Trait = trait;
             Magnitude = magnitude;
             DurationWeeks = durationWeeks;
         }
 
         public DramaEffectKind Kind { get; }
+
+        /// <summary>The trait a trait-granting kind bestows; unset for the other kinds.</summary>
+        public Gaffer.Domain.Traits.TraitId Trait { get; }
 
         public double Magnitude { get; }
 

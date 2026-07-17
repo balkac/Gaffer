@@ -157,6 +157,82 @@ namespace Gaffer.Domain.Drama
                         new DramaEffect(DramaEffectKind.TeamMorale, -1.0, 4),
                     }),
                 }),
+
+            new DramaEvent(
+                new DramaEventId("captain-succession"), DramaCategory.Relationship,
+                "drama.captain_succession.title", "drama.captain_succession.body",
+                requiresSubject: true,
+                new DramaTrigger { MinSubjectAge = 33, RequiredSubjectTrait = new TraitId("dressing-room-leader") },
+                baseWeight: 0.6, cooldownWeeks: 38,
+                new[]
+                {
+                    new DramaChoice("drama.captain_succession.anoint", new[]
+                    {
+                        new DramaEffect(DramaEffectKind.GrantTraitToSuccessor, new TraitId("dressing-room-leader")),
+                        new DramaEffect(DramaEffectKind.TeamMorale, 1.0, 4),
+                    }),
+                    new DramaChoice("drama.captain_succession.your_call", new[]
+                    {
+                        new DramaEffect(DramaEffectKind.SubjectMorale, -2.0, 4),
+                    }),
+                }),
+
+            new DramaEvent(
+                new DramaEventId("club-takeover"), DramaCategory.Institutional,
+                "drama.club_takeover.title", "drama.club_takeover.body",
+                requiresSubject: false,
+                new DramaTrigger(),
+                baseWeight: 0.2, cooldownWeeks: 76,
+                new[]
+                {
+                    new DramaChoice("drama.club_takeover.back_the_owners", new[]
+                    {
+                        new DramaEffect(DramaEffectKind.Cash, 2_000_000.0),
+                    }),
+                    new DramaChoice("drama.club_takeover.keep_your_distance", new[]
+                    {
+                        new DramaEffect(DramaEffectKind.TeamMorale, 1.0, 6),
+                    }),
+                },
+                oncePerRun: true),
+
+            new DramaEvent(
+                new DramaEventId("press-war"), DramaCategory.FansMedia,
+                "drama.press_war.title", "drama.press_war.body",
+                requiresSubject: true,
+                new DramaTrigger { RequiredSubjectTrait = new TraitId("press-magnet") },
+                baseWeight: 0.7, cooldownWeeks: 14,
+                new[]
+                {
+                    new DramaChoice("drama.press_war.muzzle_him", new[]
+                    {
+                        new DramaEffect(DramaEffectKind.SubjectMorale, -2.0, 4),
+                    }),
+                    new DramaChoice("drama.press_war.let_him_talk", new[]
+                    {
+                        new DramaEffect(DramaEffectKind.SubjectMorale, 2.0, 4),
+                        new DramaEffect(DramaEffectKind.TeamMorale, -1.0, 2),
+                    }),
+                }),
+
+            new DramaEvent(
+                new DramaEventId("contract-standoff"), DramaCategory.Personal,
+                "drama.contract_standoff.title", "drama.contract_standoff.body",
+                requiresSubject: true,
+                new DramaTrigger { MinSubjectAge = 30, MinSubjectRating = 60.0 },
+                baseWeight: 0.7, cooldownWeeks: 20,
+                new[]
+                {
+                    new DramaChoice("drama.contract_standoff.give_him_the_year", new[]
+                    {
+                        new DramaEffect(DramaEffectKind.Cash, -500_000.0),
+                        new DramaEffect(DramaEffectKind.SubjectMorale, 2.0, 6),
+                    }),
+                    new DramaChoice("drama.contract_standoff.refuse", new[]
+                    {
+                        new DramaEffect(DramaEffectKind.SubjectMorale, -3.0, 6),
+                    }),
+                }),
         });
     }
 }

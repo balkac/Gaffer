@@ -29,6 +29,13 @@ namespace Gaffer.Application.Season
         private int _currentRound;
 
         public LeagueSeason(League league)
+            : this(league, null)
+        {
+        }
+
+        /// <summary>Runs the season on a specific trait catalog (from config assets) — the strength step
+        /// resolves each player's traits through it. Null falls back to the built-in default.</summary>
+        public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits)
         {
             _clubsById = new Dictionary<ClubId, Club>(league.Clubs.Count);
             var clubIds = new List<ClubId>(league.Clubs.Count);
@@ -54,7 +61,7 @@ namespace Gaffer.Application.Season
             _tacticsByClub = new Dictionary<ClubId, Tactics>();
             _formationByClub = new Dictionary<ClubId, Formation>();
             _startersByClub = new Dictionary<ClubId, IReadOnlyList<Player>>();
-            _strengthBuilder = new EffectiveStrengthBuilder();
+            _strengthBuilder = traits == null ? new EffectiveStrengthBuilder() : new EffectiveStrengthBuilder(traits);
             _lineupSelector = new LineupSelector();
             _table = new LeagueTable(clubIds);
             _playedResults = new List<MatchResult>();
@@ -120,9 +127,9 @@ namespace Gaffer.Application.Season
         public IReadOnlyList<MatchResult> PlayedResults => _playedResults;
 
         /// <summary>Rebuilds a season part-way through from its saved result history (save/load).</summary>
-        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults)
+        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults, Gaffer.Domain.Traits.TraitCatalog traits = null)
         {
-            var season = new LeagueSeason(league);
+            var season = new LeagueSeason(league, traits);
             foreach (MatchResult result in playedResults)
             {
                 season._table.RecordMatch(result.Home, result.Away, result.HomeGoals, result.AwayGoals);

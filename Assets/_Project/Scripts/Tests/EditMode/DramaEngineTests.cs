@@ -328,6 +328,76 @@ namespace Gaffer.Tests
         }
 
         [Test]
+        public void Catalog_DefaultEventSet_StaysInTheDesignBand()
+        {
+            // GDD's MVP menu: ~8-12 consequential, decided events — enough variety to feel alive,
+            // small enough to stay authored. And every one of them must be a real decision.
+            Assert.That(DramaCatalog.Default.Events.Count, Is.InRange(8, 12));
+            foreach (DramaEvent dramaEvent in DramaCatalog.Default.Events)
+            {
+                Assert.That(dramaEvent.Choices.Count, Is.GreaterThanOrEqualTo(2),
+                    dramaEvent.Id.Value + " must force a decision, not a notification");
+            }
+        }
+
+        [Test]
+        public void TickWeek_TraitGatedEvent_OnlyFiresForItsCarrier()
+        {
+            var trigger = new DramaTrigger { RequiredSubjectTrait = new TraitId("press-magnet") };
+            var catalog = new DramaCatalog(new[] { SoloEvent("press-war", trigger, requiresSubject: true) });
+
+            var quietSquad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60) };
+            var quietEngine = new DramaEngine(catalog, AlwaysFire());
+            for (int week = 0; week < 20; week++)
+            {
+                Assert.That(quietEngine.TickWeek(ContextOf(quietSquad), new SplitMix64RandomNumberGenerator((ulong)week)), Is.Null);
+            }
+
+            var magnet = PlayerOf(1, PlayerRole.RightWing, 60, age: 24, potential: 70, "press-magnet");
+            var loudSquad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60), magnet };
+            PendingDrama pending = new DramaEngine(catalog, AlwaysFire())
+                .TickWeek(ContextOf(loudSquad), new SplitMix64RandomNumberGenerator(1UL));
+
+            Assert.That(pending, Is.Not.Null);
+            Assert.That(pending.Subject.Id, Is.EqualTo(magnet.Id), "the story belongs to the trait's carrier");
+        }
+
+        [Test]
+        public void Resolve_CaptainAnointsSuccessor_TheLeaderTraitPassesToTheHeir()
+        {
+            DramaEvent succession = DramaCatalog.Default.Find(new DramaEventId("captain-succession"));
+            Player captain = PlayerOf(0, PlayerRole.CentreBack, 66, age: 34, potential: 70, "dressing-room-leader");
+            Player heir = PlayerOf(1, PlayerRole.CentralMidfield, 58, age: 20, potential: 85);
+            Player veteran = PlayerOf(2, PlayerRole.Striker, 70, age: 28);
+            var squad = new List<Player> { captain, heir, veteran };
+            var morale = new MoraleLedger();
+
+            var pending = new PendingDrama(succession, captain, ContextOf(squad));
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 0, morale);
+
+            Assert.That(outcome.IsSuccess, Is.True);
+            // Youth outranks raw rating for the armband's future — the 20-year-old, not the better veteran.
+            Assert.That(outcome.Value.TraitGrantTarget.Id, Is.EqualTo(heir.Id));
+            Assert.That(outcome.Value.GrantedTrait, Is.EqualTo(new TraitId("dressing-room-leader")));
+            Assert.That(morale.PointsOf(veteran.Id), Is.EqualTo(1.0).Within(1e-9), "the room lifts with the ceremony");
+        }
+
+        [Test]
+        public void Resolve_ContractStandoff_TradesCashForAVeteransHeart()
+        {
+            DramaEvent standoff = DramaCatalog.Default.Find(new DramaEventId("contract-standoff"));
+            Player veteran = PlayerOf(0, PlayerRole.Striker, 66, age: 31);
+            var pending = new PendingDrama(standoff, veteran, ContextOf(new List<Player> { veteran }));
+            var morale = new MoraleLedger();
+
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 0, morale);
+
+            Assert.That(outcome.IsSuccess, Is.True);
+            Assert.That(outcome.Value.CashDelta, Is.EqualTo(-500_000));
+            Assert.That(morale.PointsOf(veteran.Id), Is.EqualTo(2.0).Within(1e-9));
+        }
+
+        [Test]
         public void Resolve_WageFineChoice_ReturnsTheFineAndWoundsTheSubject()
         {
             DramaEvent scandal = DramaCatalog.Default.Find(new DramaEventId("night-club-scandal"));

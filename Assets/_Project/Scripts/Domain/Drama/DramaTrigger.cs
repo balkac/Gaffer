@@ -1,3 +1,5 @@
+using Gaffer.Domain.Traits;
+
 namespace Gaffer.Domain.Drama
 {
     /// <summary>
@@ -32,5 +34,9 @@ namespace Gaffer.Domain.Drama
 
         /// <summary>The transfer window must be open (transfer-flavored events).</summary>
         public bool RequiresOpenWindow { get; set; }
+
+        /// <summary>The subject must carry this trait (default = any player) — how a trait makes its
+        /// carrier the protagonist of a story only he can have.</summary>
+        public TraitId RequiredSubjectTrait { get; set; }
     }
 }

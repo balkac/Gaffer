@@ -122,6 +122,8 @@ namespace Gaffer.Application.Drama
             DramaChoice choice = pending.Event.Choices[choiceIndex];
             double cashDelta = 0.0;
             Player playerToSell = null;
+            Player traitGrantTarget = null;
+            TraitId grantedTrait = default;
 
             foreach (DramaEffect effect in choice.Effects)
             {
@@ -149,11 +151,49 @@ namespace Gaffer.Application.Drama
                     case DramaEffectKind.SellSubject:
                         playerToSell = pending.Subject;
                         break;
+                    case DramaEffectKind.GrantTraitToSuccessor:
+                        traitGrantTarget = Successor(pending);
+                        grantedTrait = traitGrantTarget != null ? effect.Trait : default;
+                        break;
                 }
             }
 
             return Result<DramaOutcome>.Success(
-                new DramaOutcome(pending.Event.Id, choiceIndex, (long)cashDelta, playerToSell));
+                new DramaOutcome(pending.Event.Id, choiceIndex, (long)cashDelta, playerToSell, traitGrantTarget, grantedTrait));
+        }
+
+        // The heir apparent when a captain anoints a successor: the strongest under-24 teammate, or —
+        // in an old squad — the strongest teammate of any age. Deterministic (ties break to the lower
+        // id), never the subject himself; null in a one-man room.
+        private static Player Successor(PendingDrama pending)
+        {
+            Player best = null;
+            double bestRating = double.MinValue;
+            bool bestIsYoung = false;
+            foreach (Player player in pending.Context.Squad)
+            {
+                if (pending.Subject != null && player.Id == pending.Subject.Id)
+                {
+                    continue;
+                }
+
+                bool young = player.Age < 24;
+                double rating = PlayerRatings.ForRole(player);
+
+                // Youth outranks rating; within the same bracket the higher rating wins, then the lower id.
+                bool better = best == null
+                    || (young && !bestIsYoung)
+                    || (young == bestIsYoung
+                        && (rating > bestRating || (rating == bestRating && player.Id.Value < best.Id.Value)));
+                if (better)
+                {
+                    best = player;
+                    bestRating = rating;
+                    bestIsYoung = young;
+                }
+            }
+
+            return best;
         }
 
         private readonly struct Candidate
@@ -259,6 +299,11 @@ namespace Gaffer.Application.Drama
             }
 
             if (trigger.SubjectBenched && (context.Starters == null || IsStarter(player, context.Starters)))
+            {
+                return false;
+            }
+
+            if (trigger.RequiredSubjectTrait.Value != null && !Carries(player, trigger.RequiredSubjectTrait))
             {
                 return false;
             }
