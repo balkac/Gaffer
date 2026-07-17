@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Gaffer.Application.Drama;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
@@ -28,6 +29,13 @@ namespace Gaffer.Application.Season
         private int _currentRound;
 
         public LeagueSeason(League league)
+            : this(league, null)
+        {
+        }
+
+        /// <summary>Runs the season on a specific trait catalog (from config assets) — the strength step
+        /// resolves each player's traits through it. Null falls back to the built-in default.</summary>
+        public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits)
         {
             _clubsById = new Dictionary<ClubId, Club>(league.Clubs.Count);
             var clubIds = new List<ClubId>(league.Clubs.Count);
@@ -53,11 +61,19 @@ namespace Gaffer.Application.Season
             _tacticsByClub = new Dictionary<ClubId, Tactics>();
             _formationByClub = new Dictionary<ClubId, Formation>();
             _startersByClub = new Dictionary<ClubId, IReadOnlyList<Player>>();
-            _strengthBuilder = new EffectiveStrengthBuilder();
+            _strengthBuilder = traits == null ? new EffectiveStrengthBuilder() : new EffectiveStrengthBuilder(traits);
             _lineupSelector = new LineupSelector();
             _table = new LeagueTable(clubIds);
             _playedResults = new List<MatchResult>();
+            Morale = new MoraleLedger();
         }
+
+        /// <summary>
+        /// The season's live morale state — drama effects land here and the weekly strength
+        /// derivation reads it, so a resolved event is felt in the coming weeks' results and fades
+        /// on schedule. Transient (not yet persisted in a save — like tactics and the economy).
+        /// </summary>
+        public MoraleLedger Morale { get; }
 
         /// <summary>Sets a club's tactics; its match strength is re-derived from its lineup each round.</summary>
         public void SetTactics(ClubId club, Tactics tactics)
@@ -111,9 +127,9 @@ namespace Gaffer.Application.Season
         public IReadOnlyList<MatchResult> PlayedResults => _playedResults;
 
         /// <summary>Rebuilds a season part-way through from its saved result history (save/load).</summary>
-        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults)
+        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults, Gaffer.Domain.Traits.TraitCatalog traits = null)
         {
-            var season = new LeagueSeason(league);
+            var season = new LeagueSeason(league, traits);
             foreach (MatchResult result in playedResults)
             {
                 season._table.RecordMatch(result.Home, result.Away, result.HomeGoals, result.AwayGoals);
@@ -137,7 +153,7 @@ namespace Gaffer.Application.Season
                 Club home = _clubsById[fixture.Home];
                 Club away = _clubsById[fixture.Away];
                 var command = new MatchCommand(
-                    StrengthOf(home), StrengthOf(away),
+                    StrengthOf(home, context), StrengthOf(away, context),
                     home.Squad, away.Squad,
                     ProfileOf(home.Id), ProfileOf(away.Id),
                     context);
@@ -154,6 +170,8 @@ namespace Gaffer.Application.Season
             }
 
             _playedResults.AddRange(matches);
+            // The played week ages morale one step — a wound (or a high) from drama fades on schedule.
+            Morale.TickWeek();
             int round = _currentRound;
             _currentRound++;
             return new WeekResult(round, matches);
@@ -178,16 +196,17 @@ namespace Gaffer.Application.Season
 
         // A club with a squad fields an eleven — the manager's explicit lineup, or the best auto-pick for its
         // formation — and its strength is derived fresh from that eleven + tactics each round, so a change
-        // takes effect the next week. A squad-less club (restored, or a strength-only fixture) keeps its
-        // precomputed strength.
-        private TeamStrength StrengthOf(Club club)
+        // takes effect the next week. The match context is threaded through so context-sensitive traits fire
+        // on the occasion, not in every fixture. A squad-less club (restored, or a strength-only fixture)
+        // keeps its precomputed strength.
+        private TeamStrength StrengthOf(Club club, MatchContext context)
         {
             if (club.Squad == null)
             {
                 return club.Strength;
             }
 
-            return _strengthBuilder.Build(StartersOf(club), TacticsOf(club.Id));
+            return _strengthBuilder.Build(StartersOf(club), TacticsOf(club.Id), context, Morale);
         }
 
         private IReadOnlyList<Player> StartersOf(Club club)

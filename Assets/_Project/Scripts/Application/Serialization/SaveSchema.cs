@@ -7,6 +7,8 @@ namespace Gaffer.Application.Serialization
         // (MatchSeed) instead of an evolving rng state.
         // v3: full squads and the season number are persisted, so a multi-season run survives development
         // and renewal. A v2 save has no squads (clubs restore as strength only) and no season number.
-        public const int CurrentVersion = 3;
+        // v4: each player persists his trait ids (slugs), so the character layer survives a reload. A v3
+        // player has no traits field and restores trait-less.
+        public const int CurrentVersion = 4;
     }
 }

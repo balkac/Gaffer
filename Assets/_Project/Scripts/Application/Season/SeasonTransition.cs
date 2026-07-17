@@ -22,7 +22,7 @@ namespace Gaffer.Application.Season
     public sealed class SeasonTransition
     {
         private readonly PlayerDevelopment _development;
-        private readonly EffectiveStrengthBuilder _strengthBuilder = new EffectiveStrengthBuilder();
+        private readonly EffectiveStrengthBuilder _strengthBuilder;
         private readonly SquadRenewal _renewal;
         private readonly int _gemCadenceSeasons;
 
@@ -39,9 +39,19 @@ namespace Gaffer.Application.Season
         /// <summary>Rolls seasons on with specific development and renewal balance (from config assets), so
         /// tuning the numbers changes how every squad grows, ages, retires, and brings youth through a run.</summary>
         public SeasonTransition(DevelopmentSettings developmentSettings, RenewalSettings renewalSettings)
+            : this(developmentSettings, renewalSettings, null)
         {
-            _development = new PlayerDevelopment(developmentSettings);
-            _renewal = new SquadRenewal(new PlayerGenerator(), renewalSettings);
+        }
+
+        /// <summary>Also takes the trait catalog (from config assets): development resolves each player's
+        /// growth/decline traits through it, youth are generated against it, and re-derived strengths read
+        /// it. Null falls back to the built-in default.</summary>
+        public SeasonTransition(DevelopmentSettings developmentSettings, RenewalSettings renewalSettings, Gaffer.Domain.Traits.TraitCatalog traits)
+        {
+            Gaffer.Domain.Traits.TraitCatalog catalog = traits ?? Gaffer.Domain.Traits.TraitCatalog.Default;
+            _development = new PlayerDevelopment(developmentSettings, catalog);
+            _renewal = new SquadRenewal(new PlayerGenerator(catalog), renewalSettings);
+            _strengthBuilder = new EffectiveStrengthBuilder(catalog);
             _gemCadenceSeasons = renewalSettings.GemCadenceSeasons;
         }
 

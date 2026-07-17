@@ -18,5 +18,13 @@ namespace Gaffer.Application.Generation
         public byte MinPotential { get; set; } = 55;
 
         public byte MaxPotential { get; set; } = 90;
+
+        /// <summary>Chance a generated player carries any trait at all — traits are the personality
+        /// layer, so most players carry none and a carried one stands out (GDD §4.2).</summary>
+        public double TraitChance { get; set; } = 0.35;
+
+        /// <summary>Chance a trait carrier picks up a second one — rare, so a two-trait player reads
+        /// as a real character rather than noise.</summary>
+        public double SecondTraitChance { get; set; } = 0.10;
     }
 }

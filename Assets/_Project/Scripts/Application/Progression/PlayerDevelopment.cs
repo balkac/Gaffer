@@ -2,6 +2,7 @@ using System;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using Gaffer.Domain.Players;
+using Gaffer.Domain.Traits;
 
 namespace Gaffer.Application.Progression
 {
@@ -13,22 +14,32 @@ namespace Gaffer.Application.Progression
     /// The ceiling (<see cref="Player.HiddenPotential"/>) never moves and is only ever approached, not
     /// guaranteed. Past the peak, age bites the physical attributes (pace, acceleration, agility, stamina,
     /// jumping), so a pace-bound winger or full-back declines far more than a positional centre-back or a
-    /// keeper — the ratings fall out of that naturally. Deterministic through the injected rng: the same
-    /// player and seed develop identically. All the balance numbers come from an injected
+    /// keeper — the ratings fall out of that naturally. Traits are the per-player driver behind the curve
+    /// (the real replacement for the id-proxy, decisions #21/#23): a training dodger converts less of his
+    /// gap each season, a model professional converts more and peaks later, a glass man starts declining
+    /// years early and wears faster. Deterministic through the injected rng: the same player and seed
+    /// develop identically. All the balance numbers come from an injected
     /// <see cref="DevelopmentSettings"/> (data-driven, NON-NEGOTIABLE #3); the default is the calibrated one.
     /// </summary>
     public sealed class PlayerDevelopment
     {
         private readonly DevelopmentSettings _settings;
+        private readonly TraitCatalog _traits;
 
         public PlayerDevelopment()
-            : this(DevelopmentSettings.Default)
+            : this(DevelopmentSettings.Default, TraitCatalog.Default)
         {
         }
 
         public PlayerDevelopment(DevelopmentSettings settings)
+            : this(settings, TraitCatalog.Default)
+        {
+        }
+
+        public PlayerDevelopment(DevelopmentSettings settings, TraitCatalog traits)
         {
             _settings = settings;
+            _traits = traits;
         }
 
         // Growth as a fraction of the remaining ability gap, by age — steep for teenagers, tapering off
@@ -110,11 +121,61 @@ namespace Gaffer.Application.Progression
             return (int)(z % 5UL) - 2;
         }
 
-        // When this player, in this role, starts to decline — never before the settings' floor (physical
-        // decline is real by then even for the latest bloomers), otherwise the role peak shifted by his offset.
+        // When this player, in this role, starts to decline: the role peak shifted by his stable offset,
+        // floored at the settings' minimum — then shifted by his traits. The trait shift applies after the
+        // floor on purpose: a glass man's early decline must be real for every role (a floor that swallowed
+        // it would make the trait flavor, NON-NEGOTIABLE #7), and a model professional outlasts the floor.
         private int DeclineOnsetAge(Player player)
         {
-            return Math.Max(_settings.MinDeclineAge, RolePeakAge(player.Role) + PeakAgeOffset(player.Id));
+            int baseline = Math.Max(_settings.MinDeclineAge, RolePeakAge(player.Role) + PeakAgeOffset(player.Id));
+            return baseline + DeclineOnsetShiftOf(player);
+        }
+
+        // Trait modifiers on the development curve, resolved through the catalog. Multipliers combine by
+        // product and onset shifts by sum, so a rare two-trait player composes sensibly.
+        private double GrowthMultiplierOf(Player player)
+        {
+            double multiplier = 1.0;
+            foreach (TraitId id in player.Traits)
+            {
+                Trait trait = _traits.Find(id);
+                if (trait != null)
+                {
+                    multiplier *= trait.GrowthMultiplier;
+                }
+            }
+
+            return multiplier;
+        }
+
+        private int DeclineOnsetShiftOf(Player player)
+        {
+            int shift = 0;
+            foreach (TraitId id in player.Traits)
+            {
+                Trait trait = _traits.Find(id);
+                if (trait != null)
+                {
+                    shift += trait.DeclineOnsetShift;
+                }
+            }
+
+            return shift;
+        }
+
+        private double DeclineRateMultiplierOf(Player player)
+        {
+            double multiplier = 1.0;
+            foreach (TraitId id in player.Traits)
+            {
+                Trait trait = _traits.Find(id);
+                if (trait != null)
+                {
+                    multiplier *= trait.DeclineRateMultiplier;
+                }
+            }
+
+            return multiplier;
         }
 
         /// <summary>
@@ -126,7 +187,7 @@ namespace Gaffer.Application.Progression
         {
             Attributes attributes = player.Attributes;
 
-            double growthRate = GrowthRate(player.Age);
+            double growthRate = GrowthRate(player.Age) * GrowthMultiplierOf(player);
             if (growthRate > 0.0)
             {
                 double gap = player.HiddenPotential - PlayerRatings.ForRole(player);
@@ -142,7 +203,8 @@ namespace Gaffer.Application.Progression
             int yearsPastPeak = player.Age - DeclineOnsetAge(player);
             if (yearsPastPeak > 0)
             {
-                double amount = _settings.DeclinePerYear * Math.Min(yearsPastPeak, _settings.MaxDeclineYears) * SeasonVariance(rng);
+                double amount = _settings.DeclinePerYear * Math.Min(yearsPastPeak, _settings.MaxDeclineYears)
+                    * SeasonVariance(rng) * DeclineRateMultiplierOf(player);
 
                 // Two-part decline so the OVR actually falls once past this player's own peak, hardest for
                 // the pace-reliant. (1) A general erosion of the role's own rating attributes — his overall
@@ -154,7 +216,7 @@ namespace Gaffer.Application.Progression
                 attributes = ApplyDecline(attributes, amount, rng);
             }
 
-            return new Player(player.Id, player.Name, player.Nationality, player.Role, player.Age + 1, attributes, player.HiddenPotential);
+            return new Player(player.Id, player.Name, player.Nationality, player.Role, player.Age + 1, attributes, player.HiddenPotential, player.Traits);
         }
 
         // Adjusts exactly the attributes the role is scored on (mirrors PlayerRatings.ForRole) by a signed

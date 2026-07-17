@@ -6,9 +6,9 @@
 
 ---
 
-## 📍 Güncel durum (2026-07-09)
+## 📍 Güncel durum (2026-07-18)
 
-**Faz 0 ✅ · Faz 1 ✅ (★ Gate A geçildi) · Faz 2 🟡 · Faz 3 🟡** — bir lig sezonu uçtan uca oynanıyor (headless + Season Player demo), kaydet/yükle + deterministik oyuncu üreteci (garanti wonderkid) + kadro→güç köprüsü + gruplu FM-benzeri attribute modeli + **rol-özel rating** + **oyuncu gelişimi + sezon-entegrasyonu** (çok-sezonlu run; keşfet-büyüt-sat flip'i gerçek lig loop'unda kapandı) hazır, **157 dotnet testi yeşil**. Ayrıntı + alınan kararlar: **[`PROGRESS.md`](PROGRESS.md)**.
+**Faz 0 ✅ · Faz 1 ✅ (★ Gate A geçildi) · Faz 2 🟡 · Faz 3 🟡 · Faz 4 🟡** — bir lig sezonu uçtan uca oynanıyor (headless + Season Player demo), kaydet/yükle + deterministik oyuncu üreteci (garanti wonderkid) + kadro→güç köprüsü + gruplu FM-benzeri attribute modeli + **rol-özel rating** + **oyuncu gelişimi + sezon-entegrasyonu** (çok-sezonlu run; keşfet-büyüt-sat flip'i gerçek lig loop'unda kapandı) + **trait sistemi (9, mekanik) + dram motoru (10 olay, nadir/kararlı/state-değiştiren) + moral** hazır, **210 dotnet testi yeşil**. Ayrıntı + alınan kararlar: **[`PROGRESS.md`](PROGRESS.md)**.
 
 ---
 
@@ -29,7 +29,7 @@
 | 1 | Tuning + Test Ağı | ✅ Tamam (Gate A geçildi) | M | ★ Gate A |
 | 2 | Sezon İskeleti | 🟡 Çekirdek bitti · JSON adapter kaldı | M | |
 | 3 | Yönetim Sistemleri | 🟡 Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO + **birleşik yönetim (canlı transfer + haftalık maaş gideri + transfer dönemleri)** ✅ · devam | **L** | |
-| 4 | Karakter + Dram | ⬜ | **L** | |
+| 4 | Karakter + Dram | 🟡 Çekirdek bitti (trait + dram + moral; karar #31) · SO/editör Unity-doğrulaması + set-piece/bağ-beat'i kaldı | **L** | |
 | 5 | Hafıza + Anlatı | ⬜ | M | ★ Gate B |
 | 6 | Meta / Roguelike | ⬜ | M | |
 | 7 | UI + Art + Localization | ⬜ | **L** | |
@@ -101,12 +101,12 @@ Karar döngüsünü tamamla.
 Oyunun ruhu. (GDD 4.1, 4.2, 4.7)
 
 **Teslimatlar:**
-- Trait sistemi (veri-güdümlü): ~6–8 mekanik trait, `MatchContext`-duyarlı (derbi canavarı vb.).
-- Dram motoru: ~8–12 sonuçlu/kararlı olay (koşul + ağırlık + cooldown + Choice→Effect) + olay bütçesi.
-- Küçük set-piece olay(lar): kulüp satışı, başkan gibi el-yapımı çıpalar.
-- Minimal menajer–oyuncu bağı beat'i.
+- ✅ Trait sistemi (veri-güdümlü): 9 mekanik trait, `MatchContext`-duyarlı (derbi canavarı, kaybolan, showman, lider-aurası) + gelişim sürücüleri (kaçkın/profesyonel/cam adam) + dram-bias (sadık/basın-mıknatısı); `TraitSO`→saf `Trait` köprüsü (karar #31).
+- ✅ Dram motoru: 10 sonuçlu/kararlı olay (koşul + ağırlık + cooldown + Choice→Effect) + olay bütçesi + **moral** (etkilerin sahaya dokunduğu yer); `DramaEventSO` köprüsü.
+- ✅ Küçük set-piece olay(lar): kulüp satışı (once-per-run) + kaptan-halefiyet çıpası. *(Başkan ölümü vb. içerik olarak büyür.)*
+- Minimal menajer–oyuncu bağı beat'i. *(Faz 5'in JourneyLog'una bitişik — orada.)*
 
-**Çıkış kriteri:** Bir trait sim çıktısını ölçülebilir değiştiriyor (flavor değil); dram nadir, kararlı, state değiştiren olaylar olarak tetikleniyor.
+**Çıkış kriteri:** ✅ Bir trait sim çıktısını ölçülebilir değiştiriyor (aynı 11+seed, bahis farklı → skor farklı; testle kilitli); ✅ dram nadir (bütçe+cooldown regresyonu), kararlı (≥2 seçenek zorunlu), state değiştiren (moral→sonraki haftaların skoru, nakit, satış, trait-devri) olaylar olarak tetikleniyor. *(Unity'de SO/editör doğrulaması kaldı.)*
 
 ---
 

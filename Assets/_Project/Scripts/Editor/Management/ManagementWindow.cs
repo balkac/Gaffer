@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using Gaffer.Application.Drama;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Progression;
 using Gaffer.Application.Season;
@@ -83,6 +84,13 @@ namespace Gaffer.Editor.Management
         private DevelopmentBalanceSO _developmentBalance;
         private RenewalBalanceSO _renewalBalance;
 
+        private DramaEngine _drama;
+        private PendingDrama _pendingDrama;
+        private string _dramaStatus;
+        private DramaBalanceSO _dramaBalance;
+        private TraitCatalogSO _traitCatalog;
+        private DramaCatalogSO _dramaCatalog;
+
         private VisualElement _body;
 
         private static string SavePath => Path.Combine(UnityEngine.Application.persistentDataPath, "gaffer-run.json");
@@ -100,6 +108,7 @@ namespace Gaffer.Editor.Management
             _simulationBalance = _simulationBalance != null ? _simulationBalance : BalanceAssets.Simulation();
             _developmentBalance = _developmentBalance != null ? _developmentBalance : BalanceAssets.Development();
             _renewalBalance = _renewalBalance != null ? _renewalBalance : BalanceAssets.Renewal();
+            _dramaBalance = _dramaBalance != null ? _dramaBalance : BalanceAssets.Drama();
 
             var scroll = new ScrollView();
             scroll.style.backgroundColor = HarnessPalette.Pitch;
@@ -200,6 +209,17 @@ namespace Gaffer.Editor.Management
             var renewField = new ObjectField("Renewal balance") { objectType = typeof(RenewalBalanceSO), value = _renewalBalance };
             renewField.RegisterValueChangedCallback(e => _renewalBalance = e.newValue as RenewalBalanceSO);
             card.Add(renewField);
+            var dramaBalanceField = new ObjectField("Drama balance") { objectType = typeof(DramaBalanceSO), value = _dramaBalance };
+            dramaBalanceField.RegisterValueChangedCallback(e => _dramaBalance = e.newValue as DramaBalanceSO);
+            card.Add(dramaBalanceField);
+
+            card.Add(MakeLabel("Content (optional — assign Gaffer/Content catalogs to override the built-ins)", 10, HarnessPalette.Muted));
+            var traitCatalogField = new ObjectField("Trait catalog") { objectType = typeof(TraitCatalogSO), value = _traitCatalog };
+            traitCatalogField.RegisterValueChangedCallback(e => _traitCatalog = e.newValue as TraitCatalogSO);
+            card.Add(traitCatalogField);
+            var dramaCatalogField = new ObjectField("Drama catalog") { objectType = typeof(DramaCatalogSO), value = _dramaCatalog };
+            dramaCatalogField.RegisterValueChangedCallback(e => _dramaCatalog = e.newValue as DramaCatalogSO);
+            card.Add(dramaCatalogField);
 
             var start = new Button(StartSeason) { text = "Start Season" };
             start.style.backgroundColor = HarnessPalette.Accent;
@@ -234,11 +254,26 @@ namespace Gaffer.Editor.Management
             return _renewalBalance != null ? _renewalBalance.ToSettings() : RenewalSettings.Default;
         }
 
+        private DramaSettings DramaBalance()
+        {
+            return _dramaBalance != null ? _dramaBalance.ToSettings() : DramaSettings.Default;
+        }
+
+        private Gaffer.Domain.Traits.TraitCatalog Traits()
+        {
+            return _traitCatalog != null ? _traitCatalog.ToCatalog() : Gaffer.Domain.Traits.TraitCatalog.Default;
+        }
+
+        private Gaffer.Domain.Drama.DramaCatalog DramaEvents()
+        {
+            return _dramaCatalog != null ? _dramaCatalog.ToCatalog() : Gaffer.Domain.Drama.DramaCatalog.Default;
+        }
+
         private void StartSeason()
         {
             int count = Mathf.Clamp(_teamCount, 4, MaxTeams);
             _league = BuildLeague(count);
-            _season = new LeagueSeason(_league);
+            _season = new LeagueSeason(_league, Traits());
             _simulator = new MatchSimulator(
                 new PoissonChanceGenerator(SimSettings()),
                 new QualityChanceResolver());
@@ -252,6 +287,10 @@ namespace Gaffer.Editor.Management
             _finances = new Finances(_startingCash, _wageBudget, TotalWages(ManagedSquad()));
             _market = GenerateMarket();
             _transferStatus = null;
+
+            _drama = new DramaEngine(DramaEvents(), DramaBalance());
+            _pendingDrama = null;
+            _dramaStatus = null;
 
             AutoPickStarters();
             _season.SetFormation(_managedClub, _formation);
@@ -273,7 +312,7 @@ namespace Gaffer.Editor.Management
             {
                 MinAge = 16, MaxAge = 19, MinAbility = 35, MaxAbility = 52, MinPotential = 84, MaxPotential = 95,
             };
-            IReadOnlyList<Player> pool = new PlayerPoolGenerator(new PlayerGenerator()).GeneratePool(
+            IReadOnlyList<Player> pool = new PlayerPoolGenerator(new PlayerGenerator(Traits())).GeneratePool(
                 Mathf.Max(1, _marketSize), Mathf.Max(0, _gems), new GenerationContext(), gem,
                 new SplitMix64RandomNumberGenerator(((ulong)_seed ^ 0xA5A5A5UL) + (ulong)_seasonNumber * 0x9E3779B97F4A7C15UL));
 
@@ -289,7 +328,7 @@ namespace Gaffer.Editor.Management
 
         private static Player WithId(Player p, int id)
         {
-            return new Player(new PlayerId(id), p.Name, p.Nationality, p.Role, p.Age, p.Attributes, p.HiddenPotential);
+            return new Player(new PlayerId(id), p.Name, p.Nationality, p.Role, p.Age, p.Attributes, p.HiddenPotential, p.Traits);
         }
 
         private static long TotalWages(Squad squad)
@@ -316,13 +355,17 @@ namespace Gaffer.Editor.Management
             IReadOnlyList<Player> before = ManagedSquad().Players;
 
             _seasonNumber++;
-            _league = new SeasonTransition(DevSettings(), RenewSettings()).ToNextSeason(_league, (ulong)_seed, _seasonNumber);
-            _season = new LeagueSeason(_league);
+            _league = new SeasonTransition(DevSettings(), RenewSettings(), Traits()).ToNextSeason(_league, (ulong)_seed, _seasonNumber);
+            _season = new LeagueSeason(_league, Traits());
             ComputeSummer(before, ManagedSquad().Players);
 
             _finances = new Finances(_finances.Cash, _wageBudget, TotalWages(ManagedSquad()));
             _market = GenerateMarket();
             _transferStatus = null;
+
+            _drama?.StartSeason();
+            _pendingDrama = null;
+            _dramaStatus = null;
 
             AutoPickStarters();
             _season.SetFormation(_managedClub, _formation);
@@ -379,7 +422,7 @@ namespace Gaffer.Editor.Management
                 return;
             }
 
-            RestoredSeason restored = new SeasonSaveMapper().Restore(loaded.Value);
+            RestoredSeason restored = new SeasonSaveMapper().Restore(loaded.Value, Traits());
             _league = restored.League;
             _season = restored.Season;
             _seasonNumber = restored.SeasonNumber < 1 ? 1 : restored.SeasonNumber;
@@ -390,6 +433,11 @@ namespace Gaffer.Editor.Management
             _finances = new Finances(_startingCash, _wageBudget, TotalWages(ManagedSquad()));
             _market = GenerateMarket();
             _transferStatus = null;
+
+            // Drama engine state (cooldowns, budget) is transient like the economy — a reload starts quiet.
+            _drama = new DramaEngine(DramaEvents(), DramaBalance());
+            _pendingDrama = null;
+            _dramaStatus = null;
 
             AutoPickStarters();
             _season.SetFormation(_managedClub, _formation);
@@ -671,7 +719,7 @@ namespace Gaffer.Editor.Management
 
         private League BuildLeague(int count)
         {
-            var generator = new LeagueGenerator(new SquadGenerator(new PlayerGenerator()));
+            var generator = new LeagueGenerator(new SquadGenerator(new PlayerGenerator(Traits())));
             var genRng = new SplitMix64RandomNumberGenerator((ulong)_seed ^ 0x5EEDD5EEDUL);
             return generator.Generate(count, genRng);
         }
@@ -680,20 +728,21 @@ namespace Gaffer.Editor.Management
 
         private void AdvanceOneWeek()
         {
-            if (_season == null || _season.IsComplete)
+            if (_season == null || _season.IsComplete || _pendingDrama != null)
             {
                 return;
             }
 
             _lastWeek = _season.AdvanceWeek(_simulator, _context, (ulong)_seed);
             _finances = _finances.PayWeeklyWages();
+            TickDrama();
             CheckComplete();
             Refresh();
         }
 
         private void PlayToEnd()
         {
-            if (_season == null)
+            if (_season == null || _pendingDrama != null)
             {
                 return;
             }
@@ -709,10 +758,214 @@ namespace Gaffer.Editor.Management
                 }
 
                 guard++;
+
+                // Drama demands a decision — the fast-forward stops where the story does.
+                TickDrama();
+                if (_pendingDrama != null)
+                {
+                    break;
+                }
             }
 
             CheckComplete();
             Refresh();
+        }
+
+        // ----- Drama ---------------------------------------------------------------------------------------
+
+        // The weekly drama tick (TDD §8) for the managed club: hand the engine this week's snapshot —
+        // roster, eleven, table position, form, window — and let it decide, on its own seeded stream
+        // (independent of the match streams), whether a story surfaces.
+        private void TickDrama()
+        {
+            if (_drama == null || _season == null || _season.IsComplete)
+            {
+                return;
+            }
+
+            Squad squad = ManagedSquad();
+            if (squad == null)
+            {
+                return;
+            }
+
+            var context = new DramaWeekContext(
+                squad.Players,
+                CurrentStarters(),
+                TablePositionOfManaged(),
+                LossStreakOfManaged(),
+                WindowOpen());
+            var rng = new SplitMix64RandomNumberGenerator(DramaSeed());
+            _pendingDrama = _drama.TickWeek(context, rng);
+        }
+
+        private ulong DramaSeed()
+        {
+            unchecked
+            {
+                ulong z = (ulong)_seed ^ 0xD7A3AD7A3AUL;
+                z ^= (ulong)(uint)_seasonNumber * 0x9E3779B97F4A7C15UL;
+                z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+                z ^= (ulong)(uint)_season.CurrentRound * 0x94D049BB133111EBUL;
+                return z ^ (z >> 31);
+            }
+        }
+
+        private int TablePositionOfManaged()
+        {
+            IReadOnlyList<LeagueTableRow> rows = _season.Table.Ordered();
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (rows[i].Club == _managedClub)
+                {
+                    return i + 1;
+                }
+            }
+
+            return 0;
+        }
+
+        private int LossStreakOfManaged()
+        {
+            int streak = 0;
+            IReadOnlyList<MatchResult> results = _season.PlayedResults;
+            for (int i = results.Count - 1; i >= 0; i--)
+            {
+                MatchResult match = results[i];
+                bool home = match.Home == _managedClub;
+                bool away = match.Away == _managedClub;
+                if (!home && !away)
+                {
+                    continue;
+                }
+
+                bool lost = home ? match.HomeGoals < match.AwayGoals : match.AwayGoals < match.HomeGoals;
+                if (!lost)
+                {
+                    break;
+                }
+
+                streak++;
+            }
+
+            return streak;
+        }
+
+        private void ResolveDrama(int choiceIndex)
+        {
+            Result<DramaOutcome> result = _drama.Resolve(_pendingDrama, choiceIndex, _season.Morale, _finances.Cash);
+            if (result.IsFailure)
+            {
+                _dramaStatus = result.Error;
+                Refresh();
+                return;
+            }
+
+            DramaOutcome outcome = result.Value;
+            string title = Humanize(_pendingDrama.Event.Id.Value);
+            _dramaStatus = title + " — resolved.";
+
+            if (outcome.CashDelta != 0)
+            {
+                _finances = new Finances(_finances.Cash + outcome.CashDelta, _finances.WeeklyWageBudget, _finances.WeeklyWageBill);
+                _dramaStatus += " Cash " + (outcome.CashDelta > 0 ? "+" : "") + FormatValue(outcome.CashDelta) + ".";
+            }
+
+            if (outcome.PlayerToSell != null)
+            {
+                Result<TransferResult> sale = TransferService.Sell(_finances, ManagedSquad(), outcome.PlayerToSell);
+                if (sale.IsSuccess)
+                {
+                    _finances = sale.Value.Finances;
+                    _season.UpdateSquad(_managedClub, sale.Value.Squad);
+                    _market.Add(outcome.PlayerToSell);
+                    SyncLeague();
+                    AutoPickStarters();
+                    _season.SetStarters(_managedClub, CurrentStarters());
+                    _dramaStatus += " " + outcome.PlayerToSell.Name + " sold for " + FormatValue(sale.Value.Fee) + ".";
+                }
+                else
+                {
+                    _dramaStatus += " Sale failed: " + sale.Error;
+                }
+            }
+
+            if (outcome.TraitGrantTarget != null)
+            {
+                // The player is immutable — the heir is rebuilt with his new trait and swapped into the
+                // live squad, so the aura is real from the next lineup on.
+                Player target = outcome.TraitGrantTarget;
+                var traits = new List<Gaffer.Domain.Traits.TraitId>(target.Traits) { outcome.GrantedTrait };
+                var reborn = new Player(target.Id, target.Name, target.Nationality, target.Role, target.Age, target.Attributes, target.HiddenPotential, traits);
+                _season.UpdateSquad(_managedClub, ManagedSquad().Remove(target.Id).Add(reborn));
+                SyncLeague();
+                AutoPickStarters();
+                _season.SetStarters(_managedClub, CurrentStarters());
+                _dramaStatus += " " + target.Name + " is now a " + Humanize(outcome.GrantedTrait.Value) + ".";
+            }
+
+            _pendingDrama = null;
+            Refresh();
+        }
+
+        // Dev-tool copy: the shipped UI reads localized text through the event's keys; the workbench
+        // humanizes the slugs so the loop is playable today.
+        private static string Humanize(string slug)
+        {
+            string spaced = slug.Replace('-', ' ').Replace('_', ' ');
+            return spaced.Length == 0 ? spaced : char.ToUpperInvariant(spaced[0]) + spaced.Substring(1);
+        }
+
+        private static string ChoiceLabel(string labelKey)
+        {
+            int lastDot = labelKey.LastIndexOf('.');
+            return Humanize(lastDot >= 0 ? labelKey.Substring(lastDot + 1) : labelKey);
+        }
+
+        private VisualElement BuildDramaCard()
+        {
+            VisualElement card = MakeCard();
+            card.style.borderLeftWidth = 3;
+            card.style.borderLeftColor = HarnessPalette.Accent;
+
+            card.Add(MakeLabel("DRAMA · WEEK " + _season.CurrentRound, 11, HarnessPalette.Accent, bold: true));
+            card.Add(MakeLabel(Humanize(_pendingDrama.Event.Id.Value).ToUpperInvariant(), 15, HarnessPalette.Chalk, bold: true));
+
+            if (_pendingDrama.Subject != null)
+            {
+                Player subject = _pendingDrama.Subject;
+                var line = new VisualElement();
+                line.style.flexDirection = FlexDirection.Row;
+                line.style.alignItems = Align.Center;
+                line.Add(MakeLabel(
+                    subject.Name + "  ·  " + PlayerRoles.Abbrev(subject.Role) + "  ·  " + subject.Age +
+                    "  ·  OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(subject)), 11, HarnessPalette.Chalk));
+                line.Add(TraitBadges(subject));
+                card.Add(line);
+            }
+
+            card.Add(MakeLabel("The decision is yours — it will be felt on the pitch and in the books.", 10, HarnessPalette.Muted));
+
+            var buttons = new VisualElement();
+            buttons.style.flexDirection = FlexDirection.Row;
+            buttons.style.marginTop = 8;
+            for (int i = 0; i < _pendingDrama.Event.Choices.Count; i++)
+            {
+                int index = i;
+                var choice = new Button(() => ResolveDrama(index)) { text = ChoiceLabel(_pendingDrama.Event.Choices[i].LabelKey) };
+                choice.style.flexGrow = 1;
+                choice.style.height = 26;
+                if (i > 0)
+                {
+                    choice.style.marginLeft = 6;
+                }
+
+                StyleActionButton(choice, HarnessPalette.Accent);
+                buttons.Add(choice);
+            }
+
+            card.Add(buttons);
+            return card;
         }
 
         private void CheckComplete()
@@ -782,7 +1035,12 @@ namespace Gaffer.Editor.Management
 
             _body.Add(header);
 
-            if (!_season.IsComplete)
+            if (_pendingDrama != null)
+            {
+                // A raised event blocks the week until answered — drama is a decision, not a notification.
+                _body.Add(BuildDramaCard());
+            }
+            else if (!_season.IsComplete)
             {
                 var controls = new VisualElement();
                 controls.style.flexDirection = FlexDirection.Row;
@@ -817,6 +1075,13 @@ namespace Gaffer.Editor.Management
                 next.style.marginTop = 8;
                 SetRadius(next, 6);
                 _body.Add(next);
+            }
+
+            if (!string.IsNullOrEmpty(_dramaStatus) && _pendingDrama == null)
+            {
+                Label dramaNote = MakeLabel(_dramaStatus, 10, HarnessPalette.Draw);
+                dramaNote.style.marginTop = 4;
+                _body.Add(dramaNote);
             }
 
             if (_retired != null && (_retired.Count > 0 || _arrived.Count > 0))
@@ -1373,6 +1638,7 @@ namespace Gaffer.Editor.Management
                 ovr.style.marginRight = 8;
                 row.Add(ovr);
 
+                row.Add(TraitBadges(player));
                 row.Add(BuildKeyStats(player));
 
                 // Selling is only possible in an open window — the squad is otherwise locked for the season.
@@ -1400,6 +1666,34 @@ namespace Gaffer.Editor.Management
                 Label chip = MakeLabel(key.Label + " " + value, 10, AttributeColor(value), value >= 85);
                 chip.style.marginLeft = 10;
                 wrap.Add(chip);
+            }
+
+            return wrap;
+        }
+
+        // Small badge chips for the player's traits — the character layer made visible on the roster
+        // (dev-tool labels from the id slug; the shipped UI will read localized names off the catalog).
+        private static VisualElement TraitBadges(Player player)
+        {
+            var wrap = new VisualElement();
+            wrap.style.flexDirection = FlexDirection.Row;
+
+            foreach (Gaffer.Domain.Traits.TraitId id in player.Traits)
+            {
+                Label badge = MakeLabel(id.Value.Replace('-', ' ').ToUpperInvariant(), 9, HarnessPalette.Draw, bold: true);
+                badge.style.marginLeft = 8;
+                badge.style.paddingLeft = 4;
+                badge.style.paddingRight = 4;
+                badge.style.borderLeftWidth = 1;
+                badge.style.borderRightWidth = 1;
+                badge.style.borderTopWidth = 1;
+                badge.style.borderBottomWidth = 1;
+                badge.style.borderLeftColor = HarnessPalette.Draw;
+                badge.style.borderRightColor = HarnessPalette.Draw;
+                badge.style.borderTopColor = HarnessPalette.Draw;
+                badge.style.borderBottomColor = HarnessPalette.Draw;
+                SetRadius(badge, 3);
+                wrap.Add(badge);
             }
 
             return wrap;
@@ -1532,6 +1826,7 @@ namespace Gaffer.Editor.Management
                 var name = MakeLabel(player.Name + "  ·  " + PlayerRoles.Abbrev(player.Role) + "  ·  " + player.Age, 12, HarnessPalette.Chalk, bold: true);
                 name.style.flexGrow = 1;
                 line.Add(name);
+                line.Add(TraitBadges(player));
                 line.Add(MakeLabel("OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(player)) + "   ", 12, HarnessPalette.Accent, bold: true));
                 line.Add(MakeLabel(FormatValue(PlayerValuation.Value(player)) + " · " + FormatValue(PlayerWage.Weekly(player)) + "/wk   ", 11, HarnessPalette.Muted));
 
