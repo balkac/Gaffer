@@ -221,6 +221,137 @@ namespace Gaffer.Tests
             Assert.That(developed.Traits, Is.EqualTo(player.Traits));
         }
 
+        private static Player YoungProspect(params string[] traits)
+        {
+            var attributes = UniformAttributes(50);
+            var ids = new List<TraitId>(traits.Length);
+            foreach (string trait in traits)
+            {
+                ids.Add(new TraitId(trait));
+            }
+
+            return new Player(new PlayerId(40), "Prospect", "England", PlayerRole.Striker, 18, attributes, 92, ids);
+        }
+
+        private static Attributes UniformAttributes(byte stat)
+        {
+            return new Attributes
+            {
+                Finishing = stat, Technique = stat, FirstTouch = stat, Dribbling = stat, Passing = stat,
+                Crossing = stat, Heading = stat, LongShots = stat, Marking = stat, Tackling = stat,
+                Penalties = stat, FreeKicks = stat, Corners = stat, LongThrows = stat,
+                Pace = stat, Acceleration = stat, Stamina = stat, Strength = stat, Agility = stat,
+                Jumping = stat, Balance = stat, Positioning = stat,
+                Reflexes = stat, Handling = stat, AerialReach = stat, CommandOfArea = stat,
+                OneOnOnes = stat, Kicking = stat, GkPositioning = stat,
+            };
+        }
+
+        [Test]
+        public void Develop_TrainingDodger_GrowsLessThanIdenticalTwin()
+        {
+            var development = new Gaffer.Application.Progression.PlayerDevelopment();
+
+            Player clean = development.Develop(YoungProspect(), new SplitMix64RandomNumberGenerator(5UL));
+            Player dodger = development.Develop(YoungProspect("training-dodger"), new SplitMix64RandomNumberGenerator(5UL));
+
+            // Same player, same seed, same season — the trait alone converts less of the gap.
+            Assert.That(PlayerRatings.ForRole(dodger), Is.LessThan(PlayerRatings.ForRole(clean)));
+        }
+
+        [Test]
+        public void Develop_ModelProfessional_OutgrowsIdenticalTwin()
+        {
+            var development = new Gaffer.Application.Progression.PlayerDevelopment();
+
+            Player clean = development.Develop(YoungProspect(), new SplitMix64RandomNumberGenerator(5UL));
+            Player professional = development.Develop(YoungProspect("model-professional"), new SplitMix64RandomNumberGenerator(5UL));
+
+            Assert.That(PlayerRatings.ForRole(professional), Is.GreaterThan(PlayerRatings.ForRole(clean)));
+        }
+
+        [Test]
+        public void Develop_GlassManAtThirty_DeclinesWhileIdenticalTwinHolds()
+        {
+            var development = new Gaffer.Application.Progression.PlayerDevelopment();
+            // Same id, so both share the same per-player peak offset: the twin's onset is floored at 30+,
+            // the glass man's sits three years earlier — at 30 only he has started to fade.
+            var twin = new Player(new PlayerId(41), "Veteran", "England", PlayerRole.Striker, 30, UniformAttributes(70), 70);
+            var glassMan = new Player(new PlayerId(41), "Veteran", "England", PlayerRole.Striker, 30, UniformAttributes(70), 70,
+                new List<TraitId> { new TraitId("glass-man") });
+
+            Player twinAfter = development.Develop(twin, new SplitMix64RandomNumberGenerator(9UL));
+            Player glassAfter = development.Develop(glassMan, new SplitMix64RandomNumberGenerator(9UL));
+
+            Assert.That(PlayerRatings.ForRole(twinAfter), Is.EqualTo(PlayerRatings.ForRole(twin)).Within(1e-9));
+            Assert.That(PlayerRatings.ForRole(glassAfter), Is.LessThan(PlayerRatings.ForRole(glassMan)));
+        }
+
+        [Test]
+        public void CaptureRestore_PlayerTraits_RoundTripBySlug()
+        {
+            var strengthBuilder = new EffectiveStrengthBuilder();
+            var eleven = new List<Player>
+            {
+                PlayerAt(0, Position.Goalkeeper, 60),
+                PlayerAt(1, Position.Defender, 60, "dressing-room-leader"),
+                PlayerAt(2, Position.Forward, 60, "derby-beast", "glass-man"),
+                PlayerAt(3, Position.Forward, 60, "from-a-future-catalog"),
+            };
+            var squad = new Squad(eleven);
+            var league = new League("Save League", new List<Club>
+            {
+                new Club(new ClubId(0), "Traits FC", squad, strengthBuilder.Build(squad)),
+                new Club(new ClubId(1), "Plain FC", new TeamStrength(55, 55, 55)),
+            });
+
+            var mapper = new Gaffer.Application.Serialization.SeasonSaveMapper();
+            Gaffer.Application.Serialization.SeasonSaveData data = mapper.Capture(league, new LeagueSeason(league), 1UL, 1);
+            Gaffer.Application.Serialization.RestoredSeason restored = mapper.Restore(data);
+
+            IReadOnlyList<Player> players = restored.League.Clubs[0].Squad.Players;
+            Assert.That(players[0].Traits, Is.Empty);
+            Assert.That(players[1].Traits, Is.EqualTo(new[] { new TraitId("dressing-room-leader") }));
+            Assert.That(players[2].Traits, Is.EqualTo(new[] { new TraitId("derby-beast"), new TraitId("glass-man") }));
+            // An id the current catalog does not define is carried, not dropped — definitions rebind on use.
+            Assert.That(players[3].Traits, Is.EqualTo(new[] { new TraitId("from-a-future-catalog") }));
+        }
+
+        [Test]
+        public void Migrate_V3SaveWithoutTraits_RestoresTraitless()
+        {
+            var data = new Gaffer.Application.Serialization.SeasonSaveData
+            {
+                SchemaVersion = 3,
+                LeagueName = "Old League",
+                SeasonNumber = 2,
+                MatchSeed = 5UL,
+                PlayedRounds = 0,
+            };
+            data.Clubs.Add(new Gaffer.Application.Serialization.ClubSaveData
+            {
+                Id = 0,
+                Name = "Old FC",
+                Attack = 60, Midfield = 60, Defence = 60,
+                Squad = new List<Gaffer.Application.Serialization.PlayerSaveData>
+                {
+                    new Gaffer.Application.Serialization.PlayerSaveData
+                    {
+                        Id = 1, Name = "Old Player", Nationality = "England", Role = (int)PlayerRole.Striker,
+                        Age = 24, HiddenPotential = 70,
+                        Attributes = new Gaffer.Application.Serialization.AttributesSaveData(),
+                    },
+                },
+            });
+
+            Result<Gaffer.Application.Serialization.SeasonSaveData> migrated = new Gaffer.Application.Serialization.SaveMigrator().Migrate(data);
+
+            Assert.That(migrated.IsSuccess, Is.True);
+            Assert.That(migrated.Value.SchemaVersion, Is.EqualTo(Gaffer.Application.Serialization.SaveSchema.CurrentVersion));
+            Gaffer.Application.Serialization.RestoredSeason restored = new Gaffer.Application.Serialization.SeasonSaveMapper().Restore(migrated.Value);
+            Assert.That(restored.League.Clubs[0].Squad.Players[0].Traits, Is.Empty);
+        }
+
         [Test]
         public void AdvanceWeek_DerbyBeastSquadUnderRivalryContext_ChangesTheMatchOutcome()
         {

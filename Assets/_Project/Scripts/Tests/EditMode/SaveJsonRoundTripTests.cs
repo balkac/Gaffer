@@ -41,6 +41,7 @@ namespace Gaffer.Tests
                                     Balance = 40, Positioning = 41, Reflexes = 42, Handling = 43, AerialReach = 44,
                                     CommandOfArea = 45, OneOnOnes = 46, Kicking = 47, GkPositioning = 48,
                                 },
+                                Traits = new List<string> { "derby-beast", "glass-man" },
                             },
                         },
                     },
@@ -76,6 +77,7 @@ namespace Gaffer.Tests
             Assert.That(player.HiddenPotential, Is.EqualTo(91));
             Assert.That(player.Attributes.Finishing, Is.EqualTo(20));
             Assert.That(player.Attributes.GkPositioning, Is.EqualTo(48));
+            Assert.That(player.Traits, Is.EqualTo(new List<string> { "derby-beast", "glass-man" }));
         }
 
         [Test]

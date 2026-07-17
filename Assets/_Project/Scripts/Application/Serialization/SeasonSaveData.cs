@@ -57,6 +57,11 @@ namespace Gaffer.Application.Serialization
         public int HiddenPotential { get; set; }
 
         public AttributesSaveData Attributes { get; set; }
+
+        /// <summary>Trait id slugs (v4). Null on an older save — the player restores trait-less; ids the
+        /// current catalog does not define are carried but ignored by the sim (config is not serialized,
+        /// definitions rebind by id on load, TDD §10).</summary>
+        public List<string> Traits { get; set; }
     }
 
     // The 29 grouped attributes, flat so any JSON serializer round-trips them by name (robust to reordering).

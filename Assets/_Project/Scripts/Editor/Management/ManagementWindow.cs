@@ -289,7 +289,7 @@ namespace Gaffer.Editor.Management
 
         private static Player WithId(Player p, int id)
         {
-            return new Player(new PlayerId(id), p.Name, p.Nationality, p.Role, p.Age, p.Attributes, p.HiddenPotential);
+            return new Player(new PlayerId(id), p.Name, p.Nationality, p.Role, p.Age, p.Attributes, p.HiddenPotential, p.Traits);
         }
 
         private static long TotalWages(Squad squad)

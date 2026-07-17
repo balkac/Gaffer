@@ -5,6 +5,7 @@ using Gaffer.Application.Simulation;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
 using Gaffer.Domain.Players;
+using Gaffer.Domain.Traits;
 
 namespace Gaffer.Application.Serialization
 {
@@ -101,6 +102,7 @@ namespace Gaffer.Application.Serialization
                     Age = player.Age,
                     HiddenPotential = player.HiddenPotential,
                     Attributes = ToData(player.Attributes),
+                    Traits = CaptureTraits(player),
                 });
             }
 
@@ -119,10 +121,44 @@ namespace Gaffer.Application.Serialization
             {
                 players.Add(new Player(
                     new PlayerId(p.Id), p.Name, p.Nationality, (PlayerRole)p.Role, p.Age,
-                    FromData(p.Attributes), (byte)p.HiddenPotential));
+                    FromData(p.Attributes), (byte)p.HiddenPotential, RestoreTraits(p.Traits)));
             }
 
             return new Squad(players);
+        }
+
+        private static List<string> CaptureTraits(Player player)
+        {
+            if (player.Traits.Count == 0)
+            {
+                return null;
+            }
+
+            var slugs = new List<string>(player.Traits.Count);
+            foreach (TraitId id in player.Traits)
+            {
+                slugs.Add(id.Value);
+            }
+
+            return slugs;
+        }
+
+        // Null (a v3 save, or a trait-less player) restores as no traits; unknown slugs are kept — the
+        // catalog resolves ids on use and ignores what it does not define.
+        private static IReadOnlyList<TraitId> RestoreTraits(List<string> slugs)
+        {
+            if (slugs == null || slugs.Count == 0)
+            {
+                return null;
+            }
+
+            var ids = new List<TraitId>(slugs.Count);
+            foreach (string slug in slugs)
+            {
+                ids.Add(new TraitId(slug));
+            }
+
+            return ids;
         }
 
         private static AttributesSaveData ToData(Attributes a)
