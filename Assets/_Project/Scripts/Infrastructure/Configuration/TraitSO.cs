@@ -44,6 +44,29 @@ namespace Gaffer.Infrastructure.Configuration
         [Tooltip("Scale on post-peak erosion (1 = neutral; a glass man wears faster).")]
         [SerializeField] private double declineRateMultiplier = 1.0;
 
+        /// <summary>Fills the serialized fields from a pure definition — used by the editor tooling to
+        /// materialise the built-in catalog as tunable assets (no hand-authored YAML, decision #28).</summary>
+        public void Author(Trait trait)
+        {
+            slug = trait.Id.Value;
+            nameKey = trait.NameKey;
+            assignmentWeight = trait.AssignmentWeight;
+
+            MatchStakes stakes = trait.Match.Stakes;
+            onDerby = (stakes & MatchStakes.Derby) != 0;
+            onRivalry = (stakes & MatchStakes.Rivalry) != 0;
+            onFinal = (stakes & MatchStakes.Final) != 0;
+            onTitleDecider = (stakes & MatchStakes.TitleDecider) != 0;
+            onRelegationSixPointer = (stakes & MatchStakes.RelegationSixPointer) != 0;
+            bigCrowdThreshold = trait.Match.BigCrowdThreshold;
+            matchMultiplier = stakes == MatchStakes.None ? 1.0 : trait.Match.Multiplier;
+
+            teammateAura = trait.TeammateAura;
+            growthMultiplier = trait.GrowthMultiplier;
+            declineOnsetShift = trait.DeclineOnsetShift;
+            declineRateMultiplier = trait.DeclineRateMultiplier;
+        }
+
         public Trait ToTrait()
         {
             MatchStakes stakes = MatchStakes.None;

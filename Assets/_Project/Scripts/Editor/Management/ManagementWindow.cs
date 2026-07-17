@@ -12,6 +12,7 @@ using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
 using Gaffer.Domain.Players;
 using Gaffer.Editor.Balance;
+using Gaffer.Editor.Content;
 using Gaffer.Editor.Harness;
 using Gaffer.Infrastructure.Configuration;
 using Gaffer.Infrastructure.Persistence;
@@ -109,6 +110,8 @@ namespace Gaffer.Editor.Management
             _developmentBalance = _developmentBalance != null ? _developmentBalance : BalanceAssets.Development();
             _renewalBalance = _renewalBalance != null ? _renewalBalance : BalanceAssets.Renewal();
             _dramaBalance = _dramaBalance != null ? _dramaBalance : BalanceAssets.Drama();
+            _traitCatalog = _traitCatalog != null ? _traitCatalog : ContentAssets.Traits();
+            _dramaCatalog = _dramaCatalog != null ? _dramaCatalog : ContentAssets.Drama();
 
             var scroll = new ScrollView();
             scroll.style.backgroundColor = HarnessPalette.Pitch;

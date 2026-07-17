@@ -87,6 +87,64 @@ namespace Gaffer.Infrastructure.Configuration
         [Header("The decision (at least two choices)")]
         [SerializeField] private List<ChoiceDef> choices = new List<ChoiceDef>();
 
+        /// <summary>Fills the serialized fields from a pure definition — used by the editor tooling to
+        /// materialise the built-in catalog as tunable assets (no hand-authored YAML, decision #28).</summary>
+        public void Author(DramaEvent dramaEvent)
+        {
+            slug = dramaEvent.Id.Value;
+            category = dramaEvent.Category;
+            titleKey = dramaEvent.TitleKey;
+            bodyKey = dramaEvent.BodyKey;
+            requiresSubject = dramaEvent.RequiresSubject;
+
+            DramaTrigger trigger = dramaEvent.Trigger;
+            minSubjectAge = trigger.MinSubjectAge;
+            maxSubjectAge = trigger.MaxSubjectAge;
+            minSubjectRating = trigger.MinSubjectRating;
+            minSubjectPotentialGap = trigger.MinSubjectPotentialGap;
+            subjectBenched = trigger.SubjectBenched;
+            requiredSubjectTraitSlug = trigger.RequiredSubjectTrait.Value;
+            minLossStreak = trigger.MinLossStreak;
+            minTablePosition = trigger.MinTablePosition;
+            requiresOpenWindow = trigger.RequiresOpenWindow;
+
+            baseWeight = dramaEvent.BaseWeight;
+            cooldownWeeks = dramaEvent.CooldownWeeks;
+            oncePerRun = dramaEvent.OncePerRun;
+
+            subjectTraitBiases = AuthorBiases(dramaEvent.SubjectTraitBiases);
+            squadTraitBiases = AuthorBiases(dramaEvent.SquadTraitBiases);
+
+            choices = new List<ChoiceDef>(dramaEvent.Choices.Count);
+            foreach (DramaChoice choice in dramaEvent.Choices)
+            {
+                var def = new ChoiceDef { labelKey = choice.LabelKey };
+                foreach (DramaEffect effect in choice.Effects)
+                {
+                    def.effects.Add(new EffectDef
+                    {
+                        kind = effect.Kind,
+                        magnitude = effect.Magnitude,
+                        durationWeeks = effect.DurationWeeks,
+                        traitSlug = effect.Trait.Value,
+                    });
+                }
+
+                choices.Add(def);
+            }
+        }
+
+        private static List<BiasDef> AuthorBiases(IReadOnlyList<DramaTraitBias> biases)
+        {
+            var defs = new List<BiasDef>(biases.Count);
+            foreach (DramaTraitBias bias in biases)
+            {
+                defs.Add(new BiasDef { traitSlug = bias.Trait.Value, weightMultiplier = bias.WeightMultiplier });
+            }
+
+            return defs;
+        }
+
         public DramaEvent ToEvent()
         {
             var trigger = new DramaTrigger

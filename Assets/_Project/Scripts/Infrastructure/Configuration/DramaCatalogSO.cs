@@ -15,6 +15,13 @@ namespace Gaffer.Infrastructure.Configuration
         [Tooltip("The drama events of this run. Empty = the built-in default catalog.")]
         [SerializeField] private List<DramaEventSO> events = new List<DramaEventSO>();
 
+        /// <summary>Points the catalog at a set of event assets — used by the editor tooling when it
+        /// materialises the built-in catalog.</summary>
+        public void Author(List<DramaEventSO> assets)
+        {
+            events = new List<DramaEventSO>(assets);
+        }
+
         public DramaCatalog ToCatalog()
         {
             if (events == null || events.Count == 0)

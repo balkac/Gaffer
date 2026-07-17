@@ -16,6 +16,13 @@ namespace Gaffer.Infrastructure.Configuration
         [Tooltip("The traits of this run. Empty = the built-in default catalog.")]
         [SerializeField] private List<TraitSO> traits = new List<TraitSO>();
 
+        /// <summary>Points the catalog at a set of trait assets — used by the editor tooling when it
+        /// materialises the built-in catalog.</summary>
+        public void Author(List<TraitSO> assets)
+        {
+            traits = new List<TraitSO>(assets);
+        }
+
         public TraitCatalog ToCatalog()
         {
             if (traits == null || traits.Count == 0)

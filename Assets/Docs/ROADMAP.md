@@ -29,7 +29,7 @@
 | 1 | Tuning + Test Ağı | ✅ Tamam (Gate A geçildi) | M | ★ Gate A |
 | 2 | Sezon İskeleti | 🟡 Çekirdek bitti · JSON adapter kaldı | M | |
 | 3 | Yönetim Sistemleri | 🟡 Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO + **birleşik yönetim (canlı transfer + haftalık maaş gideri + transfer dönemleri)** ✅ · devam | **L** | |
-| 4 | Karakter + Dram | 🟡 Çekirdek bitti (trait + dram + moral; karar #31) · SO/editör Unity-doğrulaması + set-piece/bağ-beat'i kaldı | **L** | |
+| 4 | Karakter + Dram | 🟡 Çekirdek bitti (trait + dram + moral; karar #31) · playtest kalibrasyonu kaldı (dram frekans-normalizasyonu + kart etki-önizlemesi + olay kopyası — PROGRESS "Kalan") + Unity-doğrulaması | **L** | |
 | 5 | Hafıza + Anlatı | ⬜ | M | ★ Gate B |
 | 6 | Meta / Roguelike | ⬜ | M | |
 | 7 | UI + Art + Localization | ⬜ | **L** | |
