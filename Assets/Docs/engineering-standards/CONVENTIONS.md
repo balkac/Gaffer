@@ -183,6 +183,31 @@ public readonly struct Result<T>
 - **Deliverable docs, code, and comments are in English** (day-to-day chat can be in any
   language). Keep the docs in sync: update the architecture doc after any structural change.
 
+## 6. C# semantics that bite
+
+Language-level traps that produce real bugs; none are style preferences. (The *allocation*-side
+mechanics — boxing, closures, LINQ — are performance, and live in `PERFORMANCE.md` §8.)
+
+- **Never call a virtual method from a constructor.** The override runs before the derived
+  constructor body has initialised its fields (field *initializers* have run; the ctor body has
+  not), so the override observes default values. Construction only constructs.
+- **Struct copy semantics.** `list[0].hp = 5` doesn't compile (a `List<T>` indexer returns a
+  *copy* — CS1612), and `var s = list[0]; s.hp = 5;` silently edits the copy. Unity's
+  `transform.position.x = 5` fails for the same reason. The pattern is read–modify–write: take
+  the copy, change it, assign it back. Arrays are the exception — element access is a direct
+  reference, so `arr[0].hp = 5` works.
+- **Every `+=` has a `-=`.** An object subscribed to a longer-lived (worst: `static`) event stays
+  reachable — it is never collected, and the stale handler fires on a dead object. Subscribe and
+  unsubscribe in symmetric places (ctor/`Dispose`, `OnEnable`/`OnDisable`); teardown ownership
+  belongs to the composition root (`ARCHITECTURE.md` §6).
+- **`const` is baked into the *calling* assembly** at compile time; changing a library `const`
+  doesn't reach already-compiled callers until they recompile. A cross-assembly constant that may
+  ever change is `static readonly`.
+- **Static initialisation order is lazy and subtle.** A static ctor runs on first touch of the
+  type; two types whose static fields reference each other initialise in whichever order they
+  happen to be touched. Don't build dependency chains between static initialisers — one more
+  reason §3 prefers instances wired at the composition root over statics.
+
 ---
 
 ## Example transformations

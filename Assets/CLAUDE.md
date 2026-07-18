@@ -6,7 +6,7 @@ Bu dosya oturum başında okunur ve davranışı belirler. Ayrıntılar için:
 
 **➜ Nerede kaldık? `docs/PROGRESS.md`'yi oku** (ilerleme + alınan kararlar + sıradaki adım). `docs/ROADMAP.md` faz durumunu (✅/🟡/⬜) gösterir. Yeni oturuma bu ikisiyle başla. **Testler:** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj`.
 
-**Nasıl inşa edilir → `docs/engineering-standards/`** (`ARCHITECTURE.md`, `CONVENTIONS.md`, `PERFORMANCE.md`, `starter-tree.md`) **bağlayıcıdır.** Katmanlar, assembly'ler, isimlendirme, hata modeli, async sınırı, test köprüsü oradan gelir. Çelişkide **standartlar kazanır**; TDD yalnız oyuna-özel kararları taşır.
+**Nasıl inşa edilir → `docs/engineering-standards/`** (`ARCHITECTURE.md`, `CONVENTIONS.md`, `PERFORMANCE.md`, `UNITY.md`, `starter-tree.md`) **bağlayıcıdır.** Katmanlar, assembly'ler, isimlendirme, hata modeli, async sınırı, GC/alloc disiplini, engine yaşam döngüsü, test köprüsü oradan gelir. Çelişkide **standartlar kazanır**; TDD yalnız oyuna-özel kararları taşır.
 
 ---
 

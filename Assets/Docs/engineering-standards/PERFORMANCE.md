@@ -3,7 +3,9 @@
 How I keep a Unity project smooth and low-garbage. Most of this is *structural* — the same layering
 that makes the core testable (see [`ARCHITECTURE.md`](ARCHITECTURE.md)) also keeps the engine's
 per-frame overhead low — plus a handful of concrete Unity habits. These are defaults, not universal
-laws: profile before optimising, and drop any of these where a measurement says it doesn't matter.
+laws: profile before optimising (§11), and drop any of these where a measurement says it doesn't
+matter. This doc is about *cost*; the engine's correctness-side semantics (lifecycle, time, object
+lifetime) live in [`UNITY.md`](UNITY.md).
 
 ---
 
@@ -96,3 +98,106 @@ no tween callback fires against an object the unload has already destroyed — t
 been destroyed but you are still trying to access it" warning. Anything that outlives its target
 (tweens, coroutines, event subscriptions) gets an explicit teardown; the composition root owning
 lifetimes (`ARCHITECTURE.md` §6) is where that responsibility lives.
+
+## 8. Know what allocates — the C# mechanics
+
+§4 says "low garbage"; this is the concrete checklist of what actually hits the managed heap.
+Worth internalising once — after that, zero-alloc code is mostly habit, not effort.
+
+**Allocates:**
+
+- `new` on any **class** — including arrays (`new int[4]`), `List<T>`, `string`. A `new` **struct**
+  does not (it lives on the stack or inline in its container).
+- **Strings**: concatenation, `$"..."` interpolation, `Substring`, `ToString()` — every one is a
+  fresh string object.
+- **Lambdas that capture**: capturing a *local* builds a closure class + a delegate per call;
+  capturing only `this`/fields skips the closure class but still allocates a **delegate every
+  time**. A lambda that captures *nothing* is cached by the compiler after the first call — and a
+  `static` lambda enforces that at compile time.
+- **LINQ** — delegates + enumerators on almost every operator. Banned on hot paths (the pure core
+  currently contains none — keep it that way).
+- **Boxing**: assigning a value type to `object` *or an interface* (`IComparable c = 5;`),
+  `string.Format` with value-type args, and the sneaky one — **`foreach` over a collection typed
+  as an interface**. `List<T>` has a struct enumerator that `foreach` uses for free, but reach the
+  list through `IReadOnlyList<T>`/`IEnumerable<T>` and that enumerator is **boxed on every loop**.
+- `params` methods (the compiler builds an array per call).
+
+**Free:** `new` structs, `foreach` directly over an array or concretely-typed `List<T>`,
+captureless/`static` lambdas after first use, and indexer access through `IReadOnlyList<T>` —
+only the *enumerator* boxes; `list[i]` doesn't.
+
+House rules that follow, for any per-match / per-week / per-frame path:
+
+- **Iterate hot collections by index** (`for (int i = 0; i < list.Count; i++)`) or store them as a
+  concrete type. Interface types are for the API surface, not the inner loop.
+- **Shared preset data lives in `static readonly` fields, never expression-bodied properties.**
+  `public static Formation F442 => new(...)` re-allocates on *every access* — `=>` on a property
+  is a method body, not a cached value.
+- **Reuse scratch buffers.** A synchronous, single-threaded core can keep one member `List<T>`,
+  `Clear()` it per call, and pre-size it once — instead of `new`-ing it per match.
+- **Reseed, don't re-`new`, the RNG.** A sub-RNG derived per fixture/player is one `ulong` of
+  state; expose `Reseed(seed)` and reuse a single instance.
+- **Sorting**: pass a cached `IComparer<T>` singleton — `List.Sort(Comparison<T>)` wraps the
+  delegate in a fresh comparer object per call on Mono.
+- Compare distances with `sqrMagnitude`, not `Vector3.Distance`, when only the ordering matters.
+
+## 9. Unity API allocation traps
+
+Engine calls that allocate on every use, and their free counterparts:
+
+| Allocates | Use instead |
+|---|---|
+| `go.tag == "X"` (copies the string from native) | `go.CompareTag("X")` |
+| `GetComponents<T>()` (new array per call) | the `GetComponents(cachedList)` overload |
+| `Physics.RaycastAll` | `Physics.RaycastNonAlloc` + prewarmed buffer |
+| `new WaitForSeconds(...)` inside a loop | cache one instance outside the loop |
+| `Debug.Log("hp: " + hp)` on a frame path | log on events, not frames; strip logs from release |
+| repeated `GetComponent<T>` lookups | cache in `Awake`; `TryGetComponent` for the miss case |
+
+`Instantiate`, `StartCoroutine`, and `AddListener`/`+=` also allocate — fine per *action*, wrong
+per *frame* (a per-frame `+=` is a repeated-subscription bug besides). None of this replaces §4's
+pooling rule; it narrows where the remaining allocations may live.
+
+## 10. Unity's GC is Boehm — discipline beats tuning
+
+Unity's runtime does not use the generational .NET GC. It uses **Boehm**: non-generational and
+non-compacting — no Gen0 nursery making small short-lived garbage cheap, no compaction undoing
+fragmentation, and a managed heap that **grows but rarely shrinks back** to the OS. On a phone,
+that expanded heap stays claimed until the app dies. **Incremental GC** slices collection across
+frames, which softens the *spike* but does none of the *work* less — total GC cost still scales
+with how much you allocate. Both properties point the same way: the fix is allocation discipline
+(§4, §8, §9), not GC settings.
+
+## 11. Measure first — on a device
+
+The opening line says profile before optimising; concretely:
+
+- **Profile on the device**, not in the editor. Editor numbers include editor overhead on a
+  desktop CPU/GPU and routinely invert which cost dominates.
+- First decide **CPU-bound or GPU-bound** (Profiler timeline), then optimise only that side.
+- GC: CPU module, **`GC.Alloc` column** (with allocation call stacks / Deep Profile) to find the
+  allocating line. The goal state for an idle frame is a flat **0 B**.
+- **Frame Debugger** answers "why is this 40 draw calls" step by step; a **Memory Profiler**
+  snapshot answers "what is holding this 30 MB".
+- Keep the §3 budgets deliberate: on mobile a capped `targetFrameRate` is also a **thermal and
+  battery** decision — an uncapped game throttles itself into jank.
+
+## 12. Mobile rendering & memory budget (2D / URP)
+
+The habits that matter for this class of game — a 2D URP scene driven by sprites and text:
+
+- **Batching**: URP batches via the **SRP Batcher** (per shader variant, not per material). Keep
+  sprites on the shared sprite shader and pack them into a **sprite atlas**; a stray material or
+  un-atlased texture splits the batch. Watch **SetPass calls**, not just draw calls.
+- **Overdraw** is the 2D killer on mobile **tile-based GPUs**: stacked full-screen transparent
+  sprites shade every pixel they cover, again per layer. Keep backgrounds opaque where possible,
+  use tight sprite meshes (not full-rect), and don't stack full-screen alpha fades.
+- **Texture memory**: compress with **ASTC**; a 2048² RGBA32 texture is ~16 MB *before* mips —
+  budget textures up front, don't discover them in a crash report. Mipmaps **off** for UI and
+  sprites rendered 1:1.
+- **IL2CPP + stripping**: iOS is IL2CPP-only; code stripping removes "unused" types that
+  serialization or reflection actually needed — remember `link.xml` the day a type vanishes only
+  in device builds.
+- **Asset loading**: prefer direct references or Addressables over `Resources/` — `Resources`
+  defeats stripping and memory accounting, and the same asset reached from two roots is resident
+  twice.
