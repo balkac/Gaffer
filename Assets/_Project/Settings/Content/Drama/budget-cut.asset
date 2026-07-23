@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 86e794f0e22149df9736f00cd557f289, type: 3}
+  m_Name: budget-cut
+  m_EditorClassIdentifier: Gaffer.Infrastructure::Gaffer.Infrastructure.Configuration.DramaEventSO
+  slug: budget-cut
+  category: 1
+  titleKey: drama.budget_cut.title
+  bodyKey: drama.budget_cut.body
+  requiresSubject: 0
+  minSubjectAge: 0
+  maxSubjectAge: 0
+  minSubjectRating: 0
+  minSubjectPotentialGap: 0
+  subjectBenched: 0
+  requiredSubjectTraitSlug: 
+  minLossStreak: 0
+  minTablePosition: 0
+  requiresOpenWindow: 0
+  baseWeight: 0.3
+  cooldownWeeks: 38
+  oncePerRun: 0
+  subjectTraitBiases: []
+  squadTraitBiases: []
+  choices:
+  - labelKey: drama.budget_cut.accept
+    effects:
+    - kind: 3
+      magnitude: -0.2
+      durationWeeks: 0
+      traitSlug: 
+  - labelKey: drama.budget_cut.fight_it
+    effects:
+    - kind: 3
+      magnitude: -0.05
+      durationWeeks: 0
+      traitSlug: 
+    - kind: 1
+      magnitude: -1
+      durationWeeks: 4
+      traitSlug: 

@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab457f071c3d44ad89d55b002513bfa0, type: 3}
+  m_Name: TraitCatalog
+  m_EditorClassIdentifier: Gaffer.Infrastructure::Gaffer.Infrastructure.Configuration.TraitCatalogSO
+  traits:
+  - {fileID: 11400000, guid: a25f39bea74934f99b285d8c4560762c, type: 2}
+  - {fileID: 11400000, guid: 632b860aea6ae44f3818aa44cb639be0, type: 2}
+  - {fileID: 11400000, guid: f981c6cd217c84cdb8fe7876c4c9dae5, type: 2}
+  - {fileID: 11400000, guid: cc00095b0d038492cad8f22f301493f4, type: 2}
+  - {fileID: 11400000, guid: 81ec0432597994427abc2aeec1f024fc, type: 2}
+  - {fileID: 11400000, guid: eaa598f9194124b7390b4fc37f54ad82, type: 2}
+  - {fileID: 11400000, guid: b5139a9c4ce484e2f9baff75de368d9a, type: 2}
+  - {fileID: 11400000, guid: c9453c6f5229e4309a014699f79f047e, type: 2}
+  - {fileID: 11400000, guid: d4c15f96847114de1a2cbe89810a2679, type: 2}

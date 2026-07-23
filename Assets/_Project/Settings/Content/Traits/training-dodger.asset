@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8e4270d244054d8aa676dc7c8f979b96, type: 3}
+  m_Name: training-dodger
+  m_EditorClassIdentifier: Gaffer.Infrastructure::Gaffer.Infrastructure.Configuration.TraitSO
+  slug: training-dodger
+  nameKey: trait.training_dodger.name
+  assignmentWeight: 1
+  onDerby: 0
+  onRivalry: 0
+  onFinal: 0
+  onTitleDecider: 0
+  onRelegationSixPointer: 0
+  bigCrowdThreshold: 0
+  matchMultiplier: 1
+  teammateAura: 1
+  growthMultiplier: 0.5
+  declineOnsetShift: 0
+  declineRateMultiplier: 1

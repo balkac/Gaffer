@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8e4270d244054d8aa676dc7c8f979b96, type: 3}
+  m_Name: big-game-bottler
+  m_EditorClassIdentifier: Gaffer.Infrastructure::Gaffer.Infrastructure.Configuration.TraitSO
+  slug: big-game-bottler
+  nameKey: trait.big_game_bottler.name
+  assignmentWeight: 1
+  onDerby: 1
+  onRivalry: 1
+  onFinal: 1
+  onTitleDecider: 1
+  onRelegationSixPointer: 1
+  bigCrowdThreshold: 0
+  matchMultiplier: 0.88
+  teammateAura: 1
+  growthMultiplier: 1
+  declineOnsetShift: 0
+  declineRateMultiplier: 1

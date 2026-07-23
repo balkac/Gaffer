@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 86e794f0e22149df9736f00cd557f289, type: 3}
+  m_Name: transfer-request
+  m_EditorClassIdentifier: Gaffer.Infrastructure::Gaffer.Infrastructure.Configuration.DramaEventSO
+  slug: transfer-request
+  category: 0
+  titleKey: drama.transfer_request.title
+  bodyKey: drama.transfer_request.body
+  requiresSubject: 1
+  minSubjectAge: 0
+  maxSubjectAge: 0
+  minSubjectRating: 66
+  minSubjectPotentialGap: 0
+  subjectBenched: 0
+  requiredSubjectTraitSlug: 
+  minLossStreak: 0
+  minTablePosition: 0
+  requiresOpenWindow: 1
+  baseWeight: 1
+  cooldownWeeks: 16
+  oncePerRun: 0
+  subjectTraitBiases:
+  - traitSlug: loyal
+    weightMultiplier: 0.2
+  squadTraitBiases: []
+  choices:
+  - labelKey: drama.transfer_request.refuse
+    effects:
+    - kind: 0
+      magnitude: -4
+      durationWeeks: 8
+      traitSlug: 
+  - labelKey: drama.transfer_request.sell
+    effects:
+    - kind: 5
+      magnitude: 0
+      durationWeeks: 0
+      traitSlug: 
+  - labelKey: drama.transfer_request.persuade
+    effects:
+    - kind: 0
+      magnitude: 2
+      durationWeeks: 4
+      traitSlug: 
+    - kind: 2
+      magnitude: -250000
+      durationWeeks: 0
+      traitSlug: 

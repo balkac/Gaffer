@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21e16f6d35f940c3bc54fb0a33fcb0f9, type: 3}
+  m_Name: DramaCatalog
+  m_EditorClassIdentifier: Gaffer.Infrastructure::Gaffer.Infrastructure.Configuration.DramaCatalogSO
+  events:
+  - {fileID: 11400000, guid: 07787881897294a749db8741c10d45ba, type: 2}
+  - {fileID: 11400000, guid: 85c377c800ae54d809533619ec1728fb, type: 2}
+  - {fileID: 11400000, guid: 5cc163325ba0a403ba88bfcb5d387cda, type: 2}
+  - {fileID: 11400000, guid: c0897db9a0156405f93f698c56d9f7eb, type: 2}
+  - {fileID: 11400000, guid: 1cfbb23fccf92445dbf502d50746c9d7, type: 2}
+  - {fileID: 11400000, guid: ac4fd0858181c4b5e9cd58df0d316f4f, type: 2}
+  - {fileID: 11400000, guid: 2c1ea414108e4443e94a51fe6ae72d79, type: 2}
+  - {fileID: 11400000, guid: e7e712a68c479465c9307374b1ed2033, type: 2}
+  - {fileID: 11400000, guid: 9fcdb16fc6aaa403d93ebe61efdc6803, type: 2}
+  - {fileID: 11400000, guid: db85bba69fe324b1bac2d6a75cea9f97, type: 2}
