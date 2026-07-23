@@ -18,6 +18,11 @@ namespace Gaffer.Application.Simulation
 
         private readonly MatchSimulationSettings _settings;
 
+        // Scratch buffer reused across matches (cleared per call) so the per-match path allocates
+        // nothing (PERFORMANCE §8). The returned list is valid until the next GenerateChances call —
+        // the simulator consumes it synchronously before simulating the next match.
+        private readonly List<Chance> _chances = new List<Chance>(32);
+
         public PoissonChanceGenerator(MatchSimulationSettings settings)
         {
             _settings = settings;
@@ -25,7 +30,8 @@ namespace Gaffer.Application.Simulation
 
         public IReadOnlyList<Chance> GenerateChances(MatchCommand command, IRandom rng)
         {
-            var chances = new List<Chance>();
+            List<Chance> chances = _chances;
+            chances.Clear();
             double homePossession = ComputePossession(command.Home.Midfield, command.Away.Midfield);
 
             AppendSideChances(chances, TeamSide.Home, command.Home.Attack, command.Away.Defence, homePossession, _settings.HomeAdvantage, command.HomeProfile, rng);

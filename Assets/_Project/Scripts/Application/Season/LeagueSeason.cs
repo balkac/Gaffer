@@ -26,6 +26,11 @@ namespace Gaffer.Application.Season
         private readonly LineupSelector _lineupSelector;
         private readonly LeagueTable _table;
         private readonly List<MatchResult> _playedResults;
+
+        // One generator reseeded per fixture instead of a fresh instance per match — the doc's
+        // reseed-don't-re-new rule (PERFORMANCE §8). Reseeding is identical to constructing anew,
+        // so the per-fixture streams (and determinism) are unchanged.
+        private readonly SplitMix64RandomNumberGenerator _matchRng = new SplitMix64RandomNumberGenerator(0);
         private int _currentRound;
 
         public LeagueSeason(League league)
@@ -142,14 +147,16 @@ namespace Gaffer.Application.Season
 
         public WeekResult AdvanceWeek(MatchSimulator simulator, MatchContext context, ulong seasonSeed)
         {
-            var matches = new List<MatchResult>();
             if (IsComplete)
             {
-                return new WeekResult(_currentRound, matches);
+                return new WeekResult(_currentRound, new List<MatchResult>());
             }
 
-            foreach (Fixture fixture in _fixturesByRound[_currentRound])
+            List<Fixture> roundFixtures = _fixturesByRound[_currentRound];
+            var matches = new List<MatchResult>(roundFixtures.Count);
+            for (int i = 0; i < roundFixtures.Count; i++)
             {
+                Fixture fixture = roundFixtures[i];
                 Club home = _clubsById[fixture.Home];
                 Club away = _clubsById[fixture.Away];
                 var command = new MatchCommand(
@@ -158,12 +165,11 @@ namespace Gaffer.Application.Season
                     ProfileOf(home.Id), ProfileOf(away.Id),
                     context);
 
-                // Each match gets its own rng, seeded from a stable function of the fixture's identity, so a
-                // change to one club's tactics only reshapes its own matches — the rest of the league's
+                // Each match gets its own rng stream, seeded from a stable function of the fixture's identity,
+                // so a change to one club's tactics only reshapes its own matches — the rest of the league's
                 // results stay byte-identical, and a resumed save reproduces the remaining fixtures exactly.
-                var matchRng = new SplitMix64RandomNumberGenerator(
-                    MixSeed(seasonSeed, _currentRound, fixture.Home.Value, fixture.Away.Value));
-                MatchOutcome outcome = simulator.Simulate(command, matchRng);
+                _matchRng.Reseed(MixSeed(seasonSeed, _currentRound, fixture.Home.Value, fixture.Away.Value));
+                MatchOutcome outcome = simulator.Simulate(command, _matchRng);
 
                 _table.RecordMatch(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals);
                 matches.Add(new MatchResult(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals, outcome.HomeShots, outcome.AwayShots, outcome.Events));

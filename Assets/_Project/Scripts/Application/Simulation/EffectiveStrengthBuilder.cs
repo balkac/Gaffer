@@ -63,9 +63,9 @@ namespace Gaffer.Application.Simulation
             // A leader's aura reaches his teammates, not himself: the combined product over the lineup is
             // divided back out per player, so fielding the leader is felt by the other ten.
             double lineupAura = 1.0;
-            foreach (Player player in players)
+            for (int i = 0; i < players.Count; i++)
             {
-                lineupAura *= AuraOf(player);
+                lineupAura *= AuraOf(players[i]);
             }
 
             double lineupTotal = 0.0;
@@ -77,8 +77,10 @@ namespace Gaffer.Application.Simulation
             double defensiveTotal = 0.0;
             int defensiveCount = 0;
 
-            foreach (Player player in players)
+            for (int i = 0; i < players.Count; i++)
             {
+                Player player = players[i];
+
                 // Each player is scored on his own role, then contributes that single rating to the axis of
                 // the line he mans — no cross-axis scoring, so a role's rating means the same thing everywhere.
                 double rating = PlayerRatings.ForRole(player)
@@ -139,9 +141,10 @@ namespace Gaffer.Application.Simulation
         private double ContextMultiplier(Player player, in MatchContext context)
         {
             double multiplier = 1.0;
-            foreach (TraitId id in player.Traits)
+            IReadOnlyList<TraitId> traits = player.Traits;
+            for (int i = 0; i < traits.Count; i++)
             {
-                Trait trait = _traits.Find(id);
+                Trait trait = _traits.Find(traits[i]);
                 if (trait != null && Applies(trait.Match, context))
                 {
                     multiplier *= trait.Match.Multiplier;
@@ -197,9 +200,10 @@ namespace Gaffer.Application.Simulation
         private double AuraOf(Player player)
         {
             double aura = 1.0;
-            foreach (TraitId id in player.Traits)
+            IReadOnlyList<TraitId> traits = player.Traits;
+            for (int i = 0; i < traits.Count; i++)
             {
-                Trait trait = _traits.Find(id);
+                Trait trait = _traits.Find(traits[i]);
                 if (trait != null)
                 {
                     aura *= trait.TeammateAura;

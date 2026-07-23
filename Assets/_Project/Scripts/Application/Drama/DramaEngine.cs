@@ -25,6 +25,10 @@ namespace Gaffer.Application.Drama
 
         private readonly Dictionary<DramaEventId, int> _lastFiredWeek = new Dictionary<DramaEventId, int>();
         private readonly HashSet<DramaEventId> _firedEver = new HashSet<DramaEventId>();
+
+        // Scratch buffer for the weekly candidate collection, reused across ticks (cleared per call)
+        // so a quiet week allocates nothing (PERFORMANCE §8). Valid until the next TickWeek call.
+        private readonly List<Candidate> _candidateScratch = new List<Candidate>(16);
         private int _week;
         // Far enough back that the first week is never gap-blocked, small enough that the subtraction
         // in the gap check can never overflow.
@@ -214,9 +218,13 @@ namespace Gaffer.Application.Drama
 
         private List<Candidate> CollectCandidates(DramaWeekContext context)
         {
-            var candidates = new List<Candidate>();
-            foreach (DramaEvent dramaEvent in _catalog.Events)
+            List<Candidate> candidates = _candidateScratch;
+            candidates.Clear();
+            IReadOnlyList<DramaEvent> events = _catalog.Events;
+            IReadOnlyList<Player> squad = context.Squad;
+            for (int eventIndex = 0; eventIndex < events.Count; eventIndex++)
             {
+                DramaEvent dramaEvent = events[eventIndex];
                 if (dramaEvent.OncePerRun && _firedEver.Contains(dramaEvent.Id))
                 {
                     continue;
@@ -233,15 +241,16 @@ namespace Gaffer.Application.Drama
                     continue;
                 }
 
-                double squadBias = SquadBias(dramaEvent, context.Squad);
+                double squadBias = SquadBias(dramaEvent, squad);
                 if (!dramaEvent.RequiresSubject)
                 {
                     candidates.Add(new Candidate(dramaEvent, null, dramaEvent.BaseWeight * squadBias));
                     continue;
                 }
 
-                foreach (Player player in context.Squad)
+                for (int playerIndex = 0; playerIndex < squad.Count; playerIndex++)
                 {
+                    Player player = squad[playerIndex];
                     if (!SubjectMatches(dramaEvent.Trigger, player, context))
                     {
                         continue;
@@ -313,9 +322,9 @@ namespace Gaffer.Application.Drama
 
         private static bool IsStarter(Player player, IReadOnlyList<Player> starters)
         {
-            foreach (Player starter in starters)
+            for (int i = 0; i < starters.Count; i++)
             {
-                if (starter.Id == player.Id)
+                if (starters[i].Id == player.Id)
                 {
                     return true;
                 }
@@ -327,11 +336,12 @@ namespace Gaffer.Application.Drama
         private static double SubjectBias(DramaEvent dramaEvent, Player player)
         {
             double bias = 1.0;
-            foreach (DramaTraitBias traitBias in dramaEvent.SubjectTraitBiases)
+            IReadOnlyList<DramaTraitBias> biases = dramaEvent.SubjectTraitBiases;
+            for (int i = 0; i < biases.Count; i++)
             {
-                if (Carries(player, traitBias.Trait))
+                if (Carries(player, biases[i].Trait))
                 {
-                    bias *= traitBias.WeightMultiplier;
+                    bias *= biases[i].WeightMultiplier;
                 }
             }
 
@@ -341,13 +351,14 @@ namespace Gaffer.Application.Drama
         private static double SquadBias(DramaEvent dramaEvent, IReadOnlyList<Player> squad)
         {
             double bias = 1.0;
-            foreach (DramaTraitBias traitBias in dramaEvent.SquadTraitBiases)
+            IReadOnlyList<DramaTraitBias> biases = dramaEvent.SquadTraitBiases;
+            for (int i = 0; i < biases.Count; i++)
             {
-                foreach (Player player in squad)
+                for (int playerIndex = 0; playerIndex < squad.Count; playerIndex++)
                 {
-                    if (Carries(player, traitBias.Trait))
+                    if (Carries(squad[playerIndex], biases[i].Trait))
                     {
-                        bias *= traitBias.WeightMultiplier;
+                        bias *= biases[i].WeightMultiplier;
                         break;
                     }
                 }
@@ -358,9 +369,10 @@ namespace Gaffer.Application.Drama
 
         private static bool Carries(Player player, TraitId trait)
         {
-            foreach (TraitId id in player.Traits)
+            IReadOnlyList<TraitId> traits = player.Traits;
+            for (int i = 0; i < traits.Count; i++)
             {
-                if (id == trait)
+                if (traits[i] == trait)
                 {
                     return true;
                 }

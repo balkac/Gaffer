@@ -24,6 +24,16 @@ namespace Gaffer.Common
         /// <summary>The current internal state — capture it to resume the exact stream after a save/load.</summary>
         public ulong State => _state;
 
+        /// <summary>
+        /// Restarts the stream from <paramref name="seed"/> — identical to constructing a new instance,
+        /// so per-fixture/per-player sub-streams reuse one generator instead of allocating one each
+        /// (PERFORMANCE §8).
+        /// </summary>
+        public void Reseed(ulong seed)
+        {
+            _state = seed;
+        }
+
         public ulong NextUInt64()
         {
             unchecked

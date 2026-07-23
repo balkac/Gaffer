@@ -24,6 +24,10 @@ namespace Gaffer.Application.Drama
 
         private readonly Dictionary<PlayerId, List<Entry>> _entries = new Dictionary<PlayerId, List<Entry>>();
 
+        // Scratch for the players whose entries all expired this tick, reused across weeks (cleared
+        // per call) so an uneventful tick allocates nothing (PERFORMANCE §8).
+        private readonly List<PlayerId> _emptiedScratch = new List<PlayerId>();
+
         /// <summary>Adds signed morale points on the player for the coming weeks; stacks with what is live.</summary>
         public void Apply(PlayerId player, double points, int weeks)
         {
@@ -76,7 +80,8 @@ namespace Gaffer.Application.Drama
         /// <summary>Ages every entry a week and drops the expired — call once per played round.</summary>
         public void TickWeek()
         {
-            var emptied = new List<PlayerId>();
+            List<PlayerId> emptied = _emptiedScratch;
+            emptied.Clear();
             foreach (KeyValuePair<PlayerId, List<Entry>> pair in _entries)
             {
                 List<Entry> list = pair.Value;
@@ -100,9 +105,9 @@ namespace Gaffer.Application.Drama
                 }
             }
 
-            foreach (PlayerId player in emptied)
+            for (int i = 0; i < emptied.Count; i++)
             {
-                _entries.Remove(player);
+                _entries.Remove(emptied[i]);
             }
         }
     }

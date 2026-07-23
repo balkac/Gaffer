@@ -26,6 +26,10 @@ namespace Gaffer.Application.Season
         private readonly SquadRenewal _renewal;
         private readonly int _gemCadenceSeasons;
 
+        // Reseeded per player instead of newed per player (PERFORMANCE §8) — the per-player streams
+        // and determinism are unchanged.
+        private readonly SplitMix64RandomNumberGenerator _playerRng = new SplitMix64RandomNumberGenerator(0);
+
         public SeasonTransition()
             : this(DevelopmentSettings.Default, RenewalSettings.Default)
         {
@@ -66,8 +70,9 @@ namespace Gaffer.Application.Season
             int nextPlayerId = MaxPlayerId(league) + 1;
 
             var clubs = new List<Club>(league.Clubs.Count);
-            foreach (Club club in league.Clubs)
+            for (int i = 0; i < league.Clubs.Count; i++)
             {
+                Club club = league.Clubs[i];
                 if (club.Squad == null)
                 {
                     clubs.Add(club);
@@ -95,18 +100,20 @@ namespace Gaffer.Application.Season
         private static int MaxPlayerId(League league)
         {
             int max = -1;
-            foreach (Club club in league.Clubs)
+            for (int i = 0; i < league.Clubs.Count; i++)
             {
+                Club club = league.Clubs[i];
                 if (club.Squad == null)
                 {
                     continue;
                 }
 
-                foreach (Player player in club.Squad.Players)
+                IReadOnlyList<Player> squadPlayers = club.Squad.Players;
+                for (int j = 0; j < squadPlayers.Count; j++)
                 {
-                    if (player.Id.Value > max)
+                    if (squadPlayers[j].Id.Value > max)
                     {
-                        max = player.Id.Value;
+                        max = squadPlayers[j].Id.Value;
                     }
                 }
             }
@@ -116,11 +123,13 @@ namespace Gaffer.Application.Season
 
         private Squad DevelopSquad(Squad squad, ulong seasonSeed, int seasonNumber)
         {
-            var players = new List<Player>(squad.Players.Count);
-            foreach (Player player in squad.Players)
+            IReadOnlyList<Player> squadPlayers = squad.Players;
+            var players = new List<Player>(squadPlayers.Count);
+            for (int i = 0; i < squadPlayers.Count; i++)
             {
-                var rng = new SplitMix64RandomNumberGenerator(MixSeed(seasonSeed, player.Id.Value, seasonNumber));
-                players.Add(_development.Develop(player, rng));
+                Player player = squadPlayers[i];
+                _playerRng.Reseed(MixSeed(seasonSeed, player.Id.Value, seasonNumber));
+                players.Add(_development.Develop(player, _playerRng));
             }
 
             return new Squad(players);
