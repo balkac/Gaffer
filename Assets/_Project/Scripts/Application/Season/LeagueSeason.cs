@@ -22,6 +22,7 @@ namespace Gaffer.Application.Season
         private readonly Dictionary<ClubId, Tactics> _tacticsByClub;
         private readonly Dictionary<ClubId, Formation> _formationByClub;
         private readonly Dictionary<ClubId, IReadOnlyList<Player>> _startersByClub;
+        private readonly TacticsSettings _tacticsSettings;
         private readonly EffectiveStrengthBuilder _strengthBuilder;
         private readonly LineupSelector _lineupSelector;
         private readonly LeagueTable _table;
@@ -34,13 +35,21 @@ namespace Gaffer.Application.Season
         private int _currentRound;
 
         public LeagueSeason(League league)
-            : this(league, null)
+            : this(league, null, null, null)
         {
         }
 
         /// <summary>Runs the season on a specific trait catalog (from config assets) — the strength step
         /// resolves each player's traits through it. Null falls back to the built-in default.</summary>
         public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits)
+            : this(league, traits, null, null)
+        {
+        }
+
+        /// <summary>Also takes tactics and morale balance (from config assets): tactics settings shape
+        /// how far mentality/pressing/tempo/approach bend each club's strength and chance profile, and
+        /// morale settings how hard drama bites on the pitch. Nulls fall back to the calibrated defaults.</summary>
+        public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits, TacticsSettings tacticsSettings, MoraleSettings moraleSettings)
         {
             _clubsById = new Dictionary<ClubId, Club>(league.Clubs.Count);
             var clubIds = new List<ClubId>(league.Clubs.Count);
@@ -66,11 +75,12 @@ namespace Gaffer.Application.Season
             _tacticsByClub = new Dictionary<ClubId, Tactics>();
             _formationByClub = new Dictionary<ClubId, Formation>();
             _startersByClub = new Dictionary<ClubId, IReadOnlyList<Player>>();
-            _strengthBuilder = traits == null ? new EffectiveStrengthBuilder() : new EffectiveStrengthBuilder(traits);
+            _tacticsSettings = tacticsSettings ?? TacticsSettings.Default;
+            _strengthBuilder = new EffectiveStrengthBuilder(traits ?? Gaffer.Domain.Traits.TraitCatalog.Default, _tacticsSettings);
             _lineupSelector = new LineupSelector();
             _table = new LeagueTable(clubIds);
             _playedResults = new List<MatchResult>();
-            Morale = new MoraleLedger();
+            Morale = new MoraleLedger(moraleSettings);
         }
 
         /// <summary>
@@ -132,9 +142,9 @@ namespace Gaffer.Application.Season
         public IReadOnlyList<MatchResult> PlayedResults => _playedResults;
 
         /// <summary>Rebuilds a season part-way through from its saved result history (save/load).</summary>
-        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults, Gaffer.Domain.Traits.TraitCatalog traits = null)
+        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults, Gaffer.Domain.Traits.TraitCatalog traits = null, TacticsSettings tacticsSettings = null, MoraleSettings moraleSettings = null)
         {
-            var season = new LeagueSeason(league, traits);
+            var season = new LeagueSeason(league, traits, tacticsSettings, moraleSettings);
             foreach (MatchResult result in playedResults)
             {
                 season._table.RecordMatch(result.Home, result.Away, result.HomeGoals, result.AwayGoals);
@@ -237,7 +247,7 @@ namespace Gaffer.Application.Season
 
         private ChanceProfile ProfileOf(ClubId club)
         {
-            return ChanceProfile.FromTactics(TacticsOf(club));
+            return ChanceProfile.FromTactics(TacticsOf(club), _tacticsSettings);
         }
     }
 }

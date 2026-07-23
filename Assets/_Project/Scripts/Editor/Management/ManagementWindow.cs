@@ -84,6 +84,7 @@ namespace Gaffer.Editor.Management
         private SimulationBalanceSO _simulationBalance;
         private DevelopmentBalanceSO _developmentBalance;
         private RenewalBalanceSO _renewalBalance;
+        private EconomyBalanceSO _economyBalance;
 
         private DramaEngine _drama;
         private PendingDrama _pendingDrama;
@@ -110,6 +111,7 @@ namespace Gaffer.Editor.Management
             _developmentBalance = _developmentBalance != null ? _developmentBalance : BalanceAssets.Development();
             _renewalBalance = _renewalBalance != null ? _renewalBalance : BalanceAssets.Renewal();
             _dramaBalance = _dramaBalance != null ? _dramaBalance : BalanceAssets.Drama();
+            _economyBalance = _economyBalance != null ? _economyBalance : BalanceAssets.Economy();
             _traitCatalog = _traitCatalog != null ? _traitCatalog : ContentAssets.Traits();
             _dramaCatalog = _dramaCatalog != null ? _dramaCatalog : ContentAssets.Drama();
 
@@ -215,6 +217,9 @@ namespace Gaffer.Editor.Management
             var dramaBalanceField = new ObjectField("Drama balance") { objectType = typeof(DramaBalanceSO), value = _dramaBalance };
             dramaBalanceField.RegisterValueChangedCallback(e => _dramaBalance = e.newValue as DramaBalanceSO);
             card.Add(dramaBalanceField);
+            var economyField = new ObjectField("Economy balance") { objectType = typeof(EconomyBalanceSO), value = _economyBalance };
+            economyField.RegisterValueChangedCallback(e => _economyBalance = e.newValue as EconomyBalanceSO);
+            card.Add(economyField);
 
             card.Add(MakeLabel("Content (optional — assign Gaffer/Content catalogs to override the built-ins)", 10, HarnessPalette.Muted));
             var traitCatalogField = new ObjectField("Trait catalog") { objectType = typeof(TraitCatalogSO), value = _traitCatalog };
@@ -262,6 +267,26 @@ namespace Gaffer.Editor.Management
             return _dramaBalance != null ? _dramaBalance.ToSettings() : DramaSettings.Default;
         }
 
+        private TacticsSettings TacticsTuning()
+        {
+            return _simulationBalance != null ? _simulationBalance.ToTacticsSettings() : TacticsSettings.Default;
+        }
+
+        private ScorerWeights ScorerTuning()
+        {
+            return _simulationBalance != null ? _simulationBalance.ToScorerWeights() : ScorerWeights.Default;
+        }
+
+        private MoraleSettings MoraleTuning()
+        {
+            return _dramaBalance != null ? _dramaBalance.ToMoraleSettings() : MoraleSettings.Default;
+        }
+
+        private EconomySettings EconomyTuning()
+        {
+            return _economyBalance != null ? _economyBalance.ToSettings() : EconomySettings.Default;
+        }
+
         private Gaffer.Domain.Traits.TraitCatalog Traits()
         {
             return _traitCatalog != null ? _traitCatalog.ToCatalog() : Gaffer.Domain.Traits.TraitCatalog.Default;
@@ -276,10 +301,11 @@ namespace Gaffer.Editor.Management
         {
             int count = Mathf.Clamp(_teamCount, 4, MaxTeams);
             _league = BuildLeague(count);
-            _season = new LeagueSeason(_league, Traits());
+            _season = new LeagueSeason(_league, Traits(), TacticsTuning(), MoraleTuning());
             _simulator = new MatchSimulator(
                 new PoissonChanceGenerator(SimSettings()),
-                new QualityChanceResolver());
+                new QualityChanceResolver(),
+                new WeightedScorerSelector(ScorerTuning()));
             _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
             _managedClub = new ClubId(Mathf.Clamp(_managedIndex, 0, count - 1));
             _target = new BoardTarget(_promotionPosition, _survivalPosition);
@@ -291,7 +317,7 @@ namespace Gaffer.Editor.Management
             _market = GenerateMarket();
             _transferStatus = null;
 
-            _drama = new DramaEngine(DramaEvents(), DramaBalance());
+            _drama = new DramaEngine(DramaEvents(), DramaBalance(), EconomyTuning());
             _pendingDrama = null;
             _dramaStatus = null;
 
@@ -334,14 +360,15 @@ namespace Gaffer.Editor.Management
             return new Player(new PlayerId(id), p.Name, p.Nationality, p.Role, p.Age, p.Attributes, p.HiddenPotential, p.Traits);
         }
 
-        private static long TotalWages(Squad squad)
+        private long TotalWages(Squad squad)
         {
             long total = 0;
             if (squad != null)
             {
+                EconomySettings economy = EconomyTuning();
                 foreach (Player player in squad.Players)
                 {
-                    total += PlayerWage.Weekly(player);
+                    total += PlayerWage.Weekly(player, economy);
                 }
             }
 
@@ -359,7 +386,7 @@ namespace Gaffer.Editor.Management
 
             _seasonNumber++;
             _league = new SeasonTransition(DevSettings(), RenewSettings(), Traits()).ToNextSeason(_league, (ulong)_seed, _seasonNumber);
-            _season = new LeagueSeason(_league, Traits());
+            _season = new LeagueSeason(_league, Traits(), TacticsTuning(), MoraleTuning());
             ComputeSummer(before, ManagedSquad().Players);
 
             _finances = new Finances(_finances.Cash, _wageBudget, TotalWages(ManagedSquad()));
@@ -425,7 +452,7 @@ namespace Gaffer.Editor.Management
                 return;
             }
 
-            RestoredSeason restored = new SeasonSaveMapper().Restore(loaded.Value, Traits());
+            RestoredSeason restored = new SeasonSaveMapper().Restore(loaded.Value, Traits(), TacticsTuning(), MoraleTuning());
             _league = restored.League;
             _season = restored.Season;
             _seasonNumber = restored.SeasonNumber < 1 ? 1 : restored.SeasonNumber;
@@ -438,7 +465,7 @@ namespace Gaffer.Editor.Management
             _transferStatus = null;
 
             // Drama engine state (cooldowns, budget) is transient like the economy — a reload starts quiet.
-            _drama = new DramaEngine(DramaEvents(), DramaBalance());
+            _drama = new DramaEngine(DramaEvents(), DramaBalance(), EconomyTuning());
             _pendingDrama = null;
             _dramaStatus = null;
 
@@ -464,7 +491,8 @@ namespace Gaffer.Editor.Management
         {
             _simulator = new MatchSimulator(
                 new PoissonChanceGenerator(SimSettings()),
-                new QualityChanceResolver());
+                new QualityChanceResolver(),
+                new WeightedScorerSelector(ScorerTuning()));
             _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
             _target = new BoardTarget(_promotionPosition, _survivalPosition);
         }
@@ -532,7 +560,7 @@ namespace Gaffer.Editor.Management
                 return;
             }
 
-            Result<TransferResult> result = TransferService.Sign(_finances, ManagedSquad(), player);
+            Result<TransferResult> result = TransferService.Sign(_finances, ManagedSquad(), player, EconomyTuning());
             if (result.IsFailure)
             {
                 _transferStatus = result.Error;
@@ -547,7 +575,7 @@ namespace Gaffer.Editor.Management
             AutoPickStarters();
             _season.SetStarters(_managedClub, CurrentStarters());
             _transferStatus = "Signed " + player.Name + " for " + FormatValue(result.Value.Fee) +
-                " (" + FormatValue(PlayerWage.Weekly(player)) + "/wk).";
+                " (" + FormatValue(PlayerWage.Weekly(player, EconomyTuning())) + "/wk).";
             Refresh();
         }
 
@@ -560,7 +588,7 @@ namespace Gaffer.Editor.Management
                 return;
             }
 
-            Result<TransferResult> result = TransferService.Sell(_finances, ManagedSquad(), player);
+            Result<TransferResult> result = TransferService.Sell(_finances, ManagedSquad(), player, EconomyTuning());
             if (result.IsFailure)
             {
                 _transferStatus = result.Error;
@@ -876,7 +904,7 @@ namespace Gaffer.Editor.Management
 
             if (outcome.PlayerToSell != null)
             {
-                Result<TransferResult> sale = TransferService.Sell(_finances, ManagedSquad(), outcome.PlayerToSell);
+                Result<TransferResult> sale = TransferService.Sell(_finances, ManagedSquad(), outcome.PlayerToSell, EconomyTuning());
                 if (sale.IsSuccess)
                 {
                     _finances = sale.Value.Finances;
@@ -1648,7 +1676,7 @@ namespace Gaffer.Editor.Management
                 if (canSell)
                 {
                     Player target = player;
-                    var sell = new Button(() => Sell(target)) { text = "Sell " + FormatValue(TransferService.Fee(player)) };
+                    var sell = new Button(() => Sell(target)) { text = "Sell " + FormatValue(TransferService.Fee(player, EconomyTuning())) };
                     StyleActionButton(sell, HarnessPalette.Loss);
                     sell.style.marginLeft = 8;
                     row.Add(sell);
@@ -1831,10 +1859,10 @@ namespace Gaffer.Editor.Management
                 line.Add(name);
                 line.Add(TraitBadges(player));
                 line.Add(MakeLabel("OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(player)) + "   ", 12, HarnessPalette.Accent, bold: true));
-                line.Add(MakeLabel(FormatValue(PlayerValuation.Value(player)) + " · " + FormatValue(PlayerWage.Weekly(player)) + "/wk   ", 11, HarnessPalette.Muted));
+                line.Add(MakeLabel(FormatValue(PlayerValuation.Value(player, EconomyTuning())) + " · " + FormatValue(PlayerWage.Weekly(player, EconomyTuning())) + "/wk   ", 11, HarnessPalette.Muted));
 
                 Player target = player;
-                var sign = new Button(() => Sign(target)) { text = "Sign " + FormatValue(TransferService.Fee(player)) };
+                var sign = new Button(() => Sign(target)) { text = "Sign " + FormatValue(TransferService.Fee(player, EconomyTuning())) };
                 StyleActionButton(sign, HarnessPalette.Accent);
                 line.Add(sign);
                 row.Add(line);

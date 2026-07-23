@@ -14,7 +14,6 @@ namespace Gaffer.Application.Simulation
     {
         private const int MinuteFirst = 1;
         private const int MinuteAfterLast = 91;
-        private const double MaxChanceQuality = 0.95;
 
         private readonly MatchSimulationSettings _settings;
 
@@ -67,10 +66,12 @@ namespace Gaffer.Application.Simulation
 
         private double ComputeChanceQuality(double qualityMultiplier, IRandom rng)
         {
-            // Vary quality 0.5×–1.5× the tuned mean, scaled by the tactical profile (the counter sharpens
-            // it), capped below 1 so no chance is a certainty.
-            double quality = _settings.MeanChanceQuality * qualityMultiplier * (0.5 + rng.NextDouble());
-            return Math.Min(quality, MaxChanceQuality);
+            // Vary quality around the tuned mean (±variance), scaled by the tactical profile (the counter
+            // sharpens it), capped so no chance is a certainty.
+            double variance = _settings.ChanceQualityVariance;
+            double spread = (1.0 - variance) + (rng.NextDouble() * 2.0 * variance);
+            double quality = _settings.MeanChanceQuality * qualityMultiplier * spread;
+            return Math.Min(quality, _settings.MaxChanceQuality);
         }
 
         private double ClampRatio(double ratio)

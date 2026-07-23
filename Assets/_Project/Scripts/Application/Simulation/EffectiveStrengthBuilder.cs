@@ -15,20 +15,30 @@ namespace Gaffer.Application.Simulation
     /// empty line falls back to the whole-lineup average of that rating, so the result is always plausible
     /// and never divides by zero. Traits modulate each player's rating here — the step that binds character
     /// to the match (TDD §6): a context trait answers the stakes in the <see cref="MatchContext"/>, and a
-    /// leader's aura lifts every teammate. Tactics shift the axes; form follows. Weights tune into a BalanceSO.
+    /// leader's aura lifts every teammate. Tactics shift the axes through the injected
+    /// <see cref="TacticsSettings"/> (data-driven, NON-NEGOTIABLE #3); form follows.
     /// </summary>
     public sealed class EffectiveStrengthBuilder
     {
         private readonly TraitCatalog _traits;
+        private readonly TacticsSettings _tactics;
 
         public EffectiveStrengthBuilder()
-            : this(TraitCatalog.Default)
+            : this(TraitCatalog.Default, TacticsSettings.Default)
         {
         }
 
         public EffectiveStrengthBuilder(TraitCatalog traits)
+            : this(traits, TacticsSettings.Default)
+        {
+        }
+
+        /// <summary>Builds with specific tactics balance (from a config asset) shaping how far mentality
+        /// and pressing bend the axes. Null falls back to the calibrated defaults.</summary>
+        public EffectiveStrengthBuilder(TraitCatalog traits, TacticsSettings tactics)
         {
             _traits = traits;
+            _tactics = tactics ?? TacticsSettings.Default;
         }
 
         public TeamStrength Build(Squad squad)
@@ -117,15 +127,15 @@ namespace Gaffer.Application.Simulation
         // Mentality and pressing shift the base axes multiplicatively; a Balanced setup (scales 0) is the
         // identity. Attacking mentality trades defence for attack; a high press wins the midfield but
         // exposes the line. Tempo and approach do not touch strength — they shape the ChanceProfile
-        // instead, so each axis stays mechanically distinct. Weights tune into a BalanceSO later.
-        private static TeamStrength ApplyTactics(double attack, double midfield, double defence, Tactics tactics)
+        // instead, so each axis stays mechanically distinct. The step sizes come from TacticsSettings.
+        private TeamStrength ApplyTactics(double attack, double midfield, double defence, Tactics tactics)
         {
             int mentality = tactics.MentalityScale;
             int pressing = tactics.PressingScale;
 
-            double attackMult = 1.0 + (0.09 * mentality);
-            double midfieldMult = 1.0 + (0.09 * pressing);
-            double defenceMult = (1.0 - (0.07 * mentality)) * (1.0 - (0.04 * pressing));
+            double attackMult = 1.0 + (_tactics.MentalityAttackStep * mentality);
+            double midfieldMult = 1.0 + (_tactics.PressingMidfieldStep * pressing);
+            double defenceMult = (1.0 - (_tactics.MentalityDefenceStep * mentality)) * (1.0 - (_tactics.PressingDefenceStep * pressing));
 
             return new TeamStrength(attack * attackMult, midfield * midfieldMult, defence * defenceMult);
         }

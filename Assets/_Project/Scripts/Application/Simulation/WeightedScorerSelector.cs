@@ -13,11 +13,23 @@ namespace Gaffer.Application.Simulation
     /// striker is far the likeliest, a midfielder less so, a defender occasionally (mostly with his head),
     /// a keeper almost never — but not never: a keeper up for a last-minute corner is a rare, legendary
     /// beat the game wants to keep possible. One rng draw per goal, so the same seed names the same
-    /// scorers. The weights tune into a BalanceSO later.
+    /// scorers. The weights come from an injected <see cref="ScorerWeights"/> (data-driven, NON-NEGOTIABLE #3).
     /// </summary>
     public sealed class WeightedScorerSelector : IScorerSelector
     {
-        private const double MinWeight = 0.5;
+        private readonly ScorerWeights _weights;
+
+        public WeightedScorerSelector()
+            : this(ScorerWeights.Default)
+        {
+        }
+
+        /// <summary>Selects with specific attribution balance (from a config asset). Null falls back
+        /// to the calibrated defaults.</summary>
+        public WeightedScorerSelector(ScorerWeights weights)
+        {
+            _weights = weights ?? ScorerWeights.Default;
+        }
 
         public PlayerId? SelectScorer(Squad squad, IRandom rng)
         {
@@ -48,49 +60,50 @@ namespace Gaffer.Application.Simulation
             return players[players.Count - 1].Id;
         }
 
-        private static double Weight(Player player)
+        private double Weight(Player player)
         {
+            ScorerWeights w = _weights;
             Attributes a = player.Attributes;
-            double openPlay = ((0.6 * a.Finishing) + (0.2 * a.Positioning) + (0.2 * a.Pace)) * OpenPlayRole(player.Position);
-            double aerial = ((0.6 * a.Heading) + (0.25 * a.Jumping) + (0.15 * a.Strength)) * AerialRole(player.Position);
+            double openPlay = ((w.OpenPlayFinishing * a.Finishing) + (w.OpenPlayPositioning * a.Positioning) + (w.OpenPlayPace * a.Pace)) * OpenPlayRole(player.Position);
+            double aerial = ((w.AerialHeading * a.Heading) + (w.AerialJumping * a.Jumping) + (w.AerialStrength * a.Strength)) * AerialRole(player.Position);
             double weight = openPlay + aerial;
 
             // The floor keeps every outfielder a live threat; a keeper is exempt so his goal stays a
             // once-in-many-seasons event, not a regular one.
-            return player.Position == Position.Goalkeeper ? weight : Math.Max(MinWeight, weight);
+            return player.Position == Position.Goalkeeper ? weight : Math.Max(w.MinOutfielderWeight, weight);
         }
 
         // Open play favours strikers heavily; the air gives defenders a real set-piece threat while still
         // rewarding target men. Defence scores mostly through the aerial pathway (corner headers).
-        private static double OpenPlayRole(Position position)
+        private double OpenPlayRole(Position position)
         {
             switch (position)
             {
                 case Position.Forward:
-                    return 1.0;
+                    return _weights.OpenPlayForward;
                 case Position.Midfielder:
-                    return 0.55;
+                    return _weights.OpenPlayMidfielder;
                 case Position.Defender:
-                    return 0.10;
+                    return _weights.OpenPlayDefender;
                 case Position.Goalkeeper:
-                    return 0.003;
+                    return _weights.OpenPlayGoalkeeper;
                 default:
                     return 0.3;
             }
         }
 
-        private static double AerialRole(Position position)
+        private double AerialRole(Position position)
         {
             switch (position)
             {
                 case Position.Forward:
-                    return 0.45;
+                    return _weights.AerialForward;
                 case Position.Midfielder:
-                    return 0.25;
+                    return _weights.AerialMidfielder;
                 case Position.Defender:
-                    return 0.30;
+                    return _weights.AerialDefender;
                 case Position.Goalkeeper:
-                    return 0.004;
+                    return _weights.AerialGoalkeeper;
                 default:
                     return 0.2;
             }

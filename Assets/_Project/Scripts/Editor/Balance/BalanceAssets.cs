@@ -38,6 +38,11 @@ namespace Gaffer.Editor.Balance
             return LoadOrCreate<DramaBalanceSO>("DramaBalance");
         }
 
+        public static EconomyBalanceSO Economy()
+        {
+            return LoadOrCreate<EconomyBalanceSO>("EconomyBalance");
+        }
+
         [MenuItem("Gaffer/Balance/Create Default Balance Assets")]
         public static void CreateAll()
         {
@@ -45,6 +50,7 @@ namespace Gaffer.Editor.Balance
             Development();
             Renewal();
             Drama();
+            Economy();
             EditorUtility.DisplayDialog("Gaffer Balance", "Default balance assets are in " + Dir + ".", "OK");
         }
 

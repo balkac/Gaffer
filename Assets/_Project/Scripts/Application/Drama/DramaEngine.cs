@@ -22,6 +22,7 @@ namespace Gaffer.Application.Drama
     {
         private readonly DramaCatalog _catalog;
         private readonly DramaSettings _settings;
+        private readonly EconomySettings _economy;
 
         private readonly Dictionary<DramaEventId, int> _lastFiredWeek = new Dictionary<DramaEventId, int>();
         private readonly HashSet<DramaEventId> _firedEver = new HashSet<DramaEventId>();
@@ -41,9 +42,17 @@ namespace Gaffer.Application.Drama
         }
 
         public DramaEngine(DramaCatalog catalog, DramaSettings settings)
+            : this(catalog, settings, null)
+        {
+        }
+
+        /// <summary>Also takes economy balance (from a config asset) — the wage-fine effect prices a
+        /// week's wage through it. Null falls back to the calibrated defaults.</summary>
+        public DramaEngine(DramaCatalog catalog, DramaSettings settings, EconomySettings economy)
         {
             _catalog = catalog;
             _settings = settings;
+            _economy = economy ?? EconomySettings.Default;
         }
 
         /// <summary>Resets the season budget (cooldowns and once-per-run marks persist across seasons).</summary>
@@ -150,7 +159,7 @@ namespace Gaffer.Application.Drama
                         cashDelta += currentCash * effect.Magnitude;
                         break;
                     case DramaEffectKind.SubjectWageFine:
-                        cashDelta += PlayerWage.Weekly(pending.Subject);
+                        cashDelta += PlayerWage.Weekly(pending.Subject, _economy);
                         break;
                     case DramaEffectKind.SellSubject:
                         playerToSell = pending.Subject;

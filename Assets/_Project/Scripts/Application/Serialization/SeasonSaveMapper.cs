@@ -62,9 +62,15 @@ namespace Gaffer.Application.Serialization
             return Restore(data, null);
         }
 
-        /// <summary>Restores against a specific trait catalog (from config assets) so the rebuilt season's
-        /// strength step resolves traits through it; null falls back to the built-in default.</summary>
         public RestoredSeason Restore(SeasonSaveData data, TraitCatalog traits)
+        {
+            return Restore(data, traits, null, null);
+        }
+
+        /// <summary>Restores against specific config-asset settings so the rebuilt season's strength step
+        /// resolves traits, tactics balance, and morale balance the same way the live one did; nulls fall
+        /// back to the built-in defaults.</summary>
+        public RestoredSeason Restore(SeasonSaveData data, TraitCatalog traits, TacticsSettings tacticsSettings, Gaffer.Application.Drama.MoraleSettings moraleSettings)
         {
             var clubs = new List<Club>(data.Clubs.Count);
             foreach (ClubSaveData club in data.Clubs)
@@ -86,7 +92,7 @@ namespace Gaffer.Application.Serialization
                 results.Add(new MatchResult(new ClubId(result.Home), new ClubId(result.Away), result.HomeGoals, result.AwayGoals, Array.Empty<MatchEvent>()));
             }
 
-            LeagueSeason season = LeagueSeason.Restore(league, data.PlayedRounds, results, traits);
+            LeagueSeason season = LeagueSeason.Restore(league, data.PlayedRounds, results, traits, tacticsSettings, moraleSettings);
             return new RestoredSeason(league, season, data.SeasonNumber);
         }
 

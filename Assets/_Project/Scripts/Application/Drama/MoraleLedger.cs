@@ -13,8 +13,19 @@ namespace Gaffer.Application.Drama
     /// </summary>
     public sealed class MoraleLedger : IPlayerConditionSource
     {
-        private const double PerPoint = 0.012;
-        private const double MaxAbsPoints = 8.0;
+        private readonly MoraleSettings _settings;
+
+        public MoraleLedger()
+            : this(MoraleSettings.Default)
+        {
+        }
+
+        /// <summary>Runs on specific morale balance (from a config asset). Null falls back to the
+        /// calibrated defaults.</summary>
+        public MoraleLedger(MoraleSettings settings)
+        {
+            _settings = settings ?? MoraleSettings.Default;
+        }
 
         private struct Entry
         {
@@ -59,14 +70,15 @@ namespace Gaffer.Application.Drama
                 total += entry.Points;
             }
 
-            if (total > MaxAbsPoints)
+            double maxAbs = _settings.MaxAbsPoints;
+            if (total > maxAbs)
             {
-                return MaxAbsPoints;
+                return maxAbs;
             }
 
-            if (total < -MaxAbsPoints)
+            if (total < -maxAbs)
             {
-                return -MaxAbsPoints;
+                return -maxAbs;
             }
 
             return total;
@@ -74,7 +86,7 @@ namespace Gaffer.Application.Drama
 
         public double RatingMultiplierOf(PlayerId id)
         {
-            return 1.0 + (PerPoint * PointsOf(id));
+            return 1.0 + (_settings.RatingPerPoint * PointsOf(id));
         }
 
         /// <summary>Ages every entry a week and drops the expired — call once per played round.</summary>
