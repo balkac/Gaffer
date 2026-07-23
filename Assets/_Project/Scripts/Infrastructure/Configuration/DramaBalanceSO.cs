@@ -24,6 +24,22 @@ namespace Gaffer.Infrastructure.Configuration
         [Tooltip("Ceiling on the weekly firing probability however heavy the candidates get.")]
         [SerializeField] private double maxWeeklyChance = 0.35;
 
+        [Header("Morale")]
+        [Tooltip("Rating multiplier delta per morale point (0.012 -> ±8 points is roughly ±10% form).")]
+        [SerializeField] private double moraleRatingPerPoint = 0.012;
+
+        [Tooltip("Clamp on the summed live morale points, in both directions.")]
+        [SerializeField] private double moraleMaxAbsPoints = 8.0;
+
+        public MoraleSettings ToMoraleSettings()
+        {
+            return new MoraleSettings
+            {
+                RatingPerPoint = moraleRatingPerPoint,
+                MaxAbsPoints = moraleMaxAbsPoints,
+            };
+        }
+
         public DramaSettings ToSettings()
         {
             return new DramaSettings

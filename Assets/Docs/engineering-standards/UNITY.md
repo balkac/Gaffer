@@ -63,3 +63,50 @@ correctness companion to [`PERFORMANCE.md`](PERFORMANCE.md), which covers the co
   anything longer-lived than the subscriber is a leak plus a dead-object callback waiting to fire
   (`CONVENTIONS.md` §6). Same rule as tweens in `PERFORMANCE.md` §7: nothing outlives its target
   without an explicit owner tearing it down.
+
+## 6. Async & threading correctness
+
+The pure core is synchronous (`ARCHITECTURE.md`'s async boundary keeps `async` in Infrastructure/
+Presentation); these rules govern the engine-facing side where it does appear.
+
+- **An `async` continuation outlives its GameObject.** Coroutines die with their object; an
+  `async`/`UniTask` continuation does not — it resumes after `Destroy` and throws
+  `MissingReferenceException` on the first touch. Guard the resume point: check the object
+  explicitly (the real `!= null`, §3) or pass `destroyCancellationToken` (Unity 2022.2+) into the
+  awaited call. Same family as tween/event teardown (§5): nothing outlives its target unowned.
+- **The Unity API is main-thread-only.** Touching a `Transform`, renderer, or any
+  `UnityEngine.Object` from `Task.Run`/a worker thread throws. Pure C# — math, collections, file
+  IO, the whole core — is fine off-thread; that's exactly what the layering isolates.
+- **`await` resumes on the main thread** via Unity's `SynchronizationContext` — that's what makes
+  async usable with the API at all. Don't use `ConfigureAwait(false)` in Unity code; it forfeits
+  that guarantee for no benefit.
+- **`async void` only for event handlers.** It can't be awaited and its exceptions bypass the
+  caller. Everything else returns `Task`/`UniTask` so failures surface.
+
+## 7. Persistence traps (mobile)
+
+The Infrastructure save path (`ARCHITECTURE.md`; save-on-pause in §4 above) must respect these:
+
+- **Write saves to `Application.persistentDataPath`** — never `dataPath`, which is read-only
+  inside the APK/bundle on device (it works in the editor, then fails on the phone).
+- **Atomic writes.** The OS can kill a backgrounding app mid-write. Write to a temp file, then
+  rename/`File.Replace` over the real save; on load, treat a corrupt/unparsable save as an
+  expected `Result.Failure` with a defined fallback (previous file or fresh run) — never an
+  unhandled crash at boot.
+- **Versioned schema, migration chain.** Every save carries a `version` field (this project:
+  `SaveMigrator`). Adding a field is back-compatible (missing → default); renaming or removing
+  needs a migration step. Never ship a schema change without a migration test from the previous
+  version.
+- **Serializer limits.** `JsonUtility` silently drops `Dictionary`, `DateTime`, and properties —
+  no error, just missing data. This project uses Newtonsoft through the serializer adapter;
+  anything new goes through that same boundary (exceptions → `Result`, `CONVENTIONS.md` §4).
+- **`PlayerPrefs` is for small flags only** (settings toggles, first-launch marks): plain
+  platform key-value storage, no versioning, no atomicity, no encryption. Run state never goes
+  there. **`BinaryFormatter` is banned** outright — obsoleted, insecure, unmaintainable.
+- **`ScriptableObject`s are config, not state.** Runtime edits to an SO persist in the editor
+  (dirtying the asset) but are session-only in a build — an SO is neither a save medium nor safe
+  scratch space. Config data flows SO → pure settings object at load (`Infrastructure/
+  Configuration`); runtime state lives in the core and saves through Persistence.
+- **`StreamingAssets` on Android is inside the compressed APK** — unreadable via `File`/
+  `System.IO`; it needs `UnityWebRequest`. iOS reads it directly. Prefer direct references/
+  Addressables (`PERFORMANCE.md` §12) so this asymmetry never bites.

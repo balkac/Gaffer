@@ -70,23 +70,35 @@ namespace Gaffer.Application.Transfers
 
         public static long Fee(Player player)
         {
-            return PlayerValuation.Value(player);
+            return Fee(player, EconomySettings.Default);
+        }
+
+        /// <summary>The fee against specific economy balance (from a config asset).</summary>
+        public static long Fee(Player player, EconomySettings economy)
+        {
+            return PlayerValuation.Value(player, economy);
         }
 
         public static Result<TransferResult> Sign(Finances finances, Squad squad, Player player)
+        {
+            return Sign(finances, squad, player, EconomySettings.Default);
+        }
+
+        /// <summary>Signs against specific economy balance (from a config asset).</summary>
+        public static Result<TransferResult> Sign(Finances finances, Squad squad, Player player, EconomySettings economy)
         {
             if (squad.Contains(player.Id))
             {
                 return Result<TransferResult>.Failure("That player is already in the squad.");
             }
 
-            long fee = Fee(player);
+            long fee = Fee(player, economy);
             if (fee > finances.Cash)
             {
                 return Result<TransferResult>.Failure($"Not enough transfer cash: the fee is {fee} but only {finances.Cash} is available.");
             }
 
-            long wage = PlayerWage.Weekly(player);
+            long wage = PlayerWage.Weekly(player, economy);
             if (wage > finances.WageHeadroom)
             {
                 return Result<TransferResult>.Failure($"No room in the wage budget: his wage is {wage}/wk but only {finances.WageHeadroom}/wk is free.");
@@ -98,6 +110,12 @@ namespace Gaffer.Application.Transfers
 
         public static Result<TransferResult> Sell(Finances finances, Squad squad, Player player)
         {
+            return Sell(finances, squad, player, EconomySettings.Default);
+        }
+
+        /// <summary>Sells against specific economy balance (from a config asset).</summary>
+        public static Result<TransferResult> Sell(Finances finances, Squad squad, Player player, EconomySettings economy)
+        {
             if (!squad.Contains(player.Id))
             {
                 return Result<TransferResult>.Failure("That player is not in the squad.");
@@ -108,8 +126,8 @@ namespace Gaffer.Application.Transfers
                 return Result<TransferResult>.Failure($"The squad is already down to {MinSquadSize}; you can't sell more.");
             }
 
-            long fee = Fee(player);
-            long wage = PlayerWage.Weekly(player);
+            long fee = Fee(player, economy);
+            long wage = PlayerWage.Weekly(player, economy);
             var after = new Finances(finances.Cash + fee, finances.WeeklyWageBudget, finances.WeeklyWageBill - wage);
             return Result<TransferResult>.Success(new TransferResult(after, squad.Remove(player.Id), fee));
         }

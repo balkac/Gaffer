@@ -46,8 +46,8 @@ namespace Gaffer.Application.Simulation
     /// approach instead shape the <see cref="ChanceProfile"/>: tempo drives how many chances a side makes,
     /// approach the volume-versus-quality trade (the counter makes fewer but sharper chances). This split
     /// keeps each axis mechanically real without double-counting. <see cref="Balanced"/> is the neutral
-    /// setup that changes nothing. Each strength axis exposes a scale centred on zero; weights tune into a
-    /// BalanceSO later.
+    /// setup that changes nothing. Each strength axis exposes a scale centred on zero; how far each step
+    /// bends the sim comes from the injected <see cref="TacticsSettings"/> (data-driven, NON-NEGOTIABLE #3).
     /// </summary>
     public readonly struct Tactics
     {

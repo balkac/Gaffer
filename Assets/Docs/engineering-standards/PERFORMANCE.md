@@ -99,6 +99,19 @@ been destroyed but you are still trying to access it" warning. Anything that out
 (tweens, coroutines, event subscriptions) gets an explicit teardown; the composition root owning
 lifetimes (`ARCHITECTURE.md` §6) is where that responsibility lives.
 
+Per-tween discipline, beyond the scene-level kill:
+
+- **Bind a tween to its object's lifetime** — `SetLink(gameObject)` (or kill it in `OnDestroy`), so
+  destroying the object kills the tween instead of leaving a callback aimed at a corpse. A tween,
+  like an async continuation (`UNITY.md` §6), does not die with its target on its own.
+- **Starting a tween is an event, not per-frame work.** A `DOMove` called from an update loop spawns
+  a new racing tween every frame — start on the action, let the tween run. (Per-frame `+=` has the
+  same repeated-subscription shape, §9.)
+- An `OnComplete(...)` lambda that captures locals is a closure allocation per tween (§8) — fine per
+  action, wrong in a burst loop; pooled/recycled tweens (§3) keep the rest cheap.
+- UI that must animate through a pause (`timeScale = 0`) runs the tween with `SetUpdate(true)`
+  (unscaled time, `UNITY.md` §2).
+
 ## 8. Know what allocates — the C# mechanics
 
 §4 says "low garbage"; this is the concrete checklist of what actually hits the managed heap.
@@ -197,7 +210,10 @@ The habits that matter for this class of game — a 2D URP scene driven by sprit
   sprites rendered 1:1.
 - **IL2CPP + stripping**: iOS is IL2CPP-only; code stripping removes "unused" types that
   serialization or reflection actually needed — remember `link.xml` the day a type vanishes only
-  in device builds.
+  in device builds. IL2CPP is also **AOT-only**: no `Reflection.Emit`/runtime codegen, and a
+  generic instantiated only via reflection over a *value* type may never get compiled — another
+  class of works-in-editor, dies-on-device. Keep reflection-driven serialization behind the one
+  adapter and exercise it in a device build early.
 - **Asset loading**: prefer direct references or Addressables over `Resources/` — `Resources`
   defeats stripping and memory accounting, and the same asset reached from two roots is resident
   twice.

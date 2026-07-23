@@ -177,14 +177,25 @@ namespace Gaffer.Editor.SeasonPlayer
             return _renewalBalance != null ? _renewalBalance.ToSettings() : RenewalSettings.Default;
         }
 
+        private TacticsSettings TacticsTuning()
+        {
+            return _simulationBalance != null ? _simulationBalance.ToTacticsSettings() : TacticsSettings.Default;
+        }
+
+        private ScorerWeights ScorerTuning()
+        {
+            return _simulationBalance != null ? _simulationBalance.ToScorerWeights() : ScorerWeights.Default;
+        }
+
         private void StartSeason()
         {
             int count = Mathf.Clamp(_teamCount, 4, MaxTeams);
             _league = BuildLeague(count);
-            _season = new LeagueSeason(_league);
+            _season = new LeagueSeason(_league, null, TacticsTuning(), null);
             _simulator = new MatchSimulator(
                 new PoissonChanceGenerator(SimSettings()),
-                new QualityChanceResolver());
+                new QualityChanceResolver(),
+                new WeightedScorerSelector(ScorerTuning()));
             _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
             _managedClub = new ClubId(Mathf.Clamp(_managedIndex, 0, count - 1));
             _target = new BoardTarget(_promotionPosition, _survivalPosition);
@@ -211,7 +222,7 @@ namespace Gaffer.Editor.SeasonPlayer
 
             _seasonNumber++;
             _league = new SeasonTransition(DevSettings(), RenewSettings()).ToNextSeason(_league, (ulong)_seed, _seasonNumber);
-            _season = new LeagueSeason(_league);
+            _season = new LeagueSeason(_league, null, TacticsTuning(), null);
             ComputeSummer(before, ManagedSquad().Players);
             AutoPickStarters();
             _season.SetFormation(_managedClub, _formation);
@@ -256,7 +267,7 @@ namespace Gaffer.Editor.SeasonPlayer
                 return;
             }
 
-            RestoredSeason restored = new SeasonSaveMapper().Restore(loaded.Value);
+            RestoredSeason restored = new SeasonSaveMapper().Restore(loaded.Value, null, TacticsTuning(), null);
             _league = restored.League;
             _season = restored.Season;
             _seasonNumber = restored.SeasonNumber < 1 ? 1 : restored.SeasonNumber;
@@ -287,7 +298,8 @@ namespace Gaffer.Editor.SeasonPlayer
         {
             _simulator = new MatchSimulator(
                 new PoissonChanceGenerator(SimSettings()),
-                new QualityChanceResolver());
+                new QualityChanceResolver(),
+                new WeightedScorerSelector(ScorerTuning()));
             _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
             _target = new BoardTarget(_promotionPosition, _survivalPosition);
         }

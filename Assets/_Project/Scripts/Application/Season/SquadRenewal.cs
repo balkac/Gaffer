@@ -24,6 +24,12 @@ namespace Gaffer.Application.Season
         private readonly PlayerGenerator _generator;
         private readonly RenewalSettings _settings;
 
+        // One generator reseeded at each decision point (retirement roll, intake-role tie-break,
+        // per-youth generation) instead of a fresh instance per decision (PERFORMANCE §8). The
+        // decisions are sequential, and reseeding reproduces the exact per-seed streams, so
+        // determinism is unchanged.
+        private readonly SplitMix64RandomNumberGenerator _rng = new SplitMix64RandomNumberGenerator(0);
+
         public SquadRenewal(PlayerGenerator generator)
             : this(generator, RenewalSettings.Default)
         {
@@ -46,13 +52,15 @@ namespace Gaffer.Application.Season
         /// </summary>
         public Squad Renew(Squad squad, ulong seasonSeed, int seasonNumber, ref int nextPlayerId, bool seedGem = false)
         {
-            var kept = new List<Player>(squad.Players.Count);
+            IReadOnlyList<Player> squadPlayers = squad.Players;
+            var kept = new List<Player>(squadPlayers.Count);
             var intakeRoles = new List<PlayerRole>();
 
-            foreach (Player player in squad.Players)
+            for (int i = 0; i < squadPlayers.Count; i++)
             {
-                var rng = new SplitMix64RandomNumberGenerator(RetireSeed(seasonSeed, player.Id.Value, seasonNumber));
-                if (Retires(player, rng))
+                Player player = squadPlayers[i];
+                _rng.Reseed(RetireSeed(seasonSeed, player.Id.Value, seasonNumber));
+                if (Retires(player, _rng))
                 {
                     // A retiree is replaced by a youth of the same role — the line balance is preserved.
                     intakeRoles.Add(player.Role);
@@ -66,11 +74,11 @@ namespace Gaffer.Application.Season
             // The guaranteed academy intake, beyond replacing retirees: each new youth fills the squad's
             // thinnest role, so even a season with no retirements brings talent through, and the roster grows
             // toward the cap rather than holding fixed.
-            var pickRng = new SplitMix64RandomNumberGenerator(IntakeRoleSeed(seasonSeed, seasonNumber));
+            _rng.Reseed(IntakeRoleSeed(seasonSeed, seasonNumber));
             int projected = kept.Count + intakeRoles.Count;
             for (int i = 0; i < _settings.YouthIntakePerSeason && projected < _settings.MaxSquadSize; i++)
             {
-                intakeRoles.Add(ThinnestRole(kept, intakeRoles, pickRng));
+                intakeRoles.Add(ThinnestRole(kept, intakeRoles, _rng));
                 projected++;
             }
 
@@ -80,9 +88,9 @@ namespace Gaffer.Application.Season
                 for (int i = 0; i < intakeRoles.Count; i++)
                 {
                     int id = nextPlayerId++;
-                    var rng = new SplitMix64RandomNumberGenerator(IntakeSeed(seasonSeed, id, seasonNumber));
+                    _rng.Reseed(IntakeSeed(seasonSeed, id, seasonNumber));
                     GenerationContext context = seedGem && i == 0 ? GemContext() : youth;
-                    kept.Add(_generator.Generate(new PlayerId(id), context, intakeRoles[i], rng));
+                    kept.Add(_generator.Generate(new PlayerId(id), context, intakeRoles[i], _rng));
                 }
             }
 
@@ -199,18 +207,19 @@ namespace Gaffer.Application.Season
 
         private static int AverageRating(Squad squad)
         {
-            if (squad.Players.Count == 0)
+            IReadOnlyList<Player> players = squad.Players;
+            if (players.Count == 0)
             {
                 return 50;
             }
 
             double total = 0.0;
-            foreach (Player player in squad.Players)
+            for (int i = 0; i < players.Count; i++)
             {
-                total += PlayerRatings.ForRole(player);
+                total += PlayerRatings.ForRole(players[i]);
             }
 
-            return (int)(total / squad.Players.Count);
+            return (int)(total / players.Count);
         }
 
         private static int Clamp(int value, int min, int max)

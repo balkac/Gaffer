@@ -14,6 +14,10 @@ namespace Gaffer.Application.Simulation
     /// </summary>
     public sealed class MatchSimulator
     {
+        // Sort(Comparison<T>) wraps the delegate in a fresh comparer per call on Mono; a cached
+        // IComparer<T> singleton keeps the per-match path allocation-free (PERFORMANCE §8).
+        private static readonly IComparer<MatchEvent> ByMinute = new MinuteComparer();
+
         private readonly IChanceGenerator _chanceGenerator;
         private readonly IChanceResolver _chanceResolver;
         private readonly IScorerSelector _scorerSelector;
@@ -34,14 +38,15 @@ namespace Gaffer.Application.Simulation
         {
             IReadOnlyList<Chance> chances = _chanceGenerator.GenerateChances(command, rng);
 
-            var goals = new List<MatchEvent>();
+            var goals = new List<MatchEvent>(8);
             int homeGoals = 0;
             int awayGoals = 0;
             int homeShots = 0;
             int awayShots = 0;
 
-            foreach (Chance chance in chances)
+            for (int i = 0; i < chances.Count; i++)
             {
+                Chance chance = chances[i];
                 if (chance.Side == TeamSide.Home)
                 {
                     homeShots++;
@@ -70,8 +75,16 @@ namespace Gaffer.Application.Simulation
                 }
             }
 
-            goals.Sort((left, right) => left.Minute.CompareTo(right.Minute));
+            goals.Sort(ByMinute);
             return new MatchOutcome(homeGoals, awayGoals, homeShots, awayShots, goals);
+        }
+
+        private sealed class MinuteComparer : IComparer<MatchEvent>
+        {
+            public int Compare(MatchEvent left, MatchEvent right)
+            {
+                return left.Minute.CompareTo(right.Minute);
+            }
         }
     }
 }

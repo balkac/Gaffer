@@ -9,7 +9,11 @@ namespace Gaffer.Application.Simulation
     /// on the 0–100 scale (uniform attributes collapse to that value, whatever the role). The split is the
     /// point: a full-back is valued on pace and crossing, a centre-back on marking and heading, a winger on
     /// pace and dribbling — so the same attribute sheet is worth different amounts in different roles, and a
-    /// player slotted out of position rates below a natural fit. The weights tune into a BalanceSO later.
+    /// player slotted out of position rates below a natural fit. Decision (2026-07-23): these weight tables
+    /// stay in code — they are the role *model* (which attributes constitute a role, normalized to sum 1),
+    /// not a balance dial; retuning them renormalizes every rating, valuation, and wage at once, so it is a
+    /// design change, not a tweak. Balance tuning lives in the injected settings objects
+    /// (TacticsSettings, ScorerWeights, EconomySettings, and the per-domain *Settings/*BalanceSO pairs).
     /// </summary>
     public static class PlayerRatings
     {

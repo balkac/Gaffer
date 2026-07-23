@@ -14,9 +14,13 @@ namespace Gaffer.Application.Simulation
     {
         private const int MinuteFirst = 1;
         private const int MinuteAfterLast = 91;
-        private const double MaxChanceQuality = 0.95;
 
         private readonly MatchSimulationSettings _settings;
+
+        // Scratch buffer reused across matches (cleared per call) so the per-match path allocates
+        // nothing (PERFORMANCE §8). The returned list is valid until the next GenerateChances call —
+        // the simulator consumes it synchronously before simulating the next match.
+        private readonly List<Chance> _chances = new List<Chance>(32);
 
         public PoissonChanceGenerator(MatchSimulationSettings settings)
         {
@@ -25,7 +29,8 @@ namespace Gaffer.Application.Simulation
 
         public IReadOnlyList<Chance> GenerateChances(MatchCommand command, IRandom rng)
         {
-            var chances = new List<Chance>();
+            List<Chance> chances = _chances;
+            chances.Clear();
             double homePossession = ComputePossession(command.Home.Midfield, command.Away.Midfield);
 
             AppendSideChances(chances, TeamSide.Home, command.Home.Attack, command.Away.Defence, homePossession, _settings.HomeAdvantage, command.HomeProfile, rng);
@@ -61,10 +66,12 @@ namespace Gaffer.Application.Simulation
 
         private double ComputeChanceQuality(double qualityMultiplier, IRandom rng)
         {
-            // Vary quality 0.5×–1.5× the tuned mean, scaled by the tactical profile (the counter sharpens
-            // it), capped below 1 so no chance is a certainty.
-            double quality = _settings.MeanChanceQuality * qualityMultiplier * (0.5 + rng.NextDouble());
-            return Math.Min(quality, MaxChanceQuality);
+            // Vary quality around the tuned mean (±variance), scaled by the tactical profile (the counter
+            // sharpens it), capped so no chance is a certainty.
+            double variance = _settings.ChanceQualityVariance;
+            double spread = (1.0 - variance) + (rng.NextDouble() * 2.0 * variance);
+            double quality = _settings.MeanChanceQuality * qualityMultiplier * spread;
+            return Math.Min(quality, _settings.MaxChanceQuality);
         }
 
         private double ClampRatio(double ratio)

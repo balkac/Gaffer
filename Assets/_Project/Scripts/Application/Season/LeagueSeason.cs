@@ -22,20 +22,34 @@ namespace Gaffer.Application.Season
         private readonly Dictionary<ClubId, Tactics> _tacticsByClub;
         private readonly Dictionary<ClubId, Formation> _formationByClub;
         private readonly Dictionary<ClubId, IReadOnlyList<Player>> _startersByClub;
+        private readonly TacticsSettings _tacticsSettings;
         private readonly EffectiveStrengthBuilder _strengthBuilder;
         private readonly LineupSelector _lineupSelector;
         private readonly LeagueTable _table;
         private readonly List<MatchResult> _playedResults;
+
+        // One generator reseeded per fixture instead of a fresh instance per match — the doc's
+        // reseed-don't-re-new rule (PERFORMANCE §8). Reseeding is identical to constructing anew,
+        // so the per-fixture streams (and determinism) are unchanged.
+        private readonly SplitMix64RandomNumberGenerator _matchRng = new SplitMix64RandomNumberGenerator(0);
         private int _currentRound;
 
         public LeagueSeason(League league)
-            : this(league, null)
+            : this(league, null, null, null)
         {
         }
 
         /// <summary>Runs the season on a specific trait catalog (from config assets) — the strength step
         /// resolves each player's traits through it. Null falls back to the built-in default.</summary>
         public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits)
+            : this(league, traits, null, null)
+        {
+        }
+
+        /// <summary>Also takes tactics and morale balance (from config assets): tactics settings shape
+        /// how far mentality/pressing/tempo/approach bend each club's strength and chance profile, and
+        /// morale settings how hard drama bites on the pitch. Nulls fall back to the calibrated defaults.</summary>
+        public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits, TacticsSettings tacticsSettings, MoraleSettings moraleSettings)
         {
             _clubsById = new Dictionary<ClubId, Club>(league.Clubs.Count);
             var clubIds = new List<ClubId>(league.Clubs.Count);
@@ -61,11 +75,12 @@ namespace Gaffer.Application.Season
             _tacticsByClub = new Dictionary<ClubId, Tactics>();
             _formationByClub = new Dictionary<ClubId, Formation>();
             _startersByClub = new Dictionary<ClubId, IReadOnlyList<Player>>();
-            _strengthBuilder = traits == null ? new EffectiveStrengthBuilder() : new EffectiveStrengthBuilder(traits);
+            _tacticsSettings = tacticsSettings ?? TacticsSettings.Default;
+            _strengthBuilder = new EffectiveStrengthBuilder(traits ?? Gaffer.Domain.Traits.TraitCatalog.Default, _tacticsSettings);
             _lineupSelector = new LineupSelector();
             _table = new LeagueTable(clubIds);
             _playedResults = new List<MatchResult>();
-            Morale = new MoraleLedger();
+            Morale = new MoraleLedger(moraleSettings);
         }
 
         /// <summary>
@@ -127,9 +142,9 @@ namespace Gaffer.Application.Season
         public IReadOnlyList<MatchResult> PlayedResults => _playedResults;
 
         /// <summary>Rebuilds a season part-way through from its saved result history (save/load).</summary>
-        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults, Gaffer.Domain.Traits.TraitCatalog traits = null)
+        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults, Gaffer.Domain.Traits.TraitCatalog traits = null, TacticsSettings tacticsSettings = null, MoraleSettings moraleSettings = null)
         {
-            var season = new LeagueSeason(league, traits);
+            var season = new LeagueSeason(league, traits, tacticsSettings, moraleSettings);
             foreach (MatchResult result in playedResults)
             {
                 season._table.RecordMatch(result.Home, result.Away, result.HomeGoals, result.AwayGoals);
@@ -142,14 +157,16 @@ namespace Gaffer.Application.Season
 
         public WeekResult AdvanceWeek(MatchSimulator simulator, MatchContext context, ulong seasonSeed)
         {
-            var matches = new List<MatchResult>();
             if (IsComplete)
             {
-                return new WeekResult(_currentRound, matches);
+                return new WeekResult(_currentRound, new List<MatchResult>());
             }
 
-            foreach (Fixture fixture in _fixturesByRound[_currentRound])
+            List<Fixture> roundFixtures = _fixturesByRound[_currentRound];
+            var matches = new List<MatchResult>(roundFixtures.Count);
+            for (int i = 0; i < roundFixtures.Count; i++)
             {
+                Fixture fixture = roundFixtures[i];
                 Club home = _clubsById[fixture.Home];
                 Club away = _clubsById[fixture.Away];
                 var command = new MatchCommand(
@@ -158,12 +175,11 @@ namespace Gaffer.Application.Season
                     ProfileOf(home.Id), ProfileOf(away.Id),
                     context);
 
-                // Each match gets its own rng, seeded from a stable function of the fixture's identity, so a
-                // change to one club's tactics only reshapes its own matches — the rest of the league's
+                // Each match gets its own rng stream, seeded from a stable function of the fixture's identity,
+                // so a change to one club's tactics only reshapes its own matches — the rest of the league's
                 // results stay byte-identical, and a resumed save reproduces the remaining fixtures exactly.
-                var matchRng = new SplitMix64RandomNumberGenerator(
-                    MixSeed(seasonSeed, _currentRound, fixture.Home.Value, fixture.Away.Value));
-                MatchOutcome outcome = simulator.Simulate(command, matchRng);
+                _matchRng.Reseed(MixSeed(seasonSeed, _currentRound, fixture.Home.Value, fixture.Away.Value));
+                MatchOutcome outcome = simulator.Simulate(command, _matchRng);
 
                 _table.RecordMatch(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals);
                 matches.Add(new MatchResult(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals, outcome.HomeShots, outcome.AwayShots, outcome.Events));
@@ -231,7 +247,7 @@ namespace Gaffer.Application.Season
 
         private ChanceProfile ProfileOf(ClubId club)
         {
-            return ChanceProfile.FromTactics(TacticsOf(club));
+            return ChanceProfile.FromTactics(TacticsOf(club), _tacticsSettings);
         }
     }
 }

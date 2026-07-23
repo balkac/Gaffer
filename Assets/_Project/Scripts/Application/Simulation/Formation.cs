@@ -24,7 +24,9 @@ namespace Gaffer.Application.Simulation
         /// <summary>Eleven for every valid formation.</summary>
         public int Total => Slots.Count;
 
-        public static Formation F442 => new Formation("4-4-2", new[]
+        // Static readonly fields, not expression-bodied properties: `=>` would rebuild the slot array on
+        // every access, and F442 is the per-match fallback for every AI club (PERFORMANCE §8).
+        public static readonly Formation F442 = new Formation("4-4-2", new[]
         {
             PlayerRole.Goalkeeper,
             PlayerRole.RightBack, PlayerRole.CentreBack, PlayerRole.CentreBack, PlayerRole.LeftBack,
@@ -32,7 +34,7 @@ namespace Gaffer.Application.Simulation
             PlayerRole.Striker, PlayerRole.Striker,
         });
 
-        public static Formation F433 => new Formation("4-3-3", new[]
+        public static readonly Formation F433 = new Formation("4-3-3", new[]
         {
             PlayerRole.Goalkeeper,
             PlayerRole.RightBack, PlayerRole.CentreBack, PlayerRole.CentreBack, PlayerRole.LeftBack,
@@ -40,7 +42,7 @@ namespace Gaffer.Application.Simulation
             PlayerRole.RightWing, PlayerRole.Striker, PlayerRole.LeftWing,
         });
 
-        public static Formation F451 => new Formation("4-5-1", new[]
+        public static readonly Formation F451 = new Formation("4-5-1", new[]
         {
             PlayerRole.Goalkeeper,
             PlayerRole.RightBack, PlayerRole.CentreBack, PlayerRole.CentreBack, PlayerRole.LeftBack,
@@ -48,7 +50,7 @@ namespace Gaffer.Application.Simulation
             PlayerRole.AttackingMidfield, PlayerRole.Striker,
         });
 
-        public static Formation F352 => new Formation("3-5-2", new[]
+        public static readonly Formation F352 = new Formation("3-5-2", new[]
         {
             PlayerRole.Goalkeeper,
             PlayerRole.CentreBack, PlayerRole.CentreBack, PlayerRole.CentreBack,
@@ -56,7 +58,7 @@ namespace Gaffer.Application.Simulation
             PlayerRole.Striker, PlayerRole.Striker,
         });
 
-        public static Formation F532 => new Formation("5-3-2", new[]
+        public static readonly Formation F532 = new Formation("5-3-2", new[]
         {
             PlayerRole.Goalkeeper,
             PlayerRole.RightBack, PlayerRole.CentreBack, PlayerRole.CentreBack, PlayerRole.CentreBack, PlayerRole.LeftBack,
@@ -64,6 +66,7 @@ namespace Gaffer.Application.Simulation
             PlayerRole.Striker, PlayerRole.Striker,
         });
 
-        public static IReadOnlyList<Formation> Presets => new[] { F442, F433, F352, F532, F451 };
+        // Declared after the presets it references — static field initializers run in textual order.
+        public static readonly IReadOnlyList<Formation> Presets = new[] { F442, F433, F352, F532, F451 };
     }
 }

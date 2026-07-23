@@ -22,45 +22,51 @@ namespace Gaffer.Application.Simulation
 
         public static ChanceProfile FromTactics(Tactics tactics)
         {
-            double volume = TempoVolume(tactics.Tempo) * ApproachVolume(tactics.Approach);
-            double quality = ApproachQuality(tactics.Approach);
+            return FromTactics(tactics, TacticsSettings.Default);
+        }
+
+        /// <summary>Derives the profile with specific tactics balance (from a config asset).</summary>
+        public static ChanceProfile FromTactics(Tactics tactics, TacticsSettings settings)
+        {
+            double volume = TempoVolume(tactics.Tempo, settings) * ApproachVolume(tactics.Approach, settings);
+            double quality = ApproachQuality(tactics.Approach, settings);
             return new ChanceProfile(volume, quality);
         }
 
-        private static double TempoVolume(Tempo tempo)
+        private static double TempoVolume(Tempo tempo, TacticsSettings settings)
         {
             switch (tempo)
             {
                 case Tempo.Intense:
-                    return 1.15;
+                    return settings.IntenseTempoVolume;
                 case Tempo.Patient:
-                    return 0.87;
+                    return settings.PatientTempoVolume;
                 default:
                     return 1.0;
             }
         }
 
-        private static double ApproachVolume(Approach approach)
+        private static double ApproachVolume(Approach approach, TacticsSettings settings)
         {
             switch (approach)
             {
                 case Approach.Counter:
-                    return 0.82;
+                    return settings.CounterApproachVolume;
                 case Approach.Possession:
-                    return 1.15;
+                    return settings.PossessionApproachVolume;
                 default:
                     return 1.0;
             }
         }
 
-        private static double ApproachQuality(Approach approach)
+        private static double ApproachQuality(Approach approach, TacticsSettings settings)
         {
             switch (approach)
             {
                 case Approach.Counter:
-                    return 1.20;
+                    return settings.CounterApproachQuality;
                 case Approach.Possession:
-                    return 0.88;
+                    return settings.PossessionApproachQuality;
                 default:
                     return 1.0;
             }

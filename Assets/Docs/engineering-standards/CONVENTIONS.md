@@ -207,6 +207,20 @@ mechanics — boxing, closures, LINQ — are performance, and live in `PERFORMAN
   type; two types whose static fields reference each other initialise in whichever order they
   happen to be touched. Don't build dependency chains between static initialisers — one more
   reason §3 prefers instances wired at the composition root over statics.
+- **Culture-sensitive string operations — the Turkish-i bug.** `"info".ToUpper()` on a Turkish-
+  locale device yields `"İNFO"`: culture-default `ToUpper`/`ToLower`/`Equals`/`StartsWith` follow
+  the OS locale and silently break identifier comparisons. For *machine* strings — localization
+  keys, ids, file names, save fields — always use `ToUpperInvariant`/`ToLowerInvariant` and
+  `StringComparison.Ordinal(IgnoreCase)`. Culture-aware comparison is only for text shown to the
+  user. This project ships a `tr` locale — this bug is not hypothetical here.
+- **Never mutate a collection inside its own `foreach`** — `Remove` during enumeration throws
+  `InvalidOperationException` at runtime. Iterate backwards with an index `for` when removing,
+  use `RemoveAll`, or collect-then-remove (a reused scratch list, `PERFORMANCE.md` §8).
+- **Float division never throws — it poisons.** `0f/0f` is `NaN`, `x/0f` is `Infinity`, and
+  `NaN != NaN`, so one bad division silently corrupts every downstream rating or probability
+  with no exception at the source. Guard denominators at the boundary of a calculation (the sim
+  already does: possession, line averages), and test suspect values with `double.IsNaN`/
+  `IsInfinity` — never `== NaN`. Compare floats for "equality" with an epsilon, not `==`.
 
 ---
 

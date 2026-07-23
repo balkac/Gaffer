@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using Gaffer.Domain.Players;
@@ -136,9 +137,10 @@ namespace Gaffer.Application.Progression
         private double GrowthMultiplierOf(Player player)
         {
             double multiplier = 1.0;
-            foreach (TraitId id in player.Traits)
+            IReadOnlyList<TraitId> traits = player.Traits;
+            for (int i = 0; i < traits.Count; i++)
             {
-                Trait trait = _traits.Find(id);
+                Trait trait = _traits.Find(traits[i]);
                 if (trait != null)
                 {
                     multiplier *= trait.GrowthMultiplier;
@@ -151,9 +153,10 @@ namespace Gaffer.Application.Progression
         private int DeclineOnsetShiftOf(Player player)
         {
             int shift = 0;
-            foreach (TraitId id in player.Traits)
+            IReadOnlyList<TraitId> traits = player.Traits;
+            for (int i = 0; i < traits.Count; i++)
             {
-                Trait trait = _traits.Find(id);
+                Trait trait = _traits.Find(traits[i]);
                 if (trait != null)
                 {
                     shift += trait.DeclineOnsetShift;
@@ -166,9 +169,10 @@ namespace Gaffer.Application.Progression
         private double DeclineRateMultiplierOf(Player player)
         {
             double multiplier = 1.0;
-            foreach (TraitId id in player.Traits)
+            IReadOnlyList<TraitId> traits = player.Traits;
+            for (int i = 0; i < traits.Count; i++)
             {
-                Trait trait = _traits.Find(id);
+                Trait trait = _traits.Find(traits[i]);
                 if (trait != null)
                 {
                     multiplier *= trait.DeclineRateMultiplier;

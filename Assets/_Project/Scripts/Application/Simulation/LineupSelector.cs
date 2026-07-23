@@ -16,14 +16,26 @@ namespace Gaffer.Application.Simulation
     /// </summary>
     public sealed class LineupSelector
     {
+        // Scratch pool of not-yet-picked players, reused across calls (cleared each time) so the
+        // per-club-per-match auto-pick allocates only the eleven it returns (PERFORMANCE §8). The
+        // core is synchronous and single-threaded, so one buffer is safe.
+        private readonly List<Player> _available = new List<Player>(32);
+
         public IReadOnlyList<Player> SelectBest(Squad squad, Formation formation)
         {
-            var available = new List<Player>(squad.Players);
-            var chosen = new List<Player>(formation.Slots.Count);
-
-            foreach (PlayerRole slot in formation.Slots)
+            List<Player> available = _available;
+            available.Clear();
+            IReadOnlyList<Player> players = squad.Players;
+            for (int i = 0; i < players.Count; i++)
             {
-                Player pick = PickForSlot(available, slot);
+                available.Add(players[i]);
+            }
+
+            IReadOnlyList<PlayerRole> slots = formation.Slots;
+            var chosen = new List<Player>(slots.Count);
+            for (int i = 0; i < slots.Count; i++)
+            {
+                Player pick = PickForSlot(available, slots[i]);
                 if (pick != null)
                 {
                     chosen.Add(pick);
