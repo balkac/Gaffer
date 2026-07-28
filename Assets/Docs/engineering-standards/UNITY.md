@@ -7,6 +7,7 @@ correctness companion to [`PERFORMANCE.md`](PERFORMANCE.md), which covers the co
 
 > **Baseline:** Unity 6 (6000.x), C# 9.0. Version-gated rules are tagged; verify against the
 > matching manual version before porting a rule to another engine release.
+> Verified: Unity 6000.3.16f1 · last reviewed 2026-07-28.
 
 ---
 
@@ -22,7 +23,12 @@ correctness companion to [`PERFORMANCE.md`](PERFORMANCE.md), which covers the co
 - `Instantiate` on an active object runs the new object's `Awake`/`OnEnable` **synchronously
   inside the call** — before the caller can assign it any data. Anything an object needs at birth
   goes through an explicit `Init(...)` method (or a factory), never through fields set "right
-  after" Instantiate.
+  after" Instantiate — **and the mirror invariant: `Awake`/`OnEnable` must never *require* what
+  `Init` delivers**, because they have already run by the time it's called (self-setup only, per
+  the first rule; gameplay behaviour starts when `Init` completes). When a component genuinely
+  needs its data before its enable callbacks, instantiate it **inactive** (inactive prefab or
+  parent), configure, then activate — or keep the mandatory state in a plain C# object constructed
+  before any `MonoBehaviour` is involved.
 - A component on an **active** GameObject gets `Awake` even while the component itself is
   disabled; only an **inactive GameObject** defers it. An object that was never activated has run
   nothing — and per the docs, `OnDestroy` "is only called on GameObjects that have previously
@@ -92,21 +98,29 @@ The pure core is synchronous (`ARCHITECTURE.md`'s async boundary keeps `async` i
 Presentation); these rules govern the engine-facing side where it does appear.
 
 - **An `async` continuation outlives its GameObject.** Coroutines die with their object — a safety
-  AND a limitation (they also return no values, can't `try/catch` across yields, and an exception
-  inside one kills it silently). An `async`/`UniTask` continuation does not die with its object —
+  AND a limitation (they also return no values, can't `try/catch` across a `yield`, and an
+  unhandled exception terminates the coroutine: Unity logs it to the console, but nothing
+  propagates to the starter — no structured failure, no way to await the result, and any partial
+  side effects stand). An `async`/`UniTask` continuation does not die with its object —
   it resumes after `Destroy` and throws `MissingReferenceException` on the first touch. Guard the
   resume point: check the object explicitly (the real `!= null`, §3) or pass
   `destroyCancellationToken` (Unity 2022.2+) / `Application.exitCancellationToken` into the
   awaited call. Moving from coroutines to async trades automatic death for explicit cancellation —
   same family as tween/event teardown (§5): nothing outlives its target unowned.
-- **The Unity API is main-thread-only** ("most Unity APIs aren't thread-safe", per the manual).
-  Touching a `Transform`, renderer, or any `UnityEngine.Object` from `Task.Run`/a worker thread
-  throws. Pure C# — math, collections, file IO, the whole core — is fine off-thread; that's
+- **The Unity API is main-thread-only** ("most Unity APIs aren't thread-safe and can only be
+  called from the main thread", per the manual). Off-main-thread access is **unsupported, not
+  reliably fail-fast**: many calls are guarded and throw `UnityException`, but that guard is not a
+  documented universal contract — an unguarded call may corrupt state or crash instead of
+  throwing. Pure C# — math, collections, file IO, the whole core — is fine off-thread; that's
   exactly what the layering isolates. (`Debug.Log` works from any thread — the log pipeline is
   documented as multithread-aware — but Unity never documents the method itself as thread-safe.)
-- **`await` on a `Task` resumes on the main thread** via Unity's `SynchronizationContext` —
-  that's what makes async usable with the API at all. Don't use `ConfigureAwait(false)` in
-  Unity gameplay code; it forfeits that guarantee for no benefit.
+- **`await` on a `Task` resumes on the main thread only when the await runs there.** The
+  continuation context is captured **per-await** from `SynchronizationContext.Current`: an await
+  executing on the main thread posts back through the `UnitySynchronizationContext` (documented to
+  resume on the next frame's Update tick); an await executing on a pool thread — inside
+  `Task.Run`, or after a `ConfigureAwait(false)` earlier in the chain — resumes on the thread pool
+  with **no** main-thread guarantee. Don't use `ConfigureAwait(false)` in Unity gameplay code; it
+  deliberately discards the context capture for no benefit here.
 - **Unity 6's `Awaitable` is NOT a `Task`:** its continuations bypass the
   `SynchronizationContext` and run synchronously where they were triggered — main thread only if
   completed there, otherwise a ThreadPool thread (hop back explicitly via
@@ -125,12 +139,18 @@ The Infrastructure save path (`ARCHITECTURE.md`; save-on-pause in §4 above) mus
 - **Write saves to `Application.persistentDataPath`** — never `dataPath`, which is read-only
   inside the APK/bundle on device (it works in the editor, then fails on the phone).
 - **Atomic-in-practice writes.** The OS can kill a backgrounding app mid-write. Write to a temp
-  file, then `File.Replace` over the real save — with two caveats the BCL documents: `Replace`
-  throws when the destination doesn't exist yet (first save falls back to `File.Move`) and when
-  source/destination sit on different volumes (keep both inside `persistentDataPath`). The rename
-  is *effectively* atomic on one volume; the BCL does not formally guarantee atomicity — so on
-  load, still treat a corrupt/unparsable save as an expected `Result.Failure` with a defined
-  fallback (previous file or fresh run), never an unhandled crash at boot.
+  file, then `File.Replace` over the real save — with the caveats the BCL documents: `Replace`
+  throws when the destination doesn't exist yet (first save falls back to `File.Move`), throws
+  when source/destination sit on different volumes (keep both inside `persistentDataPath`), and
+  its docs reserve an `UnauthorizedAccessException` branch for "this operation is not supported
+  on the current platform" — absence of failure reports is not a platform guarantee, so
+  smoke-test the save path on every platform/backend combination actually shipped (Android
+  Mono/IL2CPP, iOS IL2CPP — iOS has no Mono player, §12). The rename is *effectively* atomic on
+  one volume; the BCL does not formally guarantee atomicity — so treat `Replace` as an
+  *optimisation of the save protocol*, not its correctness: on load, a corrupt/unparsable save is
+  an expected `Result.Failure` with a defined fallback (previous file or fresh run), never an
+  unhandled crash at boot, and the interruption points (write → flush → replace/move → cleanup)
+  are what the device smoke test exercises.
 - **Versioned schema, migration chain.** Every save carries a `version` field. Adding a field is
   back-compatible (missing → default); renaming or removing needs a migration step. Never ship a
   schema change without a migration test from the previous version. Persist **enums by name**,

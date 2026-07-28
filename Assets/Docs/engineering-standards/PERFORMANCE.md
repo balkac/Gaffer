@@ -9,7 +9,9 @@ matter. The engine's correctness-side semantics (lifecycle, time, object lifetim
 
 > **Baseline:** Unity 6 (6000.x) · C# 9.0 · URP. Several rules below are version-tagged; in
 > particular, do **not** import allocation folklore from modern .NET (C# 11 method-group caching,
-> C# 10 interpolation handlers, span-based `Sort`) — none of it is active on this baseline (§8).
+> C# 10 interpolation handlers) — none of it is active on this baseline (§8), and BCL allocation
+> claims are verified against this Unity version's shipped IL, not against web lore.
+> Verified: Unity 6000.3.16f1 · Addressables 2.11.1 · last reviewed 2026-07-28.
 
 ---
 
@@ -23,13 +25,19 @@ The cheapest work is the work you never ask the engine to do.
   core run headless. The mechanism is real, not folklore: every engine callback crosses the
   native→managed interop boundary even when the body is trivial (Unity's own "10000 Update() calls"
   measurement; the Unity 6 manual recommends a custom update manager for exactly this reason). One
-  manager iterating a plain list beats N engine callbacks.
-- **No `ParticleSystem` for simple, countable effects.** A pool of ordinary `SpriteRenderer`s driven
-  by one tween library costs only the sprites it draws — no component and no `Update` *per particle*.
-  Reach for `ParticleSystem` / VFX Graph when you genuinely need many particles or GPU simulation —
-  and then apply a mobile budget per prefab: pooled + prewarmed, bounded `maxParticles`, one shared
-  atlas material, collision/lights/trails off, and a `Play()`/`Emit()` path measured to allocate
-  nothing.
+  manager iterating a plain list beats N engine callbacks — **at scale**: ordinary `Update` methods
+  are fine for a small, stable population; introduce a centralized update manager when callback
+  count, ordering needs, subscription churn, or profiler evidence justifies its added routing and
+  ownership complexity, not on principle.
+- **Sprites vs `ParticleSystem` is a control decision, not a cost law.** A `ParticleSystem`
+  simulates all its particles native-side in one component and draws them batched — for many
+  stochastic particles it is usually the *cheaper* path, not the expensive one. A pool of
+  `SpriteRenderer`s driven by one clocked driver earns its place where the effect is **few,
+  countable, and choreographed** (authored trajectories, exact landings — a coin flying to the
+  wallet, a star to the HUD); that is a *control* argument, and any "cheaper" claim belongs to a
+  device measurement, not to this doc. Whichever is chosen, the mobile budget applies per prefab:
+  pooled + prewarmed, bounded `maxParticles`, one shared atlas material, collision/lights/trails
+  off, and a `Play()`/`Emit()` path measured to allocate nothing.
 
 ## 2. Prefer world-space to a UI canvas for a small, dynamic HUD
 
@@ -50,11 +58,14 @@ ordered by sorting order and z.
   extra raycast pass, no per-graphic `CanvasRenderer`.
 - **One render path** — text and sprites go through the camera exactly like the rest of the scene.
 
-The trade-off is real and bounds the advice: world-space UI has **no automatic anchoring or layout**,
-so each view positions itself from the camera's `orthographicSize`/`aspect` and re-anchors **only when
-the aspect changes** (a guarded check in `LateUpdate`). For a small fixed HUD that's simpler and
-cheaper than a canvas; for a large, densely interactive UI, uGUI / UI Toolkit is the right tool.
-Choose by the UI, not by reflex — and when you do choose the canvas, **§15 is that branch's rulebook**.
+The trade-off is real and bounds the advice: world-space UI gives up everything uGUI automates —
+anchoring/layout, `Screen.safeArea` handling, localization-driven reflow, accessibility/navigation
+semantics — so each view positions itself from the camera's `orthographicSize`/`aspect` and
+re-anchors on a guarded `LateUpdate` check watching **both aspect and `Screen.safeArea`** (safe
+area can change with no aspect change — rotation, foldables, split-screen multitasking). For a
+small fixed HUD that's simpler and cheaper than a canvas; for a large, densely interactive or
+localised UI, uGUI / UI Toolkit is the right tool. Choose by the UI, not by reflex — and when you
+do choose the canvas, **§15 is that branch's rulebook**.
 
 ## 3. Stable runtime — budgets from a config asset
 
@@ -94,14 +105,18 @@ systems (sim, view/tween, render) and attach the profiler numbers to "done" (§1
   **grow-only**, prewarmed at boot to the **largest content in the catalogue** (a `MaxContentHint`
   derived from the shipped data, not a guessed nominal size). If the prewarm target is smaller than
   the real maximum, the first late encounter with the biggest content pays the whole growth spike
-  mid-session — measured on device as a one-time multi-hundred-KB hit.
+  mid-session — measured on device as a one-time multi-hundred-KB hit. Prewarm-to-max presumes the
+  maximum is *small* (a puzzle board, not an open world): the target trades a mid-session spike for
+  boot time and permanent RAM, so it must fit the boot and memory budgets — for a large catalogue,
+  prewarm to a representative peak instead and accept measured, controlled growth.
 
 **Rebake in place; don't rebuild.** Level/round-scoped visuals (board meshes, decks, obstacle
 overlays, tutorial dressing) are **app-lifetime components that re-bake in place** for each level —
 grow-only buffers, count-limited mesh writes (§13) — never a `Destroy`-everything +
 recreate-everything cycle. The Destroy/rebuild pattern was measured at **170–250 KB of GC per level
-transition**, and because `Destroy` is deferred to end of frame, the old and new copies coexist for a
-frame and the *peak* doubles. A rebake transition allocates nothing once buffer capacities cover the
+transition** (measured case: a small 2D puzzle on this baseline, low-end Android device build —
+evidence for the mechanism, not a portable constant), and because `Destroy` is deferred to end of
+frame, the old and new copies coexist for a frame and the *peak* doubles. A rebake transition allocates nothing once buffer capacities cover the
 largest board. (Per-level components that must exist get a `Configure(...)`-style rebind that
 explicitly resets every clock, pending action, and stale handle — see `UNITY.md` §5 and
 `ARCHITECTURE.md` §6 for the ownership side.)
@@ -171,9 +186,12 @@ pure and synchronous, this is also exactly what makes it fast (and cheap) to tes
 
 ## 7. Tear down tweens before you unload
 
-Before a scene unload / reload, **kill in-flight tweens** (`DOTween.KillAll()` or per-target kills) so
-no tween callback fires against an object the unload has already destroyed — the classic "object has
-been destroyed but you are still trying to access it" warning. Anything that outlives its target
+Before a scene unload / reload, **kill in-flight tweens — per-target and lifetime-linked by
+default** (`SetLink`, target kills, a scoped id); reserve `DOTween.KillAll()` for whole-app
+teardown, since in an app-lifetime architecture it also kills persistent tweens that were never
+meant to die with the scene. The point either way: no tween callback may fire against an object the
+unload has already destroyed — the classic "object has been destroyed but you are still trying to
+access it" warning. Anything that outlives its target
 (tweens, coroutines, event subscriptions) gets an explicit teardown; the composition root owning
 lifetimes (`ARCHITECTURE.md` §6) is where that responsibility lives.
 
@@ -232,9 +250,17 @@ House rules that follow, for any per-action / per-frame path:
   `Clear()` it per call, and pre-size it once — instead of `new`-ing it per action.
 - **Reseed, don't re-`new`, the RNG.** A sub-RNG derived per unit of work is a few bytes of state;
   expose `Reseed(seed)` and reuse a single instance.
-- **Sorting**: `List.Sort(Comparison<T>)` wraps the delegate in a fresh comparer object per call on
-  this BCL — implement `IComparable<T>` and use the parameterless `Sort()` (`Comparer<T>.Default`
-  is a cached singleton), or pass a cached `IComparer<T>`.
+- **Sorting — verified against this Unity version's shipped IL (Editor Mono, Android AOT, iOS AOT
+  alike):** the one allocation-free overload is `List<T>.Sort(Comparison<T>)` with a **cached**
+  delegate — the comparison is passed raw through the sort, no wrapper object. The intuitive
+  alternatives are the trap: parameterless `Sort()` and `Sort(IComparer<T>)` allocate a
+  `Comparison<T>` delegate on **every call** (a `comparer.Compare` method-group conversion inside
+  `ArraySortHelper`), even for a struct implementing `IComparable<T>` — the CoreFX specialization
+  that would avoid it ships in the assembly but is never selected. `Array.Sort(array,
+  Comparison<T>)` still allocates a wrapper comparer on this BCL, too. Rule: hot-path sorting goes
+  through one `static readonly Comparison<T>` field and `List.Sort(Comparison<T>)`. (Evidence
+  level: shipped-IL inspection — confirm with the Profiler on the target backend before quoting it
+  as a device-measured number.)
 - Compare distances with `sqrMagnitude`, not `Vector3.Distance`, when only the ordering matters.
 
 ## 9. Unity API allocation traps
@@ -251,9 +277,12 @@ Engine calls that allocate on every use, and their free counterparts:
 | repeated `GetComponent<T>` lookups | cache in `Awake`; `TryGetComponent` for the miss case |
 
 **String-keyed engine APIs are CPU traps even when they don't allocate:** `animator.SetFloat("Speed",
-v)` pays the hash/lookup per call — cache `Animator.StringToHash` / `Shader.PropertyToID` ids once.
-Mind the documented asymmetry: `StringToHash` ids are stable (CRC) and safe to persist;
-`PropertyToID` ids are **per-run only** — never store or send them. `Invoke("Name", t)` and
+v)` pays the hash/lookup per call — cache `Animator.StringToHash` / `Shader.PropertyToID` ids once,
+in `static readonly` fields. Treat **both** as runtime-only values: `PropertyToID` is documented as
+per-session, and `StringToHash`'s stability is an *undocumented implementation detail*, not a
+persistence contract — neither goes into save data, content JSON, analytics, or network payloads;
+persist the source string or a project-owned stable ID instead (the general rule for any
+engine-generated id without a documented persistence guarantee). `Invoke("Name", t)` and
 `SendMessage` are string dispatch — orders of magnitude slower than a direct call in benchmarks;
 banned on runtime paths.
 
@@ -297,18 +326,21 @@ The opening line says profile before optimising; concretely:
 
 The habits that matter for this class of game — a 2D URP scene driven by sprites and text:
 
-- **Batching**: URP batches via the **SRP Batcher** (per shader *variant*, not per material — many
-  materials on one shader are cheap). Keep sprites on the shared sprite shader and pack them into a
-  **sprite atlas**; a stray material or un-atlased texture splits the batch, and a per-renderer
-  `MaterialPropertyBlock` opts that renderer out of the SRP Batcher. Watch **SetPass calls**, not
-  just draw calls. (2D `SpriteRenderer`s also flow through the sprite/dynamic batching path — the
-  practical rule is the same: one atlas + one material ⇒ a handful of draws; the Frame Debugger
-  names the exact reason whenever a batch breaks.)
-- **Overdraw** is the 2D killer on mobile **tile-based GPUs** (effectively all of them): stacked
-  full-screen transparent sprites shade every pixel they cover, again per layer. Keep backgrounds
-  opaque where possible, use tight sprite meshes (not full-rect), and don't stack full-screen alpha
-  fades. (**MSAA is the desktop-intuition exception**: tile-based GPUs resolve it on-tile, so 2x–4x
-  is cheap — for a flat 2D game it's simply unnecessary, not costly.)
+- **Batching — two different mechanisms, don't conflate them.** The **SRP Batcher** cuts the *CPU
+  setup cost per draw* (material data persists on the GPU; compatibility is per shader *variant*,
+  not per material — many materials on one shader are cheap); it does **not** merge draw calls.
+  Actual draw *merging* for 2D comes from the sprite/dynamic-batching path — one atlas + one
+  shared material ⇒ a handful of draws. Keep sprites on the shared sprite shader and pack them
+  into a **sprite atlas**; a stray material or un-atlased texture splits the batch, and a
+  per-renderer `MaterialPropertyBlock` opts that renderer out of the SRP Batcher. Watch **SetPass
+  calls**, not just draw calls, and let the **Frame Debugger** name which path a renderer actually
+  took and the exact reason whenever a batch breaks.
+- **Overdraw** is the 2D killer on mobile **tile-based GPUs** (the dominant mobile GPU
+  architecture): stacked full-screen transparent sprites shade every pixel they cover, again per
+  layer. Keep backgrounds opaque where possible, use tight sprite meshes (not full-rect), and don't
+  stack full-screen alpha fades. (**MSAA is the desktop-intuition exception**: tile-based GPUs
+  resolve it on-tile, so 2x–4x is *typically* cheap — bandwidth and store costs still exist, so
+  confirm on a representative device; for a flat 2D game it's simply unnecessary either way.)
 - **Texture memory**: compress with **ASTC** (Unity's recommended default for iOS and modern
   Android; ETC2 remains the fallback for old GLES3.0 devices — Google cites >80% ASTC coverage on
   Play, higher in practice on active devices as of 2026). A 2048² RGBA32 texture is ~16 MB *before*
@@ -367,12 +399,26 @@ Runtime-built geometry (boards, sheets, overlays) follows the §4 lifetime rule:
   lifetime are fine — but bounded, documented at their declaration, and never re-acquired per use.
 - **Probe existence with `LoadResourceLocationsAsync`**, never with a full load — it resolves
   catalogue locations without loading the asset (its `Result` needs no release; the handle does).
-- `WaitForCompletion` (sync) is supported with documented caveats: local content only (never a
-  remote/undownloaded bundle), it can pump *other* in-flight operations to completion, scenes can't
-  load synchronously, and it's unsupported on WebGL. On local bundles it is the sanctioned
-  load-time-only stall that keeps loading ports synchronous (`ARCHITECTURE.md` §5) — remote content
-  changes the answer: pre-download via `DownloadDependenciesAsync` in a dedicated loading state,
-  then load from cache.
+- **`WaitForCompletion` is a constrained mode of an async-shaped API — know its documented costs
+  before choosing it.** They are heavier than "it blocks": calling it on any operation
+  **completes ALL currently active load operations** (verbatim in the Addressables docs), it must
+  never target a remote/undownloaded bundle, a scene load doesn't fully complete through it (two
+  back-to-back sync scene loads can lock the player), calling it in `Awake` before the scene
+  finishes loading can stall the main thread, and WebGL doesn't support it at all. And **local ≠
+  free**: a local load still pays disk access, bundle decompression, dependency resolution and
+  asset deserialization on the main thread — measure the worst-case stall on target hardware, and
+  never let a gameplay/animation frame block on a load (loads belong to designed loading moments).
+  Whether to use
+  it is an architecture decision, and **`ARCHITECTURE.md` §5 owns it**: for the local-content
+  profile, a synchronous loading port via `WaitForCompletion` — inside these limits, behind a
+  designed loading moment — is the deliberate choice that keeps the flow frame-atomic, chosen
+  over paying async's contagion and intermediate-state costs for *network* latency that doesn't
+  exist locally.
+  The completes-all-active side effect makes the concurrent-operation population part of that
+  contract: any package or SDK that issues its own Addressables operations (localization tables,
+  remote catalog updates, an ad SDK) joins the population a sync call force-completes — auditing
+  who else loads is part of choosing sync. Remote content changes the answer: pre-download via
+  `DownloadDependenciesAsync` in a dedicated loading state, then load from cache.
 
 ## 15. Canvas UI & TextMeshPro — when you do choose uGUI
 

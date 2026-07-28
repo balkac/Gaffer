@@ -5,7 +5,9 @@ How the feel and teaching layers of a casual game get engineered — the design-
 [`ARCHITECTURE.md`](ARCHITECTURE.md) §8 (the sim/view split that makes responsive feel possible at
 all). The quality bar throughout: what a top-tier casual studio (Royal Match / Toon Blast class)
 would ship. Rules here were distilled from studying those references and from shipped iterations —
-they are conventions with rationale, not engine facts.
+treat every one as a **design default to validate by playtest** (an observed pattern or a
+hypothesis with rationale), never as an engine fact or a proven genre law. Last reviewed
+2026-07-28.
 
 ---
 
@@ -62,28 +64,34 @@ The pattern the genre leaders converge on (dim-and-spotlight, in-board, no modal
   into defaults once liked).
 - **Tween discipline is `PERFORMANCE.md` §7**: starting a tween is an event; one clocked driver for
   N elements; lifetime-linked; unscaled time through pauses.
-- **Retargetable motion wants an integrator, not a tween.** A tween's contract is "fixed target,
-  fixed duration" — when the target can change mid-flight (a falling block whose destination drops
-  further because blocks beneath it were blasted), a tween must be killed and recreated on every
-  retarget (allocation, racing-callback risk, duration re-math). A hand-rolled integrator
+- **Continuously-retargeted motion wants an integrator, not a tween — an ownership argument, not
+  an API gap.** When a target can change mid-flight (a falling block whose destination drops
+  further because blocks beneath it were blasted), a hand-rolled integrator
   (`velocity += g·dt; position += velocity·dt; settle at current target`) retargets for free: the
-  target is just a variable the sim updates. Use tweens for cold, one-shot, fixed-target motion;
-  use a clocked driver for hot, retargetable, N-element motion.
+  target is just a variable the sim updates, and one class owns all the state. Be accurate about
+  the alternative: DOTween *can* retarget supported tweeners (`ChangeEndValue` — with restrictions
+  inside sequences and for some plugin types) and *can* run on a manually-stepped clock
+  (`UpdateType.Manual` + `DOTween.ManualUpdate`), so the preference does not rest on missing APIs.
+  It rests on what high-count retargetable motion does to tween code — per-element tween objects,
+  duration re-math on every change, `Kill`/`OnComplete` interaction paths to test — versus one
+  integrator with explicit state; and on measured cost (`PERFORMANCE.md` §4's per-element rule).
+  Use tweens for cold, one-shot, fixed-target motion; use a clocked driver for hot, retargetable,
+  N-element motion.
 - **Hand-rolled ≠ unreadable — the player-class pattern.** The readability of `DOMove(...)` in one
   line comes from its API, not its library, and the same surface is available by hand: each motion
   concern is its **own plain-C# player class** (`FallAnimator`, `BlastFxPlayer` — single
   responsibility, no `MonoBehaviour`) with a declarative one-line entry (`Begin(view, target)`)
   and a `Step(dt)` the owning view calls from a one-line `Update`. Easing lives in named functions
   or `AnimationCurve` fields, so behaviour changes are data changes. This keeps call sites as
-  short as a tween call, makes the driver steppable in tests (a tween library's clock is not), and
-  contains growing retarget/cancel complexity inside one class instead of a web of
-  `Kill`/`OnComplete` callbacks. What this pattern forbids is the naive version: interpolation
+  short as a tween call, makes the driver trivially steppable in tests (`Step(0.016f)` — DOTween
+  needs its manual-update mode and ownership of a global clock for the same), and contains growing
+  retarget/cancel complexity inside one class instead of a web of `Kill`/`OnComplete` callbacks. What this pattern forbids is the naive version: interpolation
   soup inlined into a controller's `Update`.
 
 ## 4. Input feel
 
 - **Act on touch-began, not touch-up**, for board taps — the perceived snappiness difference is
-  large and the genre standard.
+  large, and it is the pattern the studied genre references converge on.
 - **Grid hit-testing is math, not physics**: pointer → cell by coordinate arithmetic, no colliders,
   no raycasts (convention, not engine doctrine — the wins are zero physics cost and a strippable
   physics module).
@@ -92,6 +100,14 @@ The pattern the genre leaders converge on (dim-and-spotlight, in-board, no modal
   explicit, named flow states (a win/fail sequence, a tutorial) with a single owner — and a lock
   is expressed at the input boundary (raycaster off, one gate in the handler), not sprinkled
   through views.
+- **Input-during-animation is a per-mechanic policy, not a universal rule.** Instant logical
+  commit + visual replay (**Accept**) is the right default for the puzzle core — but interacting
+  with a visibly moving object can be genuinely ambiguous, so each mechanic picks one policy
+  deliberately: **Accept** (apply to the logical state now), **Queue** (order-preserve, apply
+  after the transition), **Merge** (fold the command into the active transition), or **Gate**
+  (reject/defer until a safe point, with visible feedback). The choice answers: what does the
+  player visually target; can logical and visual identity diverge; do commands commute; can a
+  queued command become invalid; what does a rejected input show?
 - **Generous hit targets**; on the palette/buttons, pressed-state feedback is scale squash, not
   tint (tint reads as cheap).
 

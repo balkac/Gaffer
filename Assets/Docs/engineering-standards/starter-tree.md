@@ -8,15 +8,16 @@ this encodes.
 ```
 Assets/_Project/Scripts/
   Common/            MyGame.Common          (no deps)              — Result, Result<T>, generic primitives
-  Domain/            MyGame.Domain          → Common               — pure C#, no UnityEngine, no exceptions
+  Domain/            MyGame.Domain          → Common               — pure C#, no UnityEngine; Result for expected failure (CONVENTIONS §4)
     <Model>/         (value objects that form one model = one folder)
     <Geometry>/
   Application/       MyGame.Application     → Domain, Common       — pure & synchronous, headless-testable
     <Feature>/                              — orchestrator at the feature root…
     <Feature>/<Step>/                       — …collaborators behind interfaces, one concern per folder
-    Serialization/                          — ISerializer + Json impl + DTOs   (only if you serialize)
+    Serialization/                          — ISerializer port + wire DTOs + DTO→domain mapping (consumer-owned contract; pure)   (only if you serialize)
   Infrastructure/    MyGame.Infrastructure  → Application, Domain, Common, (UniTask), UnityEngine
     Loading/                                — async ports (ILevelProvider : UniTask<Result<T>>), providers, fallback chain   (only if you have async I/O)
+    Serialization/                          — the CONCRETE serializer adapter (JsonUtility / a lib) behind the Application port
     Configuration/                          — ScriptableObject configs
   Presentation/      MyGame.Presentation    → Application, Domain, UnityEngine
     <Feature>/Views/                        — MonoBehaviour views
@@ -68,16 +69,21 @@ same `.cs` files** the EditMode asmdef builds:
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <!-- Pin to the engine's C# level (Unity 6 = 9.0) so syntax Unity can't compile fails HERE first. -->
+    <LangVersion>9.0</LangVersion>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <!--
     Single source of truth: the pure layers AND the EditMode tests compile here from the SAME .cs
-    files the Unity Test Runner builds (asmdef MyGame.Tests), so `dotnet test` and Unity never diverge.
-    Only framework-free production code is included; anything touching UnityEngine (Infrastructure,
-    Presentation, Composition, Editor) stays OUT — which also *enforces* that these layers remain
-    framework-free (they wouldn't compile here if they weren't). Because both compilers build the same
-    test files, tests must use the public API only — no reliance on `internal` members.
+    files the Unity Test Runner builds (asmdef MyGame.Tests). This catches a large class of
+    divergence — framework references, and most syntax via the LangVersion pin — but it is NOT a
+    complete Unity-compatibility guard: net8.0 still exposes BCL APIs Unity's runtime lacks, and
+    desktop NUnit is broader than Unity's NUnit integration. Unity compilation + EditMode stay a
+    required gate. Only framework-free production code is included; anything touching UnityEngine
+    (Infrastructure, Presentation, Composition, Editor) stays OUT — which also *enforces* that these
+    layers remain framework-free (they wouldn't compile here if they weren't). Because both compilers
+    build the same test files, tests must use the public API only — no reliance on `internal` members.
   -->
   <ItemGroup>
     <Compile Include="..\Assets\_Project\Scripts\Common\**\*.cs" />
@@ -96,7 +102,11 @@ same `.cs` files** the EditMode asmdef builds:
 
 `dotnet test tests/` then runs the whole pure suite in seconds, in CI, with no Unity install — and if
 someone accidentally pulls `UnityEngine` into Domain or Application, this project stops compiling, so
-the framework-free boundary is checked, not just documented.
+the framework-free boundary is checked, not just documented. Treat it as the fast **inner loop** of a
+three-layer validation, not the whole story: (1) `dotnet test` per change; (2) Unity compilation +
+EditMode tests as the compatibility gate (they catch Unity-absent BCL APIs and NUnit-surface
+differences the bridge cannot); (3) device smoke/profile runs for platform-risk work (`PERFORMANCE.md`
+§11, `UNITY.md` §7).
 
 ## Example `.asmdef`
 

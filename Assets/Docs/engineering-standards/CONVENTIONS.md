@@ -7,7 +7,8 @@ project structure (layers, assemblies, folders, the async boundary) see
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 > When in doubt, take Rider's / ReSharper's suggestion — `.editorconfig` is the shared baseline
-> for them.
+> for them. Verified: C# 9.0 / Unity 6000.3.16f1 BCL for the §6 semantics · last reviewed
+> 2026-07-28.
 
 These conventions are framework-agnostic: they hold in a Unity project, an ASP.NET service, or a
 plain console library.
@@ -40,10 +41,11 @@ plain console library.
 
 - **One public type per file**, file name = type name. (A single small file grouping a set of DTOs
   that only exist as one payload is the rare exception.)
-- **Methods are verb + object** — they say what they *do*: `GetCoverage`, `BuildFillPolygon`,
-  `FindRoot`, `ChooseAdjacentRegion`, `Merge`, `EnumerateShapes`. Avoid noun-only (`Union` →
-  `Merge`) and vague (`Find` → `FindRoot`) names. This holds for **every** method, including
-  `private` helpers and test data-builders — a method name is never a bare noun:
+- **Methods are a verb or a verb phrase — specific, never a bare noun** (the .NET-guidelines
+  form; a lone verb like `Merge`, `Clear`, `Dispose` is idiomatic when the object is obvious from
+  the receiver): `GetCoverage`, `BuildFillPolygon`, `FindRoot`, `ChooseAdjacentRegion`, `Merge`,
+  `EnumerateShapes`. Avoid noun-only (`Union` → `Merge`) and vague (`Find` → `FindRoot`) names.
+  This holds for **every** method, including `private` helpers and test data-builders:
   - **Computed values prefer a property; a `Get`/`Compute` *method* is for the rest.** For a cheap,
     side-effect-free value, expose an idiomatic **property** with a noun name (`Area`, `Count`) — that
     is the .NET-guidelines default, not a `GetArea()` method. Reach for a `Get`/`Compute`-prefixed
@@ -56,7 +58,8 @@ plain console library.
   - *Idiomatic exceptions kept:* conversions (`ToDto`, `FromDto`, `CornerToWorld`), the RNG
     `Next*` family, and `Result.Success` / `Result.Failure` factories.
   - Test **method names** keep the `Scenario_Condition_Result` form (§5) — that convention
-    overrides verb+object for the `[Test]` methods themselves, not for the helpers they call.
+    overrides the verb-phrase rule for the `[Test]` methods themselves, not for the helpers they
+    call.
 - **A method does what its name says — no more, no hidden side effects.** If an operation also
   mutates or triggers extra work, name the *whole* operation and let the body read as explicit, named
   steps (`ProcessMove` — which validates, places, merges, clears, scores and refills — not
@@ -138,8 +141,12 @@ plain console library.
   fail-fast with a guard clause and `throw` (or an assert). Converting a real bug into a `Result` hides
   it. The distinction is *expected outcome* vs. *should-never-happen*, not "exceptions are banned."
 - **Catch third-party exceptions at the boundary** (e.g. JSON parsing in a serializer, a network
-  call in a provider) and convert them to `Result.Failure`. Exceptions from libraries don't leak
-  past the adapter that calls the library.
+  call in a provider) and convert them to `Result.Failure` — but only the failures the adapter
+  *expects and can recover from* (the library's documented parse/IO/network error types). A
+  catch-all that also swallows **cancellation** (`OperationCanceledException` must propagate to
+  its awaiter) or **programming errors** (a `NullReferenceException`/`ArgumentException` from your
+  own misuse) converts bugs into silent fallbacks — those still fail fast per the first bullet.
+  Expected library failures don't leak past the adapter; nothing else gets absorbed by it.
 - **Deterministic where it matters.** Any generation/simulation uses a **seeded RNG** — the same
   seed yields the same output. Refactors are behaviour-neutral unless a change is intended, which
   makes them testable by golden output.
@@ -176,10 +183,14 @@ public readonly struct Result<T>
 - **Every collaborator / data structure gets isolated tests.** Because collaborators are small and
   behind interfaces (§3), each is unit-tested on its own.
 - **Validate headless first.** Run the pure tests with `dotnet test` before opening the editor /
-  running the app, and keep the suite green after every change. This only works if the core stays
-  framework-free and synchronous (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
+  running the app, and keep the suite green after every change. The hard requirement for this is
+  that the core stays **framework-free**; keeping it *synchronous* is the house default
+  (`ARCHITECTURE.md` §5) because it shrinks the state space and keeps tests deterministic — pure
+  async code is also headless-testable, so synchrony is an architectural choice, not a technical
+  prerequisite. The bridge is the fast inner loop, not the whole gate — see `starter-tree.md` for
+  the three validation layers.
 - **Test method names use `Scenario_Condition_Result`** (e.g.
-  `Generate_WithSeed_IsDeterministic`) — this is the one place a method name isn't verb+object.
+  `Generate_WithSeed_IsDeterministic`) — this is the one place a method name isn't a verb phrase.
 - **Deliverable docs, code, and comments are in English** (day-to-day chat can be in any
   language). Keep the docs in sync: update the architecture doc after any structural change.
 
@@ -218,9 +229,14 @@ mechanics — boxing, closures, LINQ — are performance, and live in `PERFORMAN
   user. Any game that can run on a Turkish-locale device has this bug as a live possibility, not
   a hypothetical.
 - **Persist enums by NAME, never by ordinal** — names survive reordering and renumbering of the
-  enum. And guard the read: `Enum.TryParse` **succeeds on numeric strings even when the value is
-  not a defined member** (`TryParse<Kind>("999")` returns `true` with an undefined value) — follow
-  it with `Enum.IsDefined` when the data could ever contain digits.
+  enum. But a persisted name **is wire format**: renaming or removing a member whose name has
+  shipped in saves is a breaking change (Microsoft's data-contract versioning rules say exactly
+  this) — treat shipped names as frozen; a rename requires either a stable serialized-name mapping
+  (keep writing/accepting the old wire name) or a save-migration step. For long-lived *content*
+  identifiers, prefer explicit stable string/int IDs over enum names outright. And guard the read:
+  `Enum.TryParse` **succeeds on numeric strings even when the value is not a defined member**
+  (`TryParse<Kind>("999")` returns `true` with an undefined value) — follow it with
+  `Enum.IsDefined` when the data could ever contain digits.
 - **Never mutate a collection inside its own `foreach`** — `Remove` during enumeration throws
   `InvalidOperationException` at runtime. Iterate backwards with an index `for` when removing,
   use `RemoveAll` (mind the captured-predicate allocation on hot paths), or collect-then-remove
@@ -246,7 +262,7 @@ These are the kinds of edits the conventions produce, kept as generic before →
 | SOLID (§3) | `partitioner` owns its own union-find internals | extract generic `DisjointSet`; partitioner holds the *policy* | Separate the data structure from the policy that drives it. |
 | SOLID (§3) | a closure-heavy local function sharing mutable locals | a `private` method, or a small state-holding nested class | Extract when the local is shared state in disguise; keep local functions that genuinely earn their scope. |
 | SOLID (§3) | a `sealed` concrete subclassed to vary behaviour | an injected interface with N implementations | Composition over inheritance by default; sealing doesn't violate OCP — extension is a new implementation. |
-| Naming (§2) | `Union(a, b)` | `Merge(a, b)` | Methods are verb+object, never a bare noun. |
+| Naming (§2) | `Union(a, b)` | `Merge(a, b)` | Methods are verb phrases, never a bare noun. |
 | Naming (§2) | `BoardArea()`, `WorldRect()` | `GetBoardArea()`, `GetWorldRect()` | Computed-value helpers take `Get`/`Compute`. |
 | Naming (§2) | `RegionConnected(r)` | `IsRegionConnected(r)` | Predicates take `Is`/`Are`/`Has`/`Can`. |
 | Naming (§2) | `Shape(...)`, `FullCellPiece(...)` (test builders) | `CreateShape(...)`, `CreateFullCellPiece(...)` | Factories — including test builders — use `Create`/`Build`. |
