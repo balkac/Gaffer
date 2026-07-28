@@ -7,7 +7,7 @@ project structure (layers, assemblies, folders, the async boundary) see
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 > When in doubt, take Rider's / ReSharper's suggestion — `.editorconfig` is the shared baseline
-> for them. Verified: C# 9.0 / Unity 6000.3.16f1 BCL for the §6 semantics · last reviewed
+> for them. Verified: C# 9.0 / Unity 6000.3.20f1 BCL for the §6 semantics · last reviewed
 > 2026-07-28.
 
 These conventions are framework-agnostic: they hold in a Unity project, an ASP.NET service, or a

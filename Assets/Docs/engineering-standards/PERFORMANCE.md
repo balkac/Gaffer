@@ -11,7 +11,8 @@ matter. The engine's correctness-side semantics (lifecycle, time, object lifetim
 > particular, do **not** import allocation folklore from modern .NET (C# 11 method-group caching,
 > C# 10 interpolation handlers) — none of it is active on this baseline (§8), and BCL allocation
 > claims are verified against this Unity version's shipped IL, not against web lore.
-> Verified: Unity 6000.3.16f1 · Addressables 2.11.1 · last reviewed 2026-07-28.
+> Verified: Unity 6000.3.20f1 (mscorlib byte-identical to 6000.3.16f1, the IL-inspected build) ·
+> Addressables 2.11.1 · last reviewed 2026-07-28.
 
 ---
 

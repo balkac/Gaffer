@@ -134,3 +134,5 @@ differences the bridge cannot); (3) device smoke/profile runs for platform-risk 
    seams), [`CONVENTIONS.md`](CONVENTIONS.md) (style, C# traps), [`UNITY.md`](UNITY.md) (engine
    correctness), [`PERFORMANCE.md`](PERFORMANCE.md) (cost discipline), and
    [`GAME-FEEL.md`](GAME-FEEL.md) (UX craft) — they cross-reference each other by section number.
+   Commits follow [`COMMIT-CONVENTIONS.md`](COMMIT-CONVENTIONS.md) (Conventional Commits; derive
+   the scope table from your tree).

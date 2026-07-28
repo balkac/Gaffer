@@ -7,7 +7,7 @@ the layering, package-by-feature, and async-boundary ideas apply to any layered 
 
 For an empty skeleton to copy, see [`starter-tree.md`](starter-tree.md).
 
-> Verified: Unity 6000.3.16f1 · Addressables 2.11.1 · last reviewed 2026-07-28. Engine/BCL facts
+> Verified: Unity 6000.3.20f1 · Addressables 2.11.1 · last reviewed 2026-07-28. Engine/BCL facts
 > in this set are version-tagged; the layering rules here are **house defaults with rationale** —
 > scope notes in place say where they bend.
 

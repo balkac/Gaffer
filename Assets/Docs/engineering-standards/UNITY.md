@@ -7,7 +7,7 @@ correctness companion to [`PERFORMANCE.md`](PERFORMANCE.md), which covers the co
 
 > **Baseline:** Unity 6 (6000.x), C# 9.0. Version-gated rules are tagged; verify against the
 > matching manual version before porting a rule to another engine release.
-> Verified: Unity 6000.3.16f1 · last reviewed 2026-07-28.
+> Verified: Unity 6000.3.20f1 · last reviewed 2026-07-28.
 
 ---
 
