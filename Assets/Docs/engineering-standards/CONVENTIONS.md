@@ -1,7 +1,7 @@
 # Engineering Conventions — C# / .NET
 
 The rules I follow in every C# project, and the reasoning behind them. The mechanical ones
-(braces, `var`, spacing, import order) are enforced by [`.editorconfig`](.editorconfig), which
+(braces, `var`, spacing, import order) are enforced by the repo-root `.editorconfig`, which
 Rider and `dotnet format` both read — so they are tool-checked, not just documented here. For
 project structure (layers, assemblies, folders, the async boundary) see
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
@@ -189,17 +189,20 @@ Language-level traps that produce real bugs; none are style preferences. (The *a
 mechanics — boxing, closures, LINQ — are performance, and live in `PERFORMANCE.md` §8.)
 
 - **Never call a virtual method from a constructor.** The override runs before the derived
-  constructor body has initialised its fields (field *initializers* have run; the ctor body has
-  not), so the override observes default values. Construction only constructs.
+  constructor body has initialised its fields (the exact order: derived field *initializers* →
+  base initializers → base ctor body → derived ctor body — so initializer-assigned fields are
+  visible to the override, ctor-body-assigned fields are not). Construction only constructs.
 - **Struct copy semantics.** `list[0].hp = 5` doesn't compile (a `List<T>` indexer returns a
   *copy* — CS1612), and `var s = list[0]; s.hp = 5;` silently edits the copy. Unity's
   `transform.position.x = 5` fails for the same reason. The pattern is read–modify–write: take
   the copy, change it, assign it back. Arrays are the exception — element access is a direct
-  reference, so `arr[0].hp = 5` works.
+  reference, so `arr[0].hp = 5` works (as are `ref`-returning indexers like `Span<T>`).
 - **Every `+=` has a `-=`.** An object subscribed to a longer-lived (worst: `static`) event stays
   reachable — it is never collected, and the stale handler fires on a dead object. Subscribe and
   unsubscribe in symmetric places (ctor/`Dispose`, `OnEnable`/`OnDisable`); teardown ownership
-  belongs to the composition root (`ARCHITECTURE.md` §6).
+  belongs to the composition root (`ARCHITECTURE.md` §6). Where a persistent object is re-bound to
+  a fresh consumer every level, prefer an assignable delegate over an event outright
+  (`ARCHITECTURE.md` §9).
 - **`const` is baked into the *calling* assembly** at compile time; changing a library `const`
   doesn't reach already-compiled callers until they recompile. A cross-assembly constant that may
   ever change is `static readonly`.
@@ -209,18 +212,25 @@ mechanics — boxing, closures, LINQ — are performance, and live in `PERFORMAN
   reason §3 prefers instances wired at the composition root over statics.
 - **Culture-sensitive string operations — the Turkish-i bug.** `"info".ToUpper()` on a Turkish-
   locale device yields `"İNFO"`: culture-default `ToUpper`/`ToLower`/`Equals`/`StartsWith` follow
-  the OS locale and silently break identifier comparisons. For *machine* strings — localization
-  keys, ids, file names, save fields — always use `ToUpperInvariant`/`ToLowerInvariant` and
+  the OS locale and silently break identifier comparisons. For *machine* strings — keys, ids,
+  file names, save fields — always use `ToUpperInvariant`/`ToLowerInvariant` and
   `StringComparison.Ordinal(IgnoreCase)`. Culture-aware comparison is only for text shown to the
-  user. This project ships a `tr` locale — this bug is not hypothetical here.
+  user. Any game that can run on a Turkish-locale device has this bug as a live possibility, not
+  a hypothetical.
+- **Persist enums by NAME, never by ordinal** — names survive reordering and renumbering of the
+  enum. And guard the read: `Enum.TryParse` **succeeds on numeric strings even when the value is
+  not a defined member** (`TryParse<Kind>("999")` returns `true` with an undefined value) — follow
+  it with `Enum.IsDefined` when the data could ever contain digits.
 - **Never mutate a collection inside its own `foreach`** — `Remove` during enumeration throws
   `InvalidOperationException` at runtime. Iterate backwards with an index `for` when removing,
-  use `RemoveAll`, or collect-then-remove (a reused scratch list, `PERFORMANCE.md` §8).
-- **Float division never throws — it poisons.** `0f/0f` is `NaN`, `x/0f` is `Infinity`, and
-  `NaN != NaN`, so one bad division silently corrupts every downstream rating or probability
-  with no exception at the source. Guard denominators at the boundary of a calculation (the sim
-  already does: possession, line averages), and test suspect values with `double.IsNaN`/
-  `IsInfinity` — never `== NaN`. Compare floats for "equality" with an epsilon, not `==`.
+  use `RemoveAll` (mind the captured-predicate allocation on hot paths), or collect-then-remove
+  (a reused scratch list, `PERFORMANCE.md` §8).
+- **Float division never throws — it poisons.** `0f/0f` is `NaN`, `x/0f` is `Infinity`, and every
+  comparison with `NaN` is false (`NaN != NaN` is the only true one), so one bad division silently
+  corrupts every downstream value AND makes `if (x < limit)` take the wrong branch with no
+  exception at the source. Guard denominators at the boundary of a calculation, test suspect
+  values with `float.IsNaN`/`IsInfinity` — never `== NaN`. Don't compare *computed* floats with
+  `==` (the operator itself is exact; rounding is what breaks the expectation) — use a tolerance.
 
 ---
 

@@ -112,9 +112,15 @@ the framework-free boundary is checked, not just documented.
 
 ## First steps in a new repo
 
-1. Copy `.editorconfig` and `.gitattributes` to the repo root.
+1. Copy `.editorconfig` and `.gitattributes` to the repo root (they live at the SOURCE repo's root,
+   not inside this docs folder — bring them along whenever this folder is copied to a new project;
+   `.editorconfig` is the enforcement mechanism `CONVENTIONS.md` §1 relies on).
 2. Create the folder + `.asmdef` skeleton above (empty layers are fine).
 3. Add `Result` / `Result<T>` to `Common` first (everything else returns them).
 4. Add the root `tests/MyGame.Tests.csproj` bridge above, then write one Domain value object + its
    test and run `dotnet test tests/` to confirm the headless path works before opening the Unity
    editor.
+5. Read the companion docs before feature work: [`ARCHITECTURE.md`](ARCHITECTURE.md) (layers,
+   seams), [`CONVENTIONS.md`](CONVENTIONS.md) (style, C# traps), [`UNITY.md`](UNITY.md) (engine
+   correctness), [`PERFORMANCE.md`](PERFORMANCE.md) (cost discipline), and
+   [`GAME-FEEL.md`](GAME-FEEL.md) (UX craft) — they cross-reference each other by section number.

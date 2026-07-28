@@ -77,11 +77,40 @@ you from referencing outward or pulling the framework into the core.
 - **Async lives only in framework-coupled layers** (Infrastructure and up). The pure **Domain** and
   **Application** layers stay **synchronous** so they remain headless-testable with `dotnet test`,
   without a Unity PlayerLoop or event loop.
-- In Unity, use **UniTask** (`UniTask<Result<T>>`), which is allocation-free and integrates with the
-  PlayerLoop — but *because* UniTask is Unity-coupled, an async port like `ILevelProvider` belongs in
-  **Infrastructure**, not Application. The Application layer never returns a `Task`/`UniTask`.
+- In Unity, the preferred async primitive is **UniTask** (`UniTask<Result<T>>`) — and the reasons
+  are mechanical, not fashion: `Task` is a class (a heap object per operation, plus state-machine
+  boxing on suspension) and resumes through a `SynchronizationContext.Post`; UniTask is
+  struct-based with pooled continuations (~zero allocation) and integrates directly with the
+  PlayerLoop (`await UniTask.Yield(PlayerLoopTiming.…)`) — under a non-generational GC
+  (`PERFORMANCE.md` §10) that allocation difference is the point. But *because* UniTask is
+  Unity-coupled, an async port like `ILevelProvider` belongs in **Infrastructure**, not
+  Application. The Application layer never returns a `Task`/`UniTask`.
+- **UniTask is a preference, not a prerequisite** — adopt it when the async surface earns it, not
+  before. Addressables needs no extra library to be awaited: every `AsyncOperationHandle` already
+  offers `Completed` callbacks, coroutine `yield`, a built-in `.Task` for plain `await`, and
+  synchronous `WaitForCompletion`. UniTask's Addressables extension makes the await
+  allocation-free and adds cancellation ergonomics (`WithCancellation(destroyCancellationToken)`)
+  — valuable once many concurrent loads, cancellation chains, or loop-timed flows exist; noise as
+  a dependency while async remains a handful of load-time awaits (which happen on transition
+  frames, where a `Task` allocation is tolerable anyway). The tool arrives together with the
+  boundary opening — never ahead of it.
 - Same principle outside Unity: keep the algorithmic core synchronous and push `async`/`Task` out to
   the I/O adapters, so the core can be tested without an async host.
+- **Don't open the boundary before a real latency exists.** Async is contagious (every caller of an
+  async signature becomes async), and the moment a flow awaits, its in-between state becomes
+  observable — input arriving mid-load, teardown mid-await, cancellation — all of which must then be
+  handled. While content is local (millisecond loads at designed transition moments), a synchronous
+  port + `WaitForCompletion` keeps the whole flow frame-atomic and buys that complexity for nothing
+  in return. Future-proofing is done by **placing the seam** (a port the async implementation will
+  later stand behind, §7's fallback chain), not by paying async's costs early. Unity 6 also ships a
+  first-party pooled awaitable (`Awaitable`) — semantics differ from `Task`; see
+  [`UNITY.md`](UNITY.md) §6.
+- **When content does go remote, split download from load.** `DownloadDependenciesAsync` (with
+  `GetDownloadSizeAsync` for the "download N MB?" prompt) pulls bundles into the local cache as an
+  explicit, async, UX-owned phase — progress, cancellation, retry and the fallback chain all live in
+  that one designed loading state, never mid-gameplay. After it, the actual asset **load is local
+  again** (cache-hit) and the synchronous flow shape survives; instantiation of heavy prefabs is a
+  separate main-thread cost handled by the usual load-time pooling, not by async.
 
 ## 6. Composition root
 
@@ -94,6 +123,14 @@ you from referencing outward or pulling the framework into the core.
   decision, not a default.
 - Keeping composition in one place means every other layer depends only on abstractions and never
   on the concrete wiring.
+- **The composition root also owns lifetimes — including the app-lifetime/rebind model.** In a
+  level/round-based game, prefer app-lifetime components that are **re-bound** per level over
+  destroy-and-recreate cycles (the performance case is `PERFORMANCE.md` §4). The contract that
+  makes it safe: every persistent component exposes one `Configure`/`Bind`-style rebind that
+  explicitly resets its clocks, pending callbacks, and stale references — nothing is "trusted to
+  die with the level", because nothing dies. And every runtime-created *native* object (`Mesh`,
+  `Material`, render texture) has exactly **one named owner** that creates it once and releases it
+  in its own teardown — never shared creation with ambient ownership.
 
 ## 7. Fallback chains (a reusable I/O pattern)
 
@@ -128,6 +165,12 @@ immutable outcome out** — not shared mutable state the outer layers read back.
 - Keep the outcome a **read model built for its consumer**, carrying what the view needs to replay and
   nothing more — so it doesn't become the domain entities leaking out under a new name (an
   anaemic-model / leaky-abstraction smell).
+- **The sim resolves instantly; only presentation takes time.** The core applies a command and
+  returns the *final* state in the same call — falling pieces, cascades and refills are already
+  resolved in the outcome; the view animates *toward* that truth on its own clock. This is what
+  makes "the board stays interactive while things animate" trivial: a new tap queries the logical
+  board (already final), not the half-animated view. The alternative — gating input on animation
+  completion — is both worse feel and a coupling of rules to rendering.
 
 ## 9. Behavioural seams — vary by injection, not inheritance
 
@@ -148,6 +191,12 @@ reusable shapes:
   next command — and that is allowed to **take real time** — lets you swap a local AI for a networked
   peer as a new implementation, with no change to the loop or the rules. It's the fallback-chain idea
   (§7) applied to the *producer* of input rather than to a resource.
+- **A 1:1, re-bound callback is an assignable delegate, not an event.** C# `event`s model *many*
+  listeners with *matching* unsubscribes; on a persistent component whose consumer is replaced every
+  level, `+=` quietly accumulates dead subscribers and the leak is one forgotten `-=` away. An
+  assignable `Action` property ("latest binding wins") makes the stale subscription **structurally
+  impossible** instead of discipline-dependent. Reserve `event` for genuine broadcast seams where
+  independent listeners come and go.
 
 ## 10. `.meta` hygiene (Unity)
 
