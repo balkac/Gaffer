@@ -131,6 +131,13 @@ Presentation); these rules govern the engine-facing side where it does appear.
 - **`async void` only for event handlers.** It can't be awaited and its exceptions bypass the
   caller (they surface on the sync context, not at the call site). Everything else returns
   `Task`/`UniTask` so failures surface.
+- **A restartable async operation owns one `CancellationTokenSource`.** On re-trigger, cancel
+  AND dispose the previous CTS before creating the new one — re-entering the operation (a
+  transition retriggered mid-flight) then cancels the in-flight run instead of racing two
+  copies. Cancel + dispose in the owner's teardown too (an in-flight task outliving its owner
+  is the async coroutine leak, first bullet). Catch `OperationCanceledException` explicitly at
+  the awaited call and `return` — the cancel-and-bail path stays visible in the method body
+  instead of relying on the framework to swallow it.
 
 ## 7. Persistence traps (mobile)
 
@@ -170,3 +177,15 @@ The Infrastructure save path (`ARCHITECTURE.md`; save-on-pause in §4 above) mus
 - **`StreamingAssets` on Android lives inside the APK/AAB archive** — unreadable via
   `File`/`System.IO` (the manual sends you to `UnityWebRequest`); iOS reads it directly. Prefer
   direct references/Addressables (`PERFORMANCE.md` §14) so this asymmetry never bites.
+
+## 8. Inspector & serialization hygiene
+
+- **`[SerializeField] private T _field;` over `public T Field;`** when a field should be
+  Inspector-editable but is not public API — serialization visibility and API surface are
+  separate decisions; don't widen the second to get the first.
+- **`[Tooltip("...")]` instead of a comment** on a serialized field — it reaches the person
+  actually tuning the value in the Inspector.
+- **`[Range(min, max)]` on bounded numerics** — the Inspector enforces the bound instead of a
+  comment pleading for it.
+- **Group related serialized fields into a `[Serializable]` struct/class** rather than a flat
+  list of loose fields — the Inspector shows the grouping, and rebind code passes one object.

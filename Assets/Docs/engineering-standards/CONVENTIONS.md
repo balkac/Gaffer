@@ -11,7 +11,9 @@ project structure (layers, assemblies, folders, the async boundary) see
 > 2026-07-28.
 
 These conventions are framework-agnostic: they hold in a Unity project, an ASP.NET service, or a
-plain console library.
+plain console library. When a rule here is adopted or tightened later, **don't drive-by rename
+unrelated code** to match it — bring a file into line when it's already being touched for real
+work. (Several rules below are absorbed from Unity's *C# style guide* e-book, 2nd ed. 2025.)
 
 ---
 
@@ -36,6 +38,20 @@ plain console library.
   - Don't set an enum's underlying type (`: byte`) unless there's a real reason; the default `int`
     is clearer.
   - Spell out flag values (`1, 2, 4, 8`) instead of `1 << n` when the constants read plainly.
+- **Declarations: one per line, no redundant initializers, no column alignment.** Fields default
+  to `0`/`null`/`false` — writing `= false` is noise; aligning declarations into columns turns
+  every addition into a whole-block diff. And a `switch` always carries a `default:` branch,
+  even when every enum value is handled today — it's the guard that catches the value added
+  tomorrow.
+- **Class member order:** fields → properties → events/delegates → lifecycle (constructor, or
+  `Awake`/`OnEnable`/`Start` in Unity) → public methods → private methods. One glance tells a
+  reader where to look.
+- **Comments explain *why*, not *what*** — a non-obvious constraint, a workaround, an invariant;
+  self-explanatory names and small methods replace the rest. Written on their own line above the
+  code, not trailing. Delete commented-out code (git history holds it); no attribution comments
+  (`git blame` exists); a `TODO` lives only while it describes real intended work — remove it
+  when done or abandoned. (Unity: prefer `[Tooltip]` over a comment on serialized fields,
+  `UNITY.md` §8.)
 
 ## 2. Naming
 
@@ -87,8 +103,13 @@ plain console library.
   distinguishes a field from locals and parameters at a glance and removes any need for `this.`.
   `const`s and `static readonly` fields that read like constants stay `PascalCase` (`EmptyValue`,
   `OrthogonalDirections`).
-- **`[Flags]` enums:** values are powers of two; aggregate with OR (`Full = Bottom | Right | Top |
+- **Enums are singular nouns** (`CellShape`, not `CellShapes`), with no prefix or suffix
+  (`ECellShape`, `CellShapeEnum`); only a `[Flags]` enum is plural — it names a combination.
+  **`[Flags]` values are powers of two**; aggregate with OR (`Full = Bottom | Right | Top |
   Left`).
+- **Events are verb phrases whose tense carries the timing**: `DoorOpening` (before) /
+  `DoorOpened` (after). The raising method takes `On`/`Raise` (`OnDoorOpened()`,
+  `RaiseUIEvent(...)`). Subscription/teardown rules are §6 here and `UNITY.md` §5.
 
 ## 3. Design / SOLID
 
@@ -121,6 +142,10 @@ plain console library.
   function is really shared state in disguise; keep it when it earns its scope. *(Inline lambda
   **arguments** — a comparator passed to `Array.Sort`, a LINQ predicate — are always fine; this is
   about named local functions, not expressions.)*
+- **No boolean flag parameters that switch behaviour.** `GetAngle(bool inRadians)` hides two
+  operations behind one name — write `GetAngleInDegrees()` / `GetAngleInRadians()`. Same family:
+  keep parameter lists short (reach for a small struct/config object when they grow) and
+  implement only the overloads actually called.
 - **Avoid premature abstraction (YAGNI).** Extract an interface or a helper only on a real
   single-responsibility or readability win, not "in case we need it". Keep a type next to its only
   consumer and promote it (e.g. to a shared `Common`) only when a second consumer actually appears.
