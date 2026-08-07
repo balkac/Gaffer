@@ -7,7 +7,7 @@ the layering, package-by-feature, and async-boundary ideas apply to any layered 
 
 For an empty skeleton to copy, see [`starter-tree.md`](starter-tree.md).
 
-> Verified: Unity 6000.3.20f1 · Addressables 2.11.1 · last reviewed 2026-07-28. Engine/BCL facts
+> Verified: Unity 6000.3.20f1 · Addressables 2.11.1 · last reviewed 2026-08-06. Engine/BCL facts
 > in this set are version-tagged; the layering rules here are **house defaults with rationale** —
 > scope notes in place say where they bend.
 
@@ -41,13 +41,34 @@ Domain  ←  Application  ←  Infrastructure / Presentation  ←  Composition
 **One `.asmdef` per layer.** Assembly references encode the arrows above; the compiler then *stops*
 you from referencing outward or pulling the framework into the core.
 
+**A pure adapter assembly is a legitimate seventh box, and the list above has no slot for it.**
+Serialization is the usual case. A file format is an *adapter* concern, so it does not belong in
+Application; but if the serializer is a plain .NET library rather than a framework one, the adapter
+has no reason to be framework-coupled, and putting it in Infrastructure would forfeit headless
+testing for nothing. The honest shape is its own assembly — pure, referencing `Common`, the
+third-party library and (where the adapter maps into domain types) `Domain`, and referenced by
+Composition — which keeps Application free of third-party dependencies while the schema, the
+mapping and every validation stay under `dotnet test`. Reach for it only when the adapter really
+is framework-free; a `JsonUtility`-based adapter is framework-coupled by definition and belongs
+in Infrastructure, which is the split `starter-tree.md` scaffolds.
+
+**Two adapters that serialize are not one module.** Externally-authored *content* and the player's
+own *saved data* are different concerns that happen to share a technology: content ships with the
+build and its typos must fail loudly in CI, while save data outlives the build and must tolerate
+what it does not recognise. Give them separate assemblies that never reference each other, so
+neither can reach into the other's types — content also references `Domain`, because its DTOs map
+into domain types; saved data deliberately stays on `Common` alone (`starter-tree.md` scaffolds
+exactly this split) — and let each own its serializer settings even though the ~10 lines look
+duplicated — hoisting the shared helper into `Common` would drag a third-party dependency into
+the dependency-free assembly, and the two contexts legitimately want different strictness (§11).
+
 ## 2. Assemblies & folders
 
 - **Folder name = the assembly's last segment; one assembly spans the whole layer.** Each layer's
   top folder matches its `.asmdef`: `Domain/` → `MyGame.Domain`, `Presentation/` →
   `MyGame.Presentation`, …, `Composition/` → `MyGame.Composition`. The `.asmdef` file is named
   after the assembly (`MyGame.Composition.asmdef`).
-- **Organizational sub-folders below a layer get no assembly and no namespace segment.** They only
+- **Organisational sub-folders below a layer get no assembly and no namespace segment.** They only
   group files (see §4). A file's namespace is declared at the **feature/concern** level under its
   layer (`MyGame.Presentation.Input`, `MyGame.Domain.Levels`); the finer sub-folders inside it keep
   that namespace rather than deepening it — e.g. `Input/Snapping/GridSnapResolver.cs` is still
@@ -73,10 +94,10 @@ you from referencing outward or pulling the framework into the core.
   - a feature's **orchestrator / entry type may sit at the feature root** above its collaborators'
     sub-folders (e.g. the top-level generator in `Generation/`, the controller in `Gameplay/`);
   - a cohesive set of **value objects that together form one model is one responsibility** — don't
-    fragment it into one-type folders (`Domain/Levels`, `Domain/Geometry` stay whole).
-  - A sub-folder may start with a single file when it's a genuine standalone concern expected to
+    fragment it into one-type folders (`Domain/Levels`, `Domain/Geometry` stay whole);
+  - a sub-folder may start with a single file when it's a genuine standalone concern expected to
     gain siblings.
-- These sub-folders organize files only — they do **not** add namespace segments (§2).
+- These sub-folders organise files only — they do **not** add namespace segments (§2).
 
 ## 5. The async boundary — the rule people forget
 
@@ -117,14 +138,12 @@ you from referencing outward or pulling the framework into the core.
   handling**: the moment a flow awaits, its in-between state becomes observable — input arriving
   mid-load, teardown mid-await, placeholder frames when the handling is missed (observed in the
   wild: Unity's own Localization package, async by default, is reported to flash fallback text
-  for a frame or two on local tables, and offers a supported *synchronous* mode). And async is contagious — every caller of an async signature becomes
-  async (the literature genuinely disputes whether that is a cost or a discipline; this set
-  treats it as a cost to defer until it buys something). The stance is only legitimate **with its
-  guardrails written into the port's contract**: local content only (remote is a different port),
-  never scenes, never in `Awake`, not on WebGL, the **worst-case stall measured on target
-  hardware** and confined to designed loading moments (gameplay/animation frames never block on a
-  load), and the port owner knows the concurrent Addressables population (`PERFORMANCE.md` §14's
-  completes-ALL-active-operations side effect).
+  for a frame or two on local tables, and offers a supported *synchronous* mode). And async is
+  contagious — every caller of an async signature becomes async (the literature genuinely
+  disputes whether that is a cost or a discipline; this set treats it as a cost to defer until
+  it buys something). The stance is only legitimate **with
+  every guardrail below satisfied and written into the port's contract** — see the checklist
+  immediately following this section.
   Future-proofing is done by **placing the seam** (a port the async implementation will later
   stand behind, §7's fallback chain) — with the honest caveat that the true migration cost is not
   signatures but **caller timing assumptions**: call sites quietly accrete same-frame-completion
@@ -138,6 +157,55 @@ you from referencing outward or pulling the framework into the core.
   again** (cache-hit) and the synchronous flow shape survives; instantiation of heavy prefabs is a
   separate main-thread cost handled by the usual load-time pooling, not by async.
 
+### 5a. The synchronous-load guardrails — a checklist, not prose
+
+This set **endorses** synchronous loading for bundled-local content (§5). A practice that is
+endorsed with conditions must carry those conditions where the reader who was just persuaded will
+see them — so they are a list, not a subordinate clause inside the paragraph that argued for the
+practice.
+
+**Scope and provenance — read this before skipping the list.** Items 1–4 and 6 restate documented
+`WaitForCompletion` limitations and do **not** bind an asynchronous load. Item 5 is this set's own
+rule and binds **both**: an async load does not block its caller, but its disk access, bundle
+decompression and asset deserialization still land on the main thread in *some* frame, so which
+frame pays remains a design decision, not something async makes free. Item 2 is the one we have
+shipped a violation of; its cost is in `PERFORMANCE.md` §14.
+
+1. **Local content only.** Remote is a different port. The current docs are already imperative —
+   "Don't call `WaitForCompletion` on an operation that's going to fetch and download a remote
+   `AssetBundle`" (the 1.x docs merely called it "not recommended") — and the reason stands on
+   its own: the failure it invites, a main-thread block whose length is a network's, is not one
+   a designed loading moment can bound.
+2. **Never call `WaitForCompletion` during `Awake`, or anywhere before the first scene has
+   finished loading.** Unity's own remedy is to call it during `Start` instead. **It is the
+   synchronous block that is dangerous, not the callback**: an *async* load started from `Awake`
+   is fine — it returns to the player loop immediately and resumes later, and it owes the
+   intermediate-state handling §5 already describes (a rendered loading state, input off), not
+   this list. The failure this item prevents is a **deadlock, not a stall**, and it cannot be
+   reproduced in the editor — `PERFORMANCE.md` §14 carries the measured case.
+3. **Never for scenes.** On `LoadSceneAsync` it waits for dependencies but scene *activation*
+   still completes asynchronously; on a scene unload it unloads nothing and logs a warning; and
+   loading two scenes in succession with `WaitForCompletion` on the second **can deadlock** (the
+   docs' remedy: load successive scenes asynchronously, or put a delay between the requests).
+4. **Not on WebGL** — unsupported, because the platform is single-threaded and the wait loop
+   blocks the web request itself.
+5. **Worst-case stall measured on target hardware**, and confined to designed loading moments —
+   a gameplay or animation frame never blocks on a load.
+6. **The port owner knows the concurrent Addressables population.** Calling it on any asset load
+   completes **all currently active asset load operations** (`PERFORMANCE.md` §14) — including
+   loads issued by packages and SDKs you did not write, such as localisation tables, catalog
+   updates or an ad SDK. The docs' guidance follows from this: use it when the current operation
+   count is *known* and completing all of them synchronously is what you actually intend.
+
+Any item that cannot be satisfied means the boundary opens for that load: it becomes async, and
+the wait becomes a designed, visible loading moment rather than a hidden one.
+
+**Where this list lives is part of the rule.** It belongs in the port's contract — the type that
+owns the loading API — not only here. A constraint that lives only in prose has no owner, and a
+constraint with no owner is a defect waiting to happen (§8a states the general rule); the port is
+the one place every load passes through, so it is the only place the rule cannot be forgotten at a
+call site.
+
 ## 6. Composition root
 
 - **Manual wiring by default; a DI container only when the graph earns it.** A single `Composition`
@@ -149,6 +217,13 @@ you from referencing outward or pulling the framework into the core.
   decision, not a default.
 - Keeping composition in one place means every other layer depends only on abstractions and never
   on the concrete wiring.
+- **The composition root constructs; it does not wire behaviour.** Anything that runs *after*
+  startup — routing input, reacting to gameplay events, driving a flow — lives in its own class
+  from the first day, and that class subscribes to its collaborators **in its own constructor**,
+  having received them by injection. A bootstrapper that grows an event handler has stopped being
+  a composition root and become a controller with a misleading name. The payoff shows up in
+  teardown: each such class implements `IDisposable` and unsubscribes there, and the root disposes
+  them in **reverse construction order**, so ownership reads the same way in both directions.
 - **The composition root also owns lifetimes — including the app-lifetime/rebind model.** In a
   level/round-based game, prefer app-lifetime components that are **re-bound** per level over
   destroy-and-recreate cycles (the performance case is `PERFORMANCE.md` §4). The contract that
@@ -197,6 +272,50 @@ immutable outcome out** — not shared mutable state the outer layers read back.
   makes "the board stays interactive while things animate" trivial: a new tap queries the logical
   board (already final), not the half-animated view. The alternative — gating input on animation
   completion — is both worse feel and a coupling of rules to rendering.
+- **When a rule genuinely needs a presentation-derived fact, the fact travels *in the command*.**
+  Sometimes the rules really do depend on something only the view knows — whether a piece is still
+  mid-flight, which cells are currently occupied on screen. That is not a reason to open a callback:
+  put the fact in the command as data (`ProcessTap(TapCommand)` carrying the set of cells still in
+  the air), and the core reads it and calls nobody. Knowledge stays one-way and the sim still
+  resolves in one call.
+  Two alternatives are worth naming because they look reasonable and are not: threading a predicate
+  (`Func<int, bool>`) down through the call chain gives an anonymous callback identity at no call
+  site and quietly multiplies overloads; and a port the core calls back into is precisely the
+  rules-to-rendering coupling the bullet above rejects, wearing an interface. Also derive anything
+  the *view* shows about the rule from the same input — a preview icon computed from a different
+  set than the rule uses is a bug the player will find before you do.
+- **When the core is deterministic, persist the inputs, not the state.** A synchronous, seeded,
+  deterministic core means the command log *is* the save: level id, seed, and the ordered list of
+  commands replays the exact state, including derived events the state snapshot would have had to
+  encode separately. It also avoids needing a serializable RNG, which the BCL's `Random` does not
+  give you. The costs are real and belong in the decision: replay must run **before** the events
+  that presenters subscribe to, or boot animates the whole session; and **the core's behaviour
+  becomes a save format** — change a rule and old saves diverge on replay, so the version policy
+  and the fallback (resume, or restart the level) must be decided at the same time.
+
+### 8a. An ordering constraint gets a single owner
+
+A multi-step operation whose steps must happen in a particular order — *decide the outcome, then
+repair the board*; *load, then migrate, then publish* — is a defect waiting to happen for as long
+as the order lives in prose. Documenting it, with its reasoning, is not enough: the constraint is
+invisible at every individual call site, because each step is a legal call and only their
+*relationship* is wrong.
+
+The failure has a shape worth recognising. It needs several call paths that each perform the
+operation themselves (gameplay, a replay, a test harness, a bot), no single place where the order
+is expressed, and a violation that only manifests under a narrow condition — so ordinary testing
+passes. That combination will break the rule at whichever call path was written last.
+
+**The fix is to move the order out of prose and into one method that every path goes through.**
+Concretely: the step that used to act now only *reports* (an outcome carries a "this needs
+repair" flag), and one resolve method applies the outcome and performs the repair — conditionally,
+in the right order, once. Gameplay, replay and the test bot all call it, so the decision cannot
+diverge between them.
+
+Where the constraint spans an API you don't own (you cannot stop someone calling it out of order),
+the achievable version is **structural unreachability rather than structural impossibility**:
+confine the API to a single type, and state the ordering in that type's contract — see §5a, which
+is the same rule applied to a loading port.
 
 ## 9. Behavioural seams — vary by injection, not inheritance
 
@@ -217,18 +336,64 @@ reusable shapes:
   next command — and that is allowed to **take real time** — lets you swap a local AI for a networked
   peer as a new implementation, with no change to the loop or the rules. It's the fallback-chain idea
   (§7) applied to the *producer* of input rather than to a resource.
-- **A 1:1, re-bound callback is an assignable delegate, not an event.** C# `event`s model *many*
-  listeners with *matching* unsubscribes; on a persistent component whose consumer is replaced every
-  level, `+=` quietly accumulates dead subscribers and the leak is one forgotten `-=` away. An
+- **A 1:1, re-bound callback is an assignable delegate, not an event — a default with a real
+  trade, not a dogma.** C# `event`s model *many* listeners with *matching* unsubscribes; on a
+  persistent component whose consumer is replaced every level, `+=` quietly accumulates dead
+  subscribers and the leak is one forgotten `-=` away. An
   assignable `Action` property ("latest binding wins") makes the stale subscription **structurally
   impossible** instead of discipline-dependent. Reserve `event` for genuine broadcast seams where
   independent listeners come and go.
+
+  **The trade this makes, stated so the rule can be overridden knowingly.** An assignable delegate
+  buys structural safety and *sells reviewability*: there is no `-=` in the source, so a reader
+  auditing teardown finds nothing to read, and a binding that should have been dropped looks
+  identical to one that should persist. Where a team audits teardown by eye — a written `+=` in
+  the bind method and a written `-=` in the mirror callback, checked at review — `event` with a
+  visible unsubscribe is the better trade, and expecting the flow to change later strengthens it
+  further. This has been overridden in practice on exactly that reasoning. Neither choice is
+  wrong; **pick by which failure your process actually catches**, and write the choice down where
+  the callback is declared.
 
 ## 10. `.meta` hygiene (Unity)
 
 - When you move/rename/delete a `.cs`, move/remove its `.cs.meta` too (**preserve the GUID**) and
   clean orphan `.meta` files. A folder move that only relocates files (no code change) is fine
   precisely because namespaces don't track sub-folders (§2).
+
+## 11. Content schemas — a version is two different facts
+
+Externally-authored content (levels, rules, balance tables) needs a versioning story before it
+needs a loader. The trap is that one number gets asked to answer two unrelated questions:
+
+- **"Which schema does this class implement?"** is a *fact about the document*, and belongs on the
+  document type as a constant beside the fields it describes.
+- **"Which versions does this build accept?"** is a **policy**, and in anything with a live-ops
+  path it is a *range*, not an equality — it arrives with the rest of the deployment contract.
+
+Collapsing the two is correct **only** when content ships inside the build, because then file and
+reader are atomic and there is no acceptance policy to tune. Say so explicitly rather than by
+omission, because the day content stops travelling with the binary, several things change at once:
+
+- the version is **negotiated**, not discovered after download — in the request or the path
+  (`/content/v3/…`), so a client never parses something it cannot accept;
+- a manifest carries `schemaVersion` and a minimum app version per bundle;
+- **unknown fields are ignored**, so an additive server-side change cannot brick clients already
+  in the field;
+- content is **re-published, not migrated** — migration belongs to player data, which outlives the
+  build (`UNITY.md` §7);
+- a breaking change is served from a new major endpoint behind a min-version gate that tells the
+  player to update, instead of failing silently.
+
+**State the strictness as a posture, not a default.** Failing the parse on an unknown member is the
+right call for content that ships in the build and whose typos must break CI; it is the wrong call
+for remote content, where it is exactly the mechanism that bricks live clients. Whichever you
+choose, write down which situation you chose it for — this is the setting that has to flip on the
+day the delivery model changes, and nothing else will remind you.
+
+**Don't group constants by what they are.** A shared `ContentConstants` holder collecting every
+version number is the same generic-bucket smell §3 rejects at folder level: it separates a version
+from the fields it describes, and two versions that happen to share a value today are still
+independent facts. Constants live on the type whose concept they describe.
 
 ---
 
@@ -246,4 +411,8 @@ reusable shapes:
    replays, rather than exposing mutable state to read back (§8)?
 7. Is behavioural variation behind an **injected port** (composition over inheritance), with each
    implementation honouring the port's contract (§9)?
-8. Are the pure parts covered by `dotnet`-runnable tests?
+8. Does any **ordering constraint** in the feature have a single owner that every call path goes
+   through, rather than living in prose (§8a)?
+9. If the feature reads externally-authored content, is its **strictness a stated posture** and its
+   version a document fact rather than an acceptance policy (§11)?
+10. Are the pure parts covered by `dotnet`-runnable tests?

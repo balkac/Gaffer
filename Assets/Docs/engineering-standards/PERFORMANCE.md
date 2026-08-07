@@ -12,7 +12,19 @@ matter. The engine's correctness-side semantics (lifecycle, time, object lifetim
 > C# 10 interpolation handlers) — none of it is active on this baseline (§8), and BCL allocation
 > claims are verified against this Unity version's shipped IL, not against web lore.
 > Verified: Unity 6000.3.20f1 (mscorlib byte-identical to 6000.3.16f1, the IL-inspected build) ·
-> Addressables 2.11.1 · last reviewed 2026-07-28.
+> Addressables 2.11.1 · last reviewed 2026-08-06.
+> **2026-08-06 audit:** §3's frame-rate and budget figures, §14's `WaitForCompletion` semantics and
+> §10's heap-retention wording were re-checked against Unity 6000.3 / Addressables docs and hold
+> verbatim (§14's quote refreshed to the 2.11 wording). A same-day verification against the live
+> pages then reversed two of this audit's own corrections and refreshed a third: §9 —
+> `Physics2D.*NonAlloc` **is** deprecated in 6000.x (the "will be deprecated" note was 2022.3
+> wording; the 6000.x pages are gone and the runtime marks the methods obsolete); §15 — the
+> auto-size cost quotation **is** current (the Unity 6 TMP manual carries it verbatim; restored
+> with its source); §12 — ASTC/ETC2 coverage updated to the live page's >80% / >95%. §2's
+> hit-test guidance was measured and rewritten — the previous snippet could not work as written.
+> Some sections rest on **project measurement rather than documentation**; each states its
+> platform and build in place. Those figures are evidence for a mechanism — never portable
+> constants, and never Unity's numbers.
 
 ---
 
@@ -27,7 +39,7 @@ The cheapest work is the work you never ask the engine to do.
   native→managed interop boundary even when the body is trivial (Unity's own "10000 Update() calls"
   measurement; the Unity 6 manual recommends a custom update manager for exactly this reason). One
   manager iterating a plain list beats N engine callbacks — **at scale**: ordinary `Update` methods
-  are fine for a small, stable population; introduce a centralized update manager when callback
+  are fine for a small, stable population; introduce a centralised update manager when callback
   count, ordering needs, subscription churn, or profiler evidence justifies its added routing and
   ownership complexity, not on principle.
 - **Sprites vs `ParticleSystem` is a control decision, not a cost law.** A `ParticleSystem`
@@ -38,7 +50,8 @@ The cheapest work is the work you never ask the engine to do.
   wallet, a star to the HUD); that is a *control* argument, and any "cheaper" claim belongs to a
   device measurement, not to this doc. Whichever is chosen, the mobile budget applies per prefab:
   pooled + prewarmed, bounded `maxParticles`, one shared atlas material, collision/lights/trails
-  off, and a `Play()`/`Emit()` path measured to allocate nothing.
+  off, and a `Play()`/`Emit()` path measured to allocate nothing. **§4a is the operational half** —
+  the pooling, lifetime and atlas mechanics that decide whether that budget survives contact.
 
 ## 2. Prefer world-space to a UI canvas for a small, dynamic HUD
 
@@ -53,14 +66,41 @@ For a small, fixed HUD you can sidestep the mechanism entirely: draw each elemen
 ordered by sorting order and z.
 
 - **No canvas rebuilds** — each label is an independent renderer, so updating the score regenerates
-  just that one text mesh; there's no canvas to dirty and no rebuild cascade.
-- **No graphic raycaster / `EventSystem`** — hit-test buttons with a direct
-  `renderer.bounds.Contains(pointerWorld)` against the pointer you already read for other input. No
-  extra raycast pass, no per-graphic `CanvasRenderer`.
+  just that one text mesh; there's no canvas to dirty and no rebuild cascade. *Expect a profiler
+  marker that contradicts this and doesn't:*
+  `Canvas.SendWillRenderCanvases → TMP_UpdateManager.DoRebuilds` appears even in a scene with
+  **zero** `Canvas` components, because TMP's update
+  manager subscribes to that engine event as its per-frame hook and world-space `TextMeshPro` uses
+  the same manager. The player-loop stage runs in every Unity app; the cost beneath it is TMP's own
+  mesh work, not a canvas. Grep the scene for `Canvas` before believing the marker.
+- **No graphic raycaster / `EventSystem`** — hit-test buttons against the pointer you already read
+  for other input. No extra raycast pass, no per-graphic `CanvasRenderer`. **Two traps, both
+  measured on this baseline:** (1) `Camera.ScreenToWorldPoint` given a `Vector2` (or any input with
+  `z = 0`) returns a point at the **camera's own depth**, not at your content plane — with the
+  camera at `z = -10` it returns `z = -10` while the sprites sit at `z = 0`; (2) a
+  `SpriteRenderer`'s `bounds` is **not flat** — a unit sprite measured `size = (1, 1, 0.2)`, so the
+  box tolerates ±0.1 of depth error and nothing more. Combine the two and
+  `renderer.bounds.Contains(pointerWorld)` is `false` on every press in any ordinary 2D setup —
+  silently, with no error: the button simply never responds. (It would only pass if the camera
+  sat within 0.1 units of the sprite plane, which no real 2D camera does.) Either pass the
+  camera-to-plane distance as the `z` argument to `ScreenToWorldPoint`, or — preferred — test
+  **x/y only against an authored hit size**:
+
+  ```csharp
+  Vector3 localPoint = transform.InverseTransformPoint(pointerWorld);
+
+  return Mathf.Abs(localPoint.x) <= _hitSize.x / 2f
+      && Mathf.Abs(localPoint.y) <= _hitSize.y / 2f;
+  ```
+
+  The authored size is preferred because it decouples the touchable area from art bounds — which
+  is also what `GAME-FEEL.md` §4 asks for (generous hit targets), and it sidesteps the phantom
+  0.2 depth entirely. Grid content is a different problem with a better answer: pointer → cell by
+  coordinate arithmetic, no bounds test at all (`GAME-FEEL.md` §4).
 - **One render path** — text and sprites go through the camera exactly like the rest of the scene.
 
 The trade-off is real and bounds the advice: world-space UI gives up everything uGUI automates —
-anchoring/layout, `Screen.safeArea` handling, localization-driven reflow, accessibility/navigation
+anchoring/layout, `Screen.safeArea` handling, localisation-driven reflow, accessibility/navigation
 semantics — so each view positions itself from the camera's `orthographicSize`/`aspect` and
 re-anchors on a guarded `LateUpdate` check watching **both aspect and `Screen.safeArea`** (safe
 area can change with no aspect change — rotation, foldables, split-screen multitasking). For a
@@ -76,12 +116,17 @@ Set frame-rate and animation budgets **once, at boot**, from a `PerformanceSetti
 ```csharp
 Application.targetFrameRate = TargetFrameRate;   // e.g. 60
 QualitySettings.vSyncCount   = VSyncCount;
+
+// Only if the project uses DOTween. A tween library is a choice, not part of this boot step —
+// GAME-FEEL.md §3 prefers a clocked driver for hot, retargetable, N-element motion, and a
+// project with no tween library simply omits these two lines.
 DOTween.defaultRecyclable    = true;             // reuse tween objects instead of re-allocating
 DOTween.SetTweensCapacity(TweenCapacity, SequenceCapacity);
 ```
 
-Pre-sizing the tween/sequence pools means the animation system never grows its internal arrays
-mid-game (which would spike a frame), and `defaultRecyclable` lets it reuse completed tweens.
+Where a tween library *is* used, pre-sizing its tween/sequence pools means the animation system
+never grows its internal arrays mid-game (which would spike a frame), and `defaultRecyclable` lets
+it reuse completed tweens.
 
 **This boot step is not optional on mobile:** Unity's default `targetFrameRate` (−1) means the
 *platform default*, which on Android/iOS is a **fixed 30 fps** "to conserve battery power,
@@ -117,10 +162,20 @@ grow-only buffers, count-limited mesh writes (§13) — never a `Destroy`-everyt
 recreate-everything cycle. The Destroy/rebuild pattern was measured at **170–250 KB of GC per level
 transition** (measured case: a small 2D puzzle on this baseline, low-end Android device build —
 evidence for the mechanism, not a portable constant), and because `Destroy` is deferred to end of
-frame, the old and new copies coexist for a frame and the *peak* doubles. A rebake transition allocates nothing once buffer capacities cover the
-largest board. (Per-level components that must exist get a `Configure(...)`-style rebind that
+frame, the old and new copies coexist for a frame and the *peak* doubles. A rebake transition
+allocates nothing once buffer capacities cover the largest board. (Per-level components that
+must exist get a `Configure(...)`-style rebind that
 explicitly resets every clock, pending action, and stale handle — see `UNITY.md` §5 and
 `ARCHITECTURE.md` §6 for the ownership side.)
+
+**Name the path a guarantee covers.** "Zero allocation" with no named path is marketing; "zero
+allocation on the steady-state path — the per-frame and per-action path, guarded by a test" is a
+claim someone can check and you can defend. It also makes the deliberate exceptions statable
+instead of embarrassing: a debug panel or configurator that rebuilds a validated model on every
+refresh is neither per-frame nor per-action, and paying a few hundred bytes there can be the right
+call when the alternatives — reusing one live instance, collapsing types to structs, validating
+without building — each trade a real ownership or correctness property for the allocation. Write
+down which alternatives were rejected and why, next to the guarantee.
 
 Aim for **zero allocation on the idle path** — when nothing is happening, the update loops should
 allocate nothing. Where allocation is unavoidable, keep it **off the per-frame path**: e.g. one
@@ -146,9 +201,20 @@ bursts (each of these was measured as a real multi-KB offender before being bann
   fields, not re-passed per level or per frame.
 - **Logs are allocations (and I/O).** Interpolated `Debug.Log` on action paths is editor-only
   (`#if UNITY_EDITOR`); a device development build pays both the string and the logcat write.
-- **No runtime IMGUI (`OnGUI`) — dev overlays included.** IMGUI allocates tens of KB per frame just
-  to pump events and repaint; a debug HUD drawn with it poisons the very numbers it reports. Overlays
-  are code-built uGUI (or equivalent) with cached strings.
+- **Runtime IMGUI (`OnGUI`) is a measured budget item, not a blanket ban — but a naive overlay does
+  poison the numbers it reports.** Measured on this baseline (empty scene, development player, Mono
+  and IL2CPP agree; `com.balkac.perfhud` 0.3.0 `Measure~/` harness): a straightforward IMGUI HUD
+  costs **~0.7–3 KB/frame** of GC — the layout pump (~370 B/frame even with zero `GUILayout` calls)
+  plus a `GUIContent.Temp` copy of every string passed to `GUI.Label`/`GUI.Button` — *not* the
+  "tens of KB per frame" folklore, which player measurements do not reproduce. The discipline:
+  `useGUILayout = false`, draw through cached `GUIContent` instances, cache value-strings and
+  rebuild text only when a displayed value changed. The floor after that lives in the native draw
+  bindings and is text-proportional (~140–160 B/frame for a two-line badge, ~630 B/frame for an
+  8-line panel), plus a text re-mesh spike on the frame a label actually changes
+  (`GUIStyle.GetMeshInfo`, ~24 KB for a panel of text). Whatever remains, **document it so readers
+  can subtract it, and give the overlay a hidden state that draws nothing (measured 0 B/frame) for
+  capture windows**. A code-built uGUI overlay stays a fine alternative where uGUI is already in
+  the project — a preference, not a performance necessity.
 
 **Schedule the writes, too.** Disk writes are frame cost even when the bytes are small: never save
 on a frame that is already opening UI or playing a landing beat; **coalesce** multiple state changes
@@ -156,6 +222,60 @@ of one flow moment (reward + stars + progress pointer) into a single write; and 
 machinery (cached serializer instance + `StringBuilder` + `StreamWriter.Write(StringBuilder)`)
 instead of rebuilding it per save. Atomicity and platform rules for the save file live in
 `UNITY.md` §7.
+
+## 4a. Particle effects — ownership, pooling, and the atlas
+
+§1 says a `ParticleSystem` is usually the cheaper path and names the per-prefab budget. This is
+the operational half: the mechanics that decide whether that budget actually holds. Everything
+here was measured on a 2D mobile project (Unity 6000.3, URP, ASTC/ETC2 targets); the numbers are
+evidence for the mechanism, not portable constants.
+
+- **Author the effect, don't hand-roll it.** Where the engine has a subsystem for the effect, one
+  authored prefab beats bespoke components: the tuning surface is the Inspector, an artist can
+  touch it, and the simulation runs native-side. Hand-written spark/flash `MonoBehaviour`s were
+  replaced by a single authored prefab here and nothing was lost but code.
+- **Pool the view, not the system, and cache the array once.** The pooled unit is a component
+  holding `GetComponentsInChildren<ParticleSystem>(true)`, resolved on **first** lease and kept —
+  which also means the first `Get()` of a pooled effect allocates and every later one does not, so
+  an allocation measurement must run **warm** (and after the pool has cycled once, so the release
+  path is measured too).
+- **Runtime modulation must compose with the authored value, not overwrite it.** A pooled object
+  carries its previous configuration into its next use. Where a caller adds a runtime offset — a
+  ripple delay staggered per cell — store the **authored** value at lease time and add to it; the
+  naive version writes the total back into the prefab's field and the second play inherits the
+  first play's delay. Same family: clear emitted particles on release
+  (`StopEmittingAndClear`), or the returned object shows the previous burst's remains.
+- **Let the engine end the effect; don't poll for "is it done".** Reclaiming lazily at the next
+  lease costs zero per-frame code but leaves finished effects active in the hierarchy until the
+  next one is asked for. The fix belongs in the **prefab, not the code**: the lead system's
+  `Stop Action: Disable` hides a finished effect by itself. Prefer an engine-owned lifetime signal
+  over a code-owned poll (§5).
+- **If "is it playing" reads one system, that system must outlive its children — write the
+  invariant down.** Querying `IsAlive` on the first system is cheap and correct only while it is
+  the longest-lived; a polish pass that stretches an accent past the lead cuts the effect short,
+  silently. Measured here: lead 1.08 s against children at 0.80 / 0.35 (blast), 1.15 against
+  0.82 / 0.35 (debris). The array's first element is carrying a contract — say so next to the
+  prefab.
+- **Size the pools by sweeping the shipped content, not by guessing.** A test that plays every
+  shipped level N times and records the largest simultaneous demand the content can *offer* (not
+  merely what a bot took) turns pool size into a regression gate: it fails when authored content
+  outgrows the pool, which is the case that would otherwise instantiate mid-action. Measured: a
+  hand-guessed pool of 24 against a real maximum of 23 — one spare, by luck — beside a pool of 8
+  against a real maximum of 2, whose correction removed 12 particle systems from boot.
+- **Prewarm is a boot cost, not a frame cost** — 24 copies × 3 systems measured 2.7 ms in the
+  editor. It is paid against the boot budget under §4's prewarm-to-max rule, not the frame budget.
+- **FX sprites belong in the atlas — with two importer settings that sprite-mode particles
+  require.** The instinct to keep FX out ("a particle system resolves an atlased sprite's page at
+  runtime, so measure first") is a good instinct that measurement overturned here: seven FX
+  sprites shipped unatlased **and uncompressed** (~2.5 MB RGBA32) made a single blast bind a
+  different texture per system, and atlasing collapsed every gameplay particle into **one draw
+  call** at 0.45 MB resident (1024², ASTC 6×6). The two settings that must carry over from the
+  main sprite atlas are `enableRotation: 0` and `enableTightPacking: 0` — sprite-mode particles
+  break without them.
+- **Batching is a budget, not a goal — name the frame where it is enforced.** Interleaved sorting
+  orders split the batch, and that is sometimes the intended art (confetti in front of a panel,
+  a glow behind a star). A frozen celebration screen is not where the frame-rate gate lives;
+  spend the batching discipline on the frames that are actually contended.
 
 ## 5. Safe update loops
 
@@ -166,6 +286,11 @@ instead of rebuilding it per save. Atomicity and platform rules for the save fil
 - **Step toward a target and stop** (`Mathf.MoveTowards`) rather than running an easing update forever.
 - **Don't poll game state each frame.** State changes in response to an action; the view animates from
   that action's outcome (§8 of `ARCHITECTURE.md`), not by diffing the world every frame.
+- **A new clocked hook names what forces it to be per-frame.** An `Update`/`LateUpdate`/coroutine
+  is a standing per-frame cost; the justification ("input must be sampled every frame", "N
+  elements animate toward targets") is written where the hook is added. If an existing flow point
+  already gives the guarantee — an action outcome, an engine lifetime signal (§4a) — hook there
+  instead of adding a clock.
 
 ## 6. Scalable core algorithms
 
@@ -184,16 +309,31 @@ pure and synchronous, this is also exactly what makes it fast (and cheap) to tes
   an explicit (reusable) `Stack<T>`/queue. `StackOverflowException` is uncatchable and kills the
   process, and thread stacks are small on mobile (assume 0.5–1 MB; iOS secondary threads default to
   512 KB) — a deep board is enough to reach it.
+- **The cost of a query is the contract of the API you asked it through.** Reusing a production
+  analyser to answer a narrower question buys correctness and pays its full contract every call.
+  Measured instance: a "does any adjacent pair match?" check was answered by a full
+  connected-component labelling — flood fill, group records, tier bookkeeping — because that
+  analyser already existed. Fusing the check into the fill that was already running and stopping
+  at the first match made it **106× faster** (40.23 → 0.38 ms at the largest board size, measured
+  headless on .NET 8 — an algorithmic ratio, not a device figure) — with *half* of that gain
+  coming from finding neighbours by index arithmetic (`i - 1`, `i - columnCount` in a row-major
+  scan) instead of routing through a coordinate type, a bounds check and an indexer. The lesson
+  is not "write a faster analyser": it is that a wide contract
+  invoked for a narrow question is a cost with no symptom until you profile it.
 
 ## 7. Tear down tweens before you unload
+
+*Applies only where a tween library is in use — see §3; a project driving its motion from a
+clocked player class (`GAME-FEEL.md` §3) has no tween lifetimes to manage, but owes the same
+teardown for its own drivers.*
 
 Before a scene unload / reload, **kill in-flight tweens — per-target and lifetime-linked by
 default** (`SetLink`, target kills, a scoped id); reserve `DOTween.KillAll()` for whole-app
 teardown, since in an app-lifetime architecture it also kills persistent tweens that were never
 meant to die with the scene. The point either way: no tween callback may fire against an object the
-unload has already destroyed — the classic "object has been destroyed but you are still trying to
-access it" warning. Anything that outlives its target
-(tweens, coroutines, event subscriptions) gets an explicit teardown; the composition root owning
+unload has already destroyed — Unity's runtime error, "object has been destroyed but you are
+still trying to access it". Anything that outlives its target (tweens, coroutines, event
+subscriptions) gets an explicit teardown; the composition root owning
 lifetimes (`ARCHITECTURE.md` §6) is where that responsibility lives.
 
 - **Bind a tween to its object's lifetime** — `SetLink(gameObject)` (or kill it in `OnDestroy`), so
@@ -270,9 +410,9 @@ Engine calls that allocate on every use, and their free counterparts:
 
 | Allocates | Use instead |
 |---|---|
-| `go.tag == "X"` / reading `.name` (copies the string from native) | `go.CompareTag("X")`; Unity 2023.1+ adds `CompareTag(TagHandle)` for cached repeated checks |
+| `go.tag == "X"` / reading `.name` (copies the string from native) | `go.CompareTag("X")`; Unity 2023.2+ adds `CompareTag(TagHandle)` for cached repeated checks |
 | `GetComponents<T>()` (new array per call) | the `GetComponents(cachedList)` overload |
-| `Physics.RaycastAll` | `Physics.RaycastNonAlloc` + prewarmed buffer — **2D note:** `Physics2D.*NonAlloc` is deprecated in Unity 6; use the `ContactFilter2D` + results-list overloads |
+| `Physics.RaycastAll` | `Physics.RaycastNonAlloc` + prewarmed buffer — **2D note:** `Physics2D.*NonAlloc` is deprecated in Unity 6 (the 6000.x scripting reference no longer carries their pages, and the runtime's obsolete messages read "has been deprecated. Please use Raycast/CircleCast/…"); use the `ContactFilter2D` + results array/list overloads, which avoid the allocation when the results list needs no resize |
 | `new WaitForSeconds(...)` inside a loop | cache one instance outside the loop |
 | `Debug.Log("hp: " + hp)` on a frame path | log on events, not frames; strip logs from release |
 | repeated `GetComponent<T>` lookups | cache in `Awake`; `TryGetComponent` for the miss case |
@@ -316,8 +456,36 @@ The opening line says profile before optimising; concretely:
   of actions, no steady heap growth (§16).
 - **Frame Debugger** answers "why is this 40 draw calls / why did this batch break" step by step; a
   **Memory Profiler snapshot** answers "what is holding this 30 MB".
-- **Mind the instrument.** A dev overlay or profiler hook that itself allocates puts a false floor
-  under every reading — the instrument's own cost must be excluded from what it reports.
+- **Mind the instrument — and take it out when the measuring is done.** A dev overlay or profiler
+  hook that itself allocates puts a false floor under every reading, so its own cost must be
+  excluded from what it reports. The lifecycle rule is the other half: once the numbers are
+  written down, **the evidence stays and the apparatus goes.** A read-out kept past its purpose
+  accumulates its own maintenance — a flag that must ship off, a test whose only job is to catch
+  you forgetting to switch it back — and a guard protecting a setting nobody needs is cheaper to
+  delete than to keep. The sharp version, learned the hard way: if the most expensive thing in
+  your profile is a statistics read-out, that read-out is an argument against the case it exists
+  to make. The insight belongs in the document, not in the running game.
+- **Attribute allocation by owner, not by total.** A capture's headline number answers the wrong
+  question. Measured device run (1441 frames, IL2CPP): 44,062 B allocated across 9 frames — and
+  none of it written by the project. Broken down: the input system reading touch events (~32 KB,
+  one frame per tap), TMP's first-render buffer growth (~6 KB), an `Instantiate` (~5 KB), and
+  Addressables' permanent `LateUpdate` hook (424 B in a single frame). The honest claim is not
+  "0 B" — it is **"0 B from our code on the action path, with every remaining byte named, bounded
+  and third-party"**, which is both stronger and checkable.
+  Two habits make that claim cheap to produce: **classify samples into buckets** (game / engine /
+  editor / runtime) rather than reading method names, and **produce the reading twice with
+  different code** — a throwaway analyser and a committed one agreeing on 1441 frames, a 16.67 ms
+  median and the same two outlier frames is what turns a number into evidence. Read a deep
+  capture's absolute times as a ceiling, not a figure: deep profiling inflates them, so what the
+  run establishes is *who*, not *how much*.
+- **A zero-allocation claim needs a guard test in the suite, and three false positives will fool
+  it first.** All three were observed here before the measurement was trustworthy: the measured
+  block included a helper that allocates an array (`GetComponentsInChildren`); the test's pools
+  were smaller than production, so the pool grew mid-measurement; and EditMode never simulates
+  particles, so pooled effects never reported themselves finished and the pool drained forever —
+  which read as thousands of bytes per action of pure artefact (`UNITY.md` §9). Assert the
+  constraint **both while warm and again after the run**, so a leak that only appears with play
+  time fails too.
 - Keep the §3 budgets deliberate: on mobile a capped `targetFrameRate` is also a **thermal and
   battery** decision — an uncapped game throttles itself into jank.
 - **Claims need numbers.** "Optimised" means the before/after capture exists — a profiler screenshot
@@ -336,22 +504,38 @@ The habits that matter for this class of game — a 2D URP scene driven by sprit
   per-renderer `MaterialPropertyBlock` opts that renderer out of the SRP Batcher. Watch **SetPass
   calls**, not just draw calls, and let the **Frame Debugger** name which path a renderer actually
   took and the exact reason whenever a batch breaks.
+  **The consequence for a world-space HUD (§2): your label count is your draw count.** Text does
+  not merge — a `TextMeshPro` is a plain `MeshRenderer`, only classic dynamic batching could merge
+  it — off by default in URP, bounded by its documented limit (at most 300 vertices / 900 vertex
+  attributes per mesh), which at TMP's 4 vertices per glyph puts the ceiling around 75 characters
+  per label before the attribute cap lowers it, and a feature Unity 6's docs now mark "no longer
+  recommended" besides — and the SRP Batcher never merges draws at all. Sprites *do* merge
+  through the 2D renderer's own path. Measured on this baseline: a board scene drew 11 (6 sprite
+  batches + 5 text meshes), and opening a debug panel of
+  ~43 labels took it to 49 — while SetPass stayed at 3–4, which is the number that would actually
+  hurt. Budget text objects deliberately; don't be surprised by them.
 - **Overdraw** is the 2D killer on mobile **tile-based GPUs** (the dominant mobile GPU
   architecture): stacked full-screen transparent sprites shade every pixel they cover, again per
   layer. Keep backgrounds opaque where possible, use tight sprite meshes (not full-rect), and don't
   stack full-screen alpha fades. (**MSAA is the desktop-intuition exception**: tile-based GPUs
   resolve it on-tile, so 2x–4x is *typically* cheap — bandwidth and store costs still exist, so
   confirm on a representative device; for a flat 2D game it's simply unnecessary either way.)
-- **Texture memory**: compress with **ASTC** (Unity's recommended default for iOS and modern
-  Android; ETC2 remains the fallback for old GLES3.0 devices — Google cites >80% ASTC coverage on
-  Play, higher in practice on active devices as of 2026). A 2048² RGBA32 texture is ~16 MB *before*
-  the ~33% mip overhead — budget textures up front, don't discover them in a crash report. Mipmaps
+- **Texture memory**: compress with **ASTC** (Unity's recommended format for iOS — A8 and newer
+  — and the preferred format on modern Android; ETC2 remains the fallback for older devices). The
+  sourced figures are Google's texture-compression-format-targeting page (read 2026-08): **ASTC
+  on >80% of active Android devices, ETC2 on >95%** — the page calls ETC2's reach "nearly all
+  active Android mobile devices" — with ASTC as the primary format and ETC2/ETC1 as the targeted
+  fallback. *(Coverage figures drift; re-read the page before quoting them in a deliverable.)*
+  A 2048² RGBA32 texture is ~16 MB *before* the ~33% mip overhead — budget textures up front,
+  don't discover them in a crash report. Mipmaps
   **off** for UI and sprites rendered 1:1; **Read/Write Enabled off** (it keeps a CPU copy —
-  doubles the memory).
+  roughly doubles the memory).
 - **IL2CPP + stripping**: iOS is IL2CPP-only, and Google Play requires ARM64. Code stripping
   removes "unused" types that serialization or reflection actually needed — remember `link.xml` /
-  `[Preserve]` the day a type vanishes only in device builds. IL2CPP is also **AOT-only**: no
-  `Reflection.Emit`/runtime codegen, and a generic instantiated only via reflection over a *value*
+  `[Preserve]` the day a type vanishes only in device builds, and read `UNITY.md` §9 for how to
+  *diagnose* it, because the two artefacts you would naturally check both report the code as
+  present. IL2CPP is also **AOT-only**: no `Reflection.Emit`/runtime codegen, and a generic
+  instantiated only via reflection over a *value*
   type may never get compiled — another class of works-in-editor, dies-on-device. Keep
   reflection-driven serialization behind the one adapter and exercise it in a device build early.
 - **URP settings that matter on mobile 2D**: SRP Batcher on; HDR off; MSAA off (see above); Depth
@@ -399,27 +583,32 @@ Runtime-built geometry (boards, sheets, overlays) follows the §4 lifetime rule:
   returns when the owning *bundle's* count hits zero. Handles kept deliberately for the app's
   lifetime are fine — but bounded, documented at their declaration, and never re-acquired per use.
 - **Probe existence with `LoadResourceLocationsAsync`**, never with a full load — it resolves
-  catalogue locations without loading the asset (its `Result` needs no release; the handle does).
+  catalogue locations without loading the asset, and is documented to never fail (unresolvable
+  keys return an empty list); release the handle as usual.
 - **`WaitForCompletion` is a constrained mode of an async-shaped API — know its documented costs
-  before choosing it.** They are heavier than "it blocks": calling it on any operation
-  **completes ALL currently active load operations** (verbatim in the Addressables docs), it must
-  never target a remote/undownloaded bundle, a scene load doesn't fully complete through it (two
-  back-to-back sync scene loads can lock the player), calling it in `Awake` before the scene
-  finishes loading can stall the main thread, and WebGL doesn't support it at all. And **local ≠
-  free**: a local load still pays disk access, bundle decompression, dependency resolution and
-  asset deserialization on the main thread — measure the worst-case stall on target hardware, and
-  never let a gameplay/animation frame block on a load (loads belong to designed loading moments).
-  Whether to use
-  it is an architecture decision, and **`ARCHITECTURE.md` §5 owns it**: for the local-content
-  profile, a synchronous loading port via `WaitForCompletion` — inside these limits, behind a
-  designed loading moment — is the deliberate choice that keeps the flow frame-atomic, chosen
-  over paying async's contagion and intermediate-state costs for *network* latency that doesn't
-  exist locally.
-  The completes-all-active side effect makes the concurrent-operation population part of that
-  contract: any package or SDK that issues its own Addressables operations (localization tables,
-  remote catalog updates, an ad SDK) joins the population a sync call force-completes — auditing
-  who else loads is part of choosing sync. Remote content changes the answer: pre-download via
-  `DownloadDependenciesAsync` in a dedicated loading state, then load from cache.
+  before choosing it.** They are heavier than "it blocks", and the full list of conditions is
+  **`ARCHITECTURE.md` §5a**, which owns the decision; that checklist is the canonical copy and
+  this section does not keep a second, partial one. The cost mechanics that belong here: the call
+  completes **all currently active asset load operations** — the 2.11 docs' wording is "All
+  active asset load operations are completed when WaitForCompletion is called on any asset load
+  operation" — and **local ≠ free**: a local load still pays disk access, bundle decompression,
+  dependency resolution and asset deserialization on the main thread. Those two mechanics are why
+  §5a's items 5 and 6 exist; the rules themselves live there, and the remote path is
+  `ARCHITECTURE.md` §5's split-download-from-load bullet.
+
+  **The `Awake` guardrail (`ARCHITECTURE.md` §5a item 2) is a deadlock guard, and the editor
+  cannot show you the failure.** The docs describe the hazard as "can block the main thread";
+  measured on this baseline it was stronger: a **synchronous** content load issued from `Awake`
+  in the first scene re-entered the engine's own wait for that scene — the semaphore never
+  signalled, no frame was ever drawn, and iOS killed the app with a `0x8BADF00D` watchdog
+  termination after 25 s. **Play mode never reproduces it** — the editor resolves Addressables
+  through the asset database with no bundles involved, so the entire class of bundle-completion
+  hazards is absent from every editor run. Treat "it works in play mode" as no evidence at all
+  here. The remedy that shipped went past the docs' `Start` advice: the load became async
+  behind a boot splash, so the wait is a *designed* loading moment with a rendered frame behind
+  it, rather than a hidden stall in the first frames.
+  *(Evidence: one project, iOS IL2CPP device build, Addressables 2.11.1. The mechanism is
+  documented; the watchdog outcome is our measurement, not a documented guarantee.)*
 
 ## 15. Canvas UI & TextMeshPro — when you do choose uGUI
 
@@ -442,10 +631,29 @@ The missing branch of §2: once a screen *is* canvas UI, these rules keep it fla
 - **Full-screen input gates are explicit objects**: an invisible raycast-target image (a "catcher")
   toggled with its lesson/modal — never a global "disable all input" flag scattered through
   handlers. Raycast reach is controlled at the `GraphicRaycaster`/`raycastTarget` level.
-- **TMP auto-size is for unpredictable text only.** Auto Size re-lays the text "multiple times to
-  find a good fit" (Unity's docs: "resource intensive… avoid auto-sizing dynamic text that changes
-  frequently"). Bounded numeric labels (score, moves, cost) get a fixed size that fits their widest
-  case; auto-size stays on genuinely variable strings.
+- **Auto-fitting text is for unpredictable text only.** TMP's own manual states the cost: with
+  Auto Size on, "TextMesh Pro lays out the text multiple times to find a good fit. This is a
+  resource intensive process, so avoid auto-sizing dynamic text that changes frequently" (the
+  Unity 6 TMP manual, in com.unity.ugui 2.0) — and the fit re-runs whenever the string or the box
+  changes, which is exactly the case for a per-frame counter. Bounded numeric labels (score,
+  moves, cost) get a fixed size that fits their widest case; a fit search stays on genuinely
+  variable strings. uGUI's **Best Fit** is the same trap with its own source: Unity's UI
+  optimisation guide names it a hotspot (`Text_OnPopulateMesh` dominates when it is on) and says
+  it "should never be used".
+- **TMP's per-label buffer growth is bounded, not a leak — recognise it before you build a fix.**
+  Each label grows its internal arrays (character info, mesh vertex buffers, line info) the first
+  time it renders text longer than it ever has, then goes permanently quiet: growth
+  block-allocates to the next power of two — in +256-element blocks past 1024 — and never shrinks
+  (read from the package source, not from documentation — the auto-size-reduction path defaults
+  off). The total is therefore bounded by the longest string each label will ever show.
+  Measured: ~72 KB across ~30 labels in a
+  2000-frame capture, all in `SetArraySizes → TMP_TextInfo.Resize`. Before engineering a warm-up
+  for it, **map each growth event to its frame type** — here they landed on click frames and
+  level-start frames, never on the action path, because mid-level counters only count down. A
+  warm-up that moves a bounded one-time cost off frames that already pay `Instantiate` is not
+  obviously worth permanent machinery. Two facts if you do build one: it must render a **visible**
+  glyph (whitespace builds no quads, so the vertex buffers never grow), and `Start` — not `Awake`
+  — is the order-safe hook.
 - **Dynamic font atlases grow at runtime.** Each first-seen glyph rasterizes into the atlas
   (new pages under multi-atlas) — on the frame that first shows it. Warm the app's bounded charset
   once at boot (`TMP_FontAsset.TryAddCharacters`), enable *Clear Dynamic Data on Build*, and bake a

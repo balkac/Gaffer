@@ -57,6 +57,31 @@ fully synchronous project (no async I/O, no serialization) simply omits them, an
 rule (`ARCHITECTURE.md` §5) still holds by having nothing to push out. Don't scaffold layers you have
 no work for.
 
+## The optional pure-adapter assemblies
+
+The `Application/Serialization` + `Infrastructure/Serialization` split above assumes a
+**framework-coupled** serializer (`JsonUtility` lives in `UnityEngine`, so its adapter cannot be
+pure). When the serializer is a **plain .NET library**, the adapter has no reason to leave the
+headless world, and the honest shape is its own pure assembly (`ARCHITECTURE.md` §1):
+
+```
+  Content/          MyGame.Content   → Domain, Common (+ serializer lib)  — externally-authored content: DTOs, readers, validation
+  UserData/         MyGame.UserData  → Common (+ serializer lib)          — the player's own saved data: DTOs, store, migration
+```
+
+| Assembly | References |
+|---|---|
+| `MyGame.Content` | `MyGame.Common`, `MyGame.Domain` (+ the serializer as a precompiled reference) |
+| `MyGame.UserData` | `MyGame.Common` (+ the serializer as a precompiled reference) |
+
+Both stay **`noEngineReferences: true`** and join the `dotnet test` bridge below, so schemas,
+mappings and validation are covered headlessly — and `MyGame.Application` stays free of
+third-party dependencies.
+**Keep them separate from each other**, referencing `Common` and not one another: content ships with
+the build and should fail loudly on an unknown field, saved data outlives the build and must tolerate
+one, so they legitimately want different serializer settings (`ARCHITECTURE.md` §11). Unity's side
+stays one line handing over the `TextAsset` text.
+
 ## Running the pure tests under `dotnet`
 
 The point of keeping Domain + Application framework-free is to test them **without opening the editor**.
@@ -89,6 +114,8 @@ same `.cs` files** the EditMode asmdef builds:
     <Compile Include="..\Assets\_Project\Scripts\Common\**\*.cs" />
     <Compile Include="..\Assets\_Project\Scripts\Domain\**\*.cs" />
     <Compile Include="..\Assets\_Project\Scripts\Application\**\*.cs" />
+    <!-- Add Content\ and UserData\ here too if you took the pure-adapter assemblies above;
+         their serializer then needs a matching <PackageReference> in the group below. -->
     <Compile Include="..\Assets\_Project\Scripts\Tests\EditMode\**\*.cs" />
   </ItemGroup>
 
