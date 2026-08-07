@@ -46,20 +46,18 @@ namespace Gaffer.Infrastructure.Configuration
         public EconomySettings ToSettings()
         {
             ClampToValidRanges();
-            return new EconomySettings
-            {
-                ValuationCeiling = valuationCeiling,
-                ValuationRounding = valuationRounding,
-                ValueFactorTo18 = valueFactorTo18,
-                ValueFactorTo21 = valueFactorTo21,
-                ValueFactorTo27 = valueFactorTo27,
-                ValueFactorTo30 = valueFactorTo30,
-                ValueFactorTo32 = valueFactorTo32,
-                ValueFactorVeteran = valueFactorVeteran,
-                WageCeiling = wageCeiling,
-                WageRounding = wageRounding,
-                WageFloor = wageFloor,
-            };
+            return new EconomySettings(
+                valuationCeiling: valuationCeiling,
+                valuationRounding: valuationRounding,
+                valueFactorTo18: valueFactorTo18,
+                valueFactorTo21: valueFactorTo21,
+                valueFactorTo27: valueFactorTo27,
+                valueFactorTo30: valueFactorTo30,
+                valueFactorTo32: valueFactorTo32,
+                valueFactorVeteran: valueFactorVeteran,
+                wageCeiling: wageCeiling,
+                wageRounding: wageRounding,
+                wageFloor: wageFloor);
         }
 
         /// <summary>

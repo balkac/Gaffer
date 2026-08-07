@@ -12,22 +12,43 @@ namespace Gaffer.Application.Run
     /// </summary>
     public sealed class SeasonRollover
     {
+        /// <summary>
+        /// Every value is required: this record is only ever built by
+        /// <see cref="RunSession.StartNextSeason"/>, where all of it is known, so there is no default
+        /// worth having and an omitted field should not compile.
+        /// </summary>
+        public SeasonRollover(
+            int seasonNumber,
+            IReadOnlyList<Player> retired,
+            IReadOnlyList<Player> arrived,
+            Finances finances,
+            IReadOnlyList<Player> market,
+            LineupOutcome lineup)
+        {
+            SeasonNumber = seasonNumber;
+            Retired = retired;
+            Arrived = arrived;
+            Finances = finances;
+            Market = market;
+            Lineup = lineup;
+        }
+
         /// <summary>The season now being played (1 for the first).</summary>
-        public int SeasonNumber { get; init; }
+        public int SeasonNumber { get; }
 
         /// <summary>Players who were in the squad last season and are not in it now — they retired.</summary>
-        public IReadOnlyList<Player> Retired { get; init; }
+        public IReadOnlyList<Player> Retired { get; }
 
         /// <summary>Players who were not in the squad last season and are now — the youth intake.</summary>
-        public IReadOnlyList<Player> Arrived { get; init; }
+        public IReadOnlyList<Player> Arrived { get; }
 
         /// <summary>Cash carries over; the wage bill is re-derived from the developed squad.</summary>
-        public Finances Finances { get; init; }
+        public Finances Finances { get; }
 
         /// <summary>The new season's free-agent market — a fresh set of prospects.</summary>
-        public IReadOnlyList<Player> Market { get; init; }
+        public IReadOnlyList<Player> Market { get; }
 
         /// <summary>The eleven auto-picked from the developed squad.</summary>
-        public LineupOutcome Lineup { get; init; }
+        public LineupOutcome Lineup { get; }
     }
 }

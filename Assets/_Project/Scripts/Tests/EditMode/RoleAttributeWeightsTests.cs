@@ -156,7 +156,7 @@ namespace Gaffer.Tests
             // the athletic ones (his body goes), and nothing else. Acceleration, agility and jumping are in
             // the second group without being in the first for any role — see PlayerAttributes.Athletic —
             // which is a real asymmetry, so it is pinned rather than tidied away.
-            var dev = new PlayerDevelopment(new DevelopmentSettings { DeclinePerYear = 3.0 });
+            var dev = new PlayerDevelopment(new DevelopmentSettings(declinePerYear: 3.0));
 
             foreach (PlayerRole role in AllRoles)
             {

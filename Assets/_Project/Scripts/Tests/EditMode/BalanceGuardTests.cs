@@ -215,7 +215,7 @@ namespace Gaffer.Tests
             // Twilight and Hard on the same year makes the retirement odds a 0/0 — NaN, and
             // `rng.NextDouble() < NaN` is false, so nobody would ever retire and squads would age
             // forever. The band is clamped, so a veteran at the threshold still goes.
-            var settings = new RenewalSettings { OutfielderTwilightAge = 34, OutfielderHardAge = 34 };
+            var settings = new RenewalSettings(outfielderTwilightAge: 34, outfielderHardAge: 34);
             var squad = new Squad(new List<Player>
             {
                 CreatePlayer(0, PlayerRole.CentreBack, age: 36),
@@ -237,7 +237,7 @@ namespace Gaffer.Tests
             // The role search now counts into a reusable int[] indexed by (int)PlayerRole instead of
             // allocating a dictionary and a list per youth. The behaviour it must preserve: successive
             // arrivals go to distinct roles the squad has none of.
-            var settings = new RenewalSettings { YouthIntakePerSeason = 5 };
+            var settings = new RenewalSettings(youthIntakePerSeason: 5);
             var squad = new Squad(new List<Player>
             {
                 CreatePlayer(0, PlayerRole.Striker, age: 22),
@@ -271,7 +271,7 @@ namespace Gaffer.Tests
         {
             // The role buffers are fields cleared per call, so the second use must see a clean state —
             // the buffer-reuse contract CONVENTIONS §5 asks a pooled scratch to prove.
-            var settings = new RenewalSettings { YouthIntakePerSeason = 3 };
+            var settings = new RenewalSettings(youthIntakePerSeason: 3);
             var squad = new Squad(new List<Player>
             {
                 CreatePlayer(0, PlayerRole.Goalkeeper, age: 25),
@@ -307,8 +307,8 @@ namespace Gaffer.Tests
             // free — a silent economy wipe. A step below one currency unit means nothing, so 1 is the
             // floor the guard holds.
             Player player = CreatePlayer(0, PlayerRole.Striker, age: 25, stat: 80);
-            var broken = new EconomySettings { ValuationRounding = 0 };
-            var unrounded = new EconomySettings { ValuationRounding = 1 };
+            var broken = new EconomySettings(valuationRounding: 0);
+            var unrounded = new EconomySettings(valuationRounding: 1);
 
             long value = PlayerValuation.Value(player, broken);
 
@@ -320,8 +320,8 @@ namespace Gaffer.Tests
         public void Weekly_ZeroWageRounding_StillPricesThePlayer()
         {
             Player player = CreatePlayer(0, PlayerRole.Striker, age: 25, stat: 80);
-            var broken = new EconomySettings { WageRounding = 0 };
-            var unrounded = new EconomySettings { WageRounding = 1 };
+            var broken = new EconomySettings(wageRounding: 0);
+            var unrounded = new EconomySettings(wageRounding: 1);
 
             long wage = PlayerWage.Weekly(player, broken);
 

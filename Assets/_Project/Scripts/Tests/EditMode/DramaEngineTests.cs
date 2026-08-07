@@ -70,17 +70,15 @@ namespace Gaffer.Tests
             return new DramaWeekContext(squad, starters, tablePosition, lossStreak, windowOpen);
         }
 
-        // Settings are init-only, so the envelope a test wants to vary is a parameter here rather than
+        // Settings are immutable, so the envelope a test wants to vary is a parameter here rather than
         // an assignment on the returned object.
         private static DramaSettings AlwaysFire(int maxEventsPerSeason = 99, int minWeeksBetweenEvents = 1)
         {
-            return new DramaSettings
-            {
-                MaxEventsPerSeason = maxEventsPerSeason,
-                MinWeeksBetweenEvents = minWeeksBetweenEvents,
-                WeeklyChancePerWeight = 1.0,
-                MaxWeeklyChance = 1.0,
-            };
+            return new DramaSettings(
+                maxEventsPerSeason: maxEventsPerSeason,
+                minWeeksBetweenEvents: minWeeksBetweenEvents,
+                weeklyChancePerWeight: 1.0,
+                maxWeeklyChance: 1.0);
         }
 
         private static DramaEvent SoloEvent(string id, DramaTrigger trigger, bool requiresSubject = false, int cooldown = 0, bool oncePerRun = false, IReadOnlyList<DramaTraitBias> subjectBiases = null, IReadOnlyList<DramaTraitBias> squadBiases = null)
@@ -278,13 +276,11 @@ namespace Gaffer.Tests
                 SoloEvent("dressing-room-rift", new DramaTrigger { MinLossStreak = 3 },
                     squadBiases: new[] { new DramaTraitBias(new TraitId("dressing-room-leader"), 0.5) }),
             });
-            var settings = new DramaSettings
-            {
-                MaxEventsPerSeason = 99,
-                MinWeeksBetweenEvents = 1,
-                WeeklyChancePerWeight = 0.3,
-                MaxWeeklyChance = 1.0,
-            };
+            var settings = new DramaSettings(
+                maxEventsPerSeason: 99,
+                minWeeksBetweenEvents: 1,
+                weeklyChancePerWeight: 0.3,
+                maxWeeklyChance: 1.0);
 
             var plainSquad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60) };
             var ledSquad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60, age: 24, potential: 70, "dressing-room-leader") };

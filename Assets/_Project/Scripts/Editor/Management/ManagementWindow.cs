@@ -261,20 +261,18 @@ namespace Gaffer.Editor.Management
         // carries neither — continues on the shape the manager was playing.
         private RunSetup Setup()
         {
-            return new RunSetup
-            {
-                TeamCount = _teamCount,
-                Seed = (ulong)_seed,
-                ManagedClubIndex = _managedIndex,
-                PromotionPosition = _promotionPosition,
-                SurvivalPosition = _survivalPosition,
-                StartingCash = _startingCash,
-                WeeklyWageBudget = _wageBudget,
-                MarketSize = _marketSize,
-                GuaranteedGems = _gems,
-                Formation = _formation,
-                Tactics = _tactics,
-            };
+            return new RunSetup(
+                teamCount: _teamCount,
+                seed: (ulong)_seed,
+                managedClubIndex: _managedIndex,
+                promotionPosition: _promotionPosition,
+                survivalPosition: _survivalPosition,
+                startingCash: _startingCash,
+                weeklyWageBudget: _wageBudget,
+                marketSize: _marketSize,
+                guaranteedGems: _gems,
+                formation: _formation,
+                tactics: _tactics);
         }
 
         // Every tuning object and catalog the run plays on, from the assigned config assets or the calibrated
@@ -282,20 +280,18 @@ namespace Gaffer.Editor.Management
         // different trait catalogs the way two hand-wired windows did (ARCHITECTURE §6).
         private RunBalance Balance()
         {
-            return new RunBalance
-            {
-                Simulation = _simulationBalance != null ? _simulationBalance.ToSettings() : MatchSimulationSettings.Default,
-                TacticsBalance = _simulationBalance != null ? _simulationBalance.ToTacticsSettings() : TacticsSettings.Default,
-                Scorer = _simulationBalance != null ? _simulationBalance.ToScorerWeights() : ScorerWeights.Default,
-                Development = _developmentBalance != null ? _developmentBalance.ToSettings() : DevelopmentSettings.Default,
-                Renewal = _renewalBalance != null ? _renewalBalance.ToSettings() : RenewalSettings.Default,
-                Drama = _dramaBalance != null ? _dramaBalance.ToSettings() : DramaSettings.Default,
-                Morale = _dramaBalance != null ? _dramaBalance.ToMoraleSettings() : MoraleSettings.Default,
-                Economy = _economyBalance != null ? _economyBalance.ToSettings() : EconomySettings.Default,
-                Scouting = _scoutingBalance != null ? _scoutingBalance.ToSettings() : ScoutingSettings.Default,
-                Traits = _traitCatalog != null ? _traitCatalog.ToCatalog() : Gaffer.Domain.Traits.TraitCatalog.Default,
-                DramaEvents = _dramaCatalog != null ? _dramaCatalog.ToCatalog() : Gaffer.Domain.Drama.DramaCatalog.Default,
-            };
+            return new RunBalance(
+                simulation: _simulationBalance != null ? _simulationBalance.ToSettings() : MatchSimulationSettings.Default,
+                tacticsBalance: _simulationBalance != null ? _simulationBalance.ToTacticsSettings() : TacticsSettings.Default,
+                scorer: _simulationBalance != null ? _simulationBalance.ToScorerWeights() : ScorerWeights.Default,
+                development: _developmentBalance != null ? _developmentBalance.ToSettings() : DevelopmentSettings.Default,
+                renewal: _renewalBalance != null ? _renewalBalance.ToSettings() : RenewalSettings.Default,
+                drama: _dramaBalance != null ? _dramaBalance.ToSettings() : DramaSettings.Default,
+                morale: _dramaBalance != null ? _dramaBalance.ToMoraleSettings() : MoraleSettings.Default,
+                economy: _economyBalance != null ? _economyBalance.ToSettings() : EconomySettings.Default,
+                scouting: _scoutingBalance != null ? _scoutingBalance.ToSettings() : ScoutingSettings.Default,
+                traits: _traitCatalog != null ? _traitCatalog.ToCatalog() : Gaffer.Domain.Traits.TraitCatalog.Default,
+                dramaEvents: _dramaCatalog != null ? _dramaCatalog.ToCatalog() : Gaffer.Domain.Drama.DramaCatalog.Default);
         }
 
         private void StartSeason()

@@ -105,42 +105,38 @@ namespace Gaffer.Infrastructure.Configuration
         public TacticsSettings ToTacticsSettings()
         {
             ClampToValidRanges();
-            return new TacticsSettings
-            {
-                MentalityAttackStep = mentalityAttackStep,
-                PressingMidfieldStep = pressingMidfieldStep,
-                MentalityDefenceStep = mentalityDefenceStep,
-                PressingDefenceStep = pressingDefenceStep,
-                IntenseTempoVolume = intenseTempoVolume,
-                PatientTempoVolume = patientTempoVolume,
-                CounterApproachVolume = counterApproachVolume,
-                CounterApproachQuality = counterApproachQuality,
-                PossessionApproachVolume = possessionApproachVolume,
-                PossessionApproachQuality = possessionApproachQuality,
-            };
+            return new TacticsSettings(
+                mentalityAttackStep: mentalityAttackStep,
+                pressingMidfieldStep: pressingMidfieldStep,
+                mentalityDefenceStep: mentalityDefenceStep,
+                pressingDefenceStep: pressingDefenceStep,
+                intenseTempoVolume: intenseTempoVolume,
+                patientTempoVolume: patientTempoVolume,
+                counterApproachVolume: counterApproachVolume,
+                counterApproachQuality: counterApproachQuality,
+                possessionApproachVolume: possessionApproachVolume,
+                possessionApproachQuality: possessionApproachQuality);
         }
 
         public ScorerWeights ToScorerWeights()
         {
             ClampToValidRanges();
-            return new ScorerWeights
-            {
-                MinOutfielderWeight = minOutfielderWeight,
-                OpenPlayFinishing = openPlayFinishing,
-                OpenPlayPositioning = openPlayPositioning,
-                OpenPlayPace = openPlayPace,
-                AerialHeading = aerialHeading,
-                AerialJumping = aerialJumping,
-                AerialStrength = aerialStrength,
-                OpenPlayForward = openPlayForward,
-                OpenPlayMidfielder = openPlayMidfielder,
-                OpenPlayDefender = openPlayDefender,
-                OpenPlayGoalkeeper = openPlayGoalkeeper,
-                AerialForward = aerialForward,
-                AerialMidfielder = aerialMidfielder,
-                AerialDefender = aerialDefender,
-                AerialGoalkeeper = aerialGoalkeeper,
-            };
+            return new ScorerWeights(
+                minOutfielderWeight: minOutfielderWeight,
+                openPlayFinishing: openPlayFinishing,
+                openPlayPositioning: openPlayPositioning,
+                openPlayPace: openPlayPace,
+                aerialHeading: aerialHeading,
+                aerialJumping: aerialJumping,
+                aerialStrength: aerialStrength,
+                openPlayForward: openPlayForward,
+                openPlayMidfielder: openPlayMidfielder,
+                openPlayDefender: openPlayDefender,
+                openPlayGoalkeeper: openPlayGoalkeeper,
+                aerialForward: aerialForward,
+                aerialMidfielder: aerialMidfielder,
+                aerialDefender: aerialDefender,
+                aerialGoalkeeper: aerialGoalkeeper);
         }
 
         /// <summary>

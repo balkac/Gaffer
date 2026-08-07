@@ -411,20 +411,18 @@ namespace Gaffer.Application.Run
 
             _pending = null;
 
-            return Result<DramaResolution>.Success(new DramaResolution
-            {
-                EventId = outcome.EventId,
-                ChoiceIndex = outcome.ChoiceIndex,
-                CashDelta = outcome.CashDelta,
-                Finances = _finances,
-                MoraleChanges = moraleChanges,
-                SoldPlayer = sale != null ? outcome.PlayerToSell : null,
-                SaleFee = sale != null ? sale.Fee : 0L,
-                TraitGrantTarget = outcome.TraitGrantTarget,
-                GrantedTrait = outcome.GrantedTrait,
-                RebuiltPlayer = rebuilt,
-                Lineup = BuildLineupOutcome(),
-            });
+            return Result<DramaResolution>.Success(new DramaResolution(
+                eventId: outcome.EventId,
+                choiceIndex: outcome.ChoiceIndex,
+                cashDelta: outcome.CashDelta,
+                finances: _finances,
+                moraleChanges: moraleChanges,
+                soldPlayer: sale != null ? outcome.PlayerToSell : null,
+                saleFee: sale != null ? sale.Fee : 0L,
+                traitGrantTarget: outcome.TraitGrantTarget,
+                grantedTrait: outcome.GrantedTrait,
+                rebuiltPlayer: rebuilt,
+                lineup: BuildLineupOutcome()));
         }
 
         /// <summary>
@@ -459,15 +457,13 @@ namespace Gaffer.Application.Run
             _verdict = null;
             AutoPickAndBind();
 
-            return Result<SeasonRollover>.Success(new SeasonRollover
-            {
-                SeasonNumber = _seasonNumber,
-                Retired = Missing(beforePlayers, afterPlayers),
-                Arrived = Missing(afterPlayers, beforePlayers),
-                Finances = _finances,
-                Market = _market,
-                Lineup = BuildLineupOutcome(),
-            });
+            return Result<SeasonRollover>.Success(new SeasonRollover(
+                seasonNumber: _seasonNumber,
+                retired: Missing(beforePlayers, afterPlayers),
+                arrived: Missing(afterPlayers, beforePlayers),
+                finances: _finances,
+                market: _market,
+                lineup: BuildLineupOutcome()));
         }
 
         /// <summary>
@@ -505,15 +501,13 @@ namespace Gaffer.Application.Run
             SyncLeague();
             AutoPickAndBind();
 
-            return Result<TransferOutcome>.Success(new TransferOutcome
-            {
-                Player = player,
-                IsSale = false,
-                Fee = result.Value.Fee,
-                WeeklyWage = WeeklyWageOf(player),
-                Finances = _finances,
-                Lineup = BuildLineupOutcome(),
-            });
+            return Result<TransferOutcome>.Success(new TransferOutcome(
+                player: player,
+                isSale: false,
+                fee: result.Value.Fee,
+                weeklyWage: WeeklyWageOf(player),
+                finances: _finances,
+                lineup: BuildLineupOutcome()));
         }
 
         /// <summary>Sells a squad player back onto the market. Only in an open window.</summary>
@@ -547,15 +541,13 @@ namespace Gaffer.Application.Run
             SyncLeague();
             AutoPickAndBind();
 
-            return Result<TransferOutcome>.Success(new TransferOutcome
-            {
-                Player = player,
-                IsSale = true,
-                Fee = result.Value.Fee,
-                WeeklyWage = WeeklyWageOf(player),
-                Finances = _finances,
-                Lineup = BuildLineupOutcome(),
-            });
+            return Result<TransferOutcome>.Success(new TransferOutcome(
+                player: player,
+                isSale: true,
+                fee: result.Value.Fee,
+                weeklyWage: WeeklyWageOf(player),
+                finances: _finances,
+                lineup: BuildLineupOutcome()));
         }
 
         /// <summary>Changes shape and re-picks the best eleven for it; applies from next week.</summary>
@@ -869,19 +861,17 @@ namespace Gaffer.Application.Run
                 }
             }
 
-            return new LineupOutcome
-            {
-                Formation = _formation,
-                Tactics = _tactics,
-                Slots = slots,
-                Starters = starters,
-                Bench = bench,
-                IsComplete = starters.Count == _formation.Total,
-                Strength = starters.Count > 0
+            return new LineupOutcome(
+                formation: _formation,
+                tactics: _tactics,
+                slots: slots,
+                starters: starters,
+                bench: bench,
+                isComplete: starters.Count == _formation.Total,
+                strength: starters.Count > 0
                     ? _strengthBuilder.Build(starters, _tactics)
                     : _league.Clubs[_managedClub.Value].Strength,
-                ChanceProfile = ChanceProfile.FromTactics(_tactics, _balance.TacticsBalance),
-            };
+                chanceProfile: ChanceProfile.FromTactics(_tactics, _balance.TacticsBalance));
         }
 
         // ----- Drama ------------------------------------------------------------------------------------
@@ -990,23 +980,21 @@ namespace Gaffer.Application.Run
             }
 
             int position = TablePosition;
-            return new WeekOutcome
-            {
-                Round = week.Round,
-                PlayedRounds = _season.CurrentRound,
-                RoundCount = _season.RoundCount,
-                IsSeasonComplete = _season.IsComplete,
-                Matches = week.Matches,
-                ManagedMatch = managed,
-                TablePosition = position,
-                LossStreak = LossStreak,
-                Finances = _finances,
-                WagesPaid = wagesPaid,
-                WindowPhase = WindowPhase,
-                Drama = _pending,
-                Verdict = _verdict,
-                FinalPosition = _season.IsComplete ? position : 0,
-            };
+            return new WeekOutcome(
+                round: week.Round,
+                playedRounds: _season.CurrentRound,
+                roundCount: _season.RoundCount,
+                isSeasonComplete: _season.IsComplete,
+                matches: week.Matches,
+                managedMatch: managed,
+                tablePosition: position,
+                lossStreak: LossStreak,
+                finances: _finances,
+                wagesPaid: wagesPaid,
+                windowPhase: WindowPhase,
+                drama: _pending,
+                verdict: _verdict,
+                finalPosition: _season.IsComplete ? position : 0);
         }
 
         // Everything in `players` that is not in `other`, by id — the summer's ins and outs.

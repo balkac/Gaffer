@@ -198,7 +198,7 @@ namespace Gaffer.Tests
         {
             // The mask's calibration used to be two literals inside Scout (22 / 12). Spelled out here,
             // not read from ScoutingSettings, so this is a real comparison and not a tautology.
-            var theOldLiterals = new ScoutingSettings { PotentialMaxWidth = 22, AttributeMaxWidth = 12 };
+            var theOldLiterals = new ScoutingSettings(potentialMaxWidth: 22, attributeMaxWidth: 12);
             Player player = Prospect(66);
 
             ScoutReport shipped = new Scout().Observe(player, 0.0);
@@ -220,7 +220,7 @@ namespace Gaffer.Tests
             Player player = Prospect(66);
 
             ScoutReport wide = new Scout(ScoutingSettings.Default).Observe(player, 0.0);
-            ScoutReport narrow = new Scout(new ScoutingSettings { PotentialMaxWidth = 4, AttributeMaxWidth = 2 })
+            ScoutReport narrow = new Scout(new ScoutingSettings(potentialMaxWidth: 4, attributeMaxWidth: 2))
                 .Observe(player, 0.0);
 
             Assert.That(narrow.PotentialHigh - narrow.PotentialLow, Is.LessThan(wide.PotentialHigh - wide.PotentialLow));

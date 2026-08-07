@@ -6,90 +6,154 @@ namespace Gaffer.Application.Season
     /// hidden band, and the youth intake age range. Kept in one injected value so tuning changes the numbers,
     /// not the code (NON-NEGOTIABLE #3); <c>RenewalBalanceSO</c> authors it in Unity, and <see cref="Default"/>
     /// is the calibrated baseline, plus the youth ability/potential band drawn around the squad's own
-    /// level (tier persistence). Immutable once built — defaults inline, overrides by object
-    /// initializer, and <c>init</c> makes that the only way in.
+    /// level (tier persistence).
+    /// <para>
+    /// Immutable once built: get-only properties set by one constructor whose parameters are all optional,
+    /// so a caller names only what it overrides. The defaults therefore live in the constructor signature
+    /// and are baked into every calling assembly at compile time — after changing one, rebuild everything
+    /// before trusting it (see <c>SettingsDefaultContractTests</c> for the convention and the full cost).
+    /// </para>
     /// </summary>
     public sealed class RenewalSettings
     {
+        /// <summary>
+        /// Every parameter is optional and defaulted to the calibrated value, so a caller writes only what it
+        /// changes: <c>new RenewalSettings(youthIntakePerSeason: 5)</c>.
+        /// </summary>
+        public RenewalSettings(
+            int keeperTwilightAge = 36,
+            int keeperHardAge = 43,
+            int outfielderTwilightAge = 33,
+            int outfielderHardAge = 40,
+            double retirementRatingEase = 0.4,
+            int gemCadenceSeasons = 5,
+            byte gemMinAbility = 28,
+            byte gemMaxAbility = 46,
+            byte gemMinPotential = 86,
+            byte gemMaxPotential = 96,
+            int youthMinAge = 16,
+            int youthMaxAge = 18,
+            int youthIntakePerSeason = 1,
+            int maxSquadSize = 25,
+            int youthMinAbilityOffset = -25,
+            byte youthMinAbilityFloor = 25,
+            byte youthMinAbilityCeiling = 60,
+            int youthMaxAbilityOffset = -8,
+            byte youthMaxAbilityFloor = 35,
+            byte youthMaxAbilityCeiling = 72,
+            int youthMinPotentialOffset = -3,
+            byte youthMinPotentialFloor = 45,
+            byte youthMinPotentialCeiling = 85,
+            int youthMaxPotentialOffset = 18,
+            byte youthMaxPotentialFloor = 60,
+            byte youthMaxPotentialCeiling = 95,
+            int emptySquadAverageRating = 50)
+        {
+            KeeperTwilightAge = keeperTwilightAge;
+            KeeperHardAge = keeperHardAge;
+            OutfielderTwilightAge = outfielderTwilightAge;
+            OutfielderHardAge = outfielderHardAge;
+            RetirementRatingEase = retirementRatingEase;
+            GemCadenceSeasons = gemCadenceSeasons;
+            GemMinAbility = gemMinAbility;
+            GemMaxAbility = gemMaxAbility;
+            GemMinPotential = gemMinPotential;
+            GemMaxPotential = gemMaxPotential;
+            YouthMinAge = youthMinAge;
+            YouthMaxAge = youthMaxAge;
+            YouthIntakePerSeason = youthIntakePerSeason;
+            MaxSquadSize = maxSquadSize;
+            YouthMinAbilityOffset = youthMinAbilityOffset;
+            YouthMinAbilityFloor = youthMinAbilityFloor;
+            YouthMinAbilityCeiling = youthMinAbilityCeiling;
+            YouthMaxAbilityOffset = youthMaxAbilityOffset;
+            YouthMaxAbilityFloor = youthMaxAbilityFloor;
+            YouthMaxAbilityCeiling = youthMaxAbilityCeiling;
+            YouthMinPotentialOffset = youthMinPotentialOffset;
+            YouthMinPotentialFloor = youthMinPotentialFloor;
+            YouthMinPotentialCeiling = youthMinPotentialCeiling;
+            YouthMaxPotentialOffset = youthMaxPotentialOffset;
+            YouthMaxPotentialFloor = youthMaxPotentialFloor;
+            YouthMaxPotentialCeiling = youthMaxPotentialCeiling;
+            EmptySquadAverageRating = emptySquadAverageRating;
+        }
+
         // Retirement thresholds by role group: no one plays past Hard, and in the twilight years the odds
         // climb with age. Keepers play latest of all.
-        public int KeeperTwilightAge { get; init; } = 36;
+        public int KeeperTwilightAge { get; }
 
-        public int KeeperHardAge { get; init; } = 43;
+        public int KeeperHardAge { get; }
 
-        public int OutfielderTwilightAge { get; init; } = 33;
+        public int OutfielderTwilightAge { get; }
 
-        public int OutfielderHardAge { get; init; } = 40;
+        public int OutfielderHardAge { get; }
 
         /// <summary>How much a high rating eases retirement in the twilight years (0 = age only, higher = stars linger).</summary>
-        public double RetirementRatingEase { get; init; } = 0.4;
+        public double RetirementRatingEase { get; }
 
         /// <summary>How often, in seasons, a club's academy yields a gem — rare and guaranteed, never a per-player chance.</summary>
-        public int GemCadenceSeasons { get; init; } = 5;
+        public int GemCadenceSeasons { get; }
 
         // The academy gem's hidden band: low visible ability (hides among ordinary prospects), rare high ceiling.
-        public byte GemMinAbility { get; init; } = 28;
+        public byte GemMinAbility { get; }
 
-        public byte GemMaxAbility { get; init; } = 46;
+        public byte GemMaxAbility { get; }
 
-        public byte GemMinPotential { get; init; } = 86;
+        public byte GemMinPotential { get; }
 
-        public byte GemMaxPotential { get; init; } = 96;
+        public byte GemMaxPotential { get; }
 
         // The age range youth arrive at.
-        public int YouthMinAge { get; init; } = 16;
+        public int YouthMinAge { get; }
 
-        public int YouthMaxAge { get; init; } = 18;
+        public int YouthMaxAge { get; }
 
         /// <summary>
         /// How many academy youths join each season beyond replacing retirees — so a club's academy feeds the
         /// squad every year, not only when a veteran leaves. Held to <see cref="MaxSquadSize"/>. 0 disables it.
         /// </summary>
-        public int YouthIntakePerSeason { get; init; } = 1;
+        public int YouthIntakePerSeason { get; }
 
         /// <summary>The size the academy intake grows the squad toward and never pushes it past.</summary>
-        public int MaxSquadSize { get; init; } = 25;
+        public int MaxSquadSize { get; }
 
         // The ordinary youth band: each edge is the squad's average rating plus an offset, then held
         // inside its own absolute floor/ceiling. The offsets are what make tier persist — a strong
         // club's academy is stronger — and the floor/ceiling pair is what keeps a bottom-of-the-pyramid
         // or a superclub squad from producing unplayable or world-class teenagers by arithmetic alone.
-        // These lived as literals in SquadRenewal.YouthContext next to the gem band that was already
-        // config; they are balance, so they belong here (NON-NEGOTIABLE #3). Every value below is the
-        // literal that shipped, so Default reproduces the previous youth exactly.
 
         /// <summary>Offset from the squad average for the youth band's lowest visible ability.</summary>
-        public int YouthMinAbilityOffset { get; init; } = -25;
+        public int YouthMinAbilityOffset { get; }
 
-        public byte YouthMinAbilityFloor { get; init; } = 25;
+        public byte YouthMinAbilityFloor { get; }
 
-        public byte YouthMinAbilityCeiling { get; init; } = 60;
+        public byte YouthMinAbilityCeiling { get; }
 
         /// <summary>Offset from the squad average for the youth band's highest visible ability.</summary>
-        public int YouthMaxAbilityOffset { get; init; } = -8;
+        public int YouthMaxAbilityOffset { get; }
 
-        public byte YouthMaxAbilityFloor { get; init; } = 35;
+        public byte YouthMaxAbilityFloor { get; }
 
-        public byte YouthMaxAbilityCeiling { get; init; } = 72;
+        public byte YouthMaxAbilityCeiling { get; }
 
         /// <summary>Offset from the squad average for the youth band's lowest hidden potential.</summary>
-        public int YouthMinPotentialOffset { get; init; } = -3;
+        public int YouthMinPotentialOffset { get; }
 
-        public byte YouthMinPotentialFloor { get; init; } = 45;
+        public byte YouthMinPotentialFloor { get; }
 
-        public byte YouthMinPotentialCeiling { get; init; } = 85;
+        public byte YouthMinPotentialCeiling { get; }
 
         /// <summary>Offset from the squad average for the youth band's highest hidden potential — the
         /// only positive one, so the best prospect can climb past today's first team.</summary>
-        public int YouthMaxPotentialOffset { get; init; } = 18;
+        public int YouthMaxPotentialOffset { get; }
 
-        public byte YouthMaxPotentialFloor { get; init; } = 60;
+        public byte YouthMaxPotentialFloor { get; }
 
-        public byte YouthMaxPotentialCeiling { get; init; } = 95;
+        public byte YouthMaxPotentialCeiling { get; }
 
         /// <summary>The average to assume when there is no one to average — an empty squad still has
         /// to draw its intake from somewhere, and a 0 average would floor every band.</summary>
-        public int EmptySquadAverageRating { get; init; } = 50;
+        public int EmptySquadAverageRating { get; }
 
         /// <summary>
         /// The calibrated defaults — one cached, shared, immutable instance, the convention every

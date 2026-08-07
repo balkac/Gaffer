@@ -10,22 +10,43 @@ namespace Gaffer.Application.Run
     /// </summary>
     public sealed class TransferOutcome
     {
+        /// <summary>
+        /// Every value is required: this record is only ever built by <see cref="RunSession"/> once a
+        /// transfer has completed, where all of it is known, so there is no default worth having and an
+        /// omitted field should not compile.
+        /// </summary>
+        public TransferOutcome(
+            Player player,
+            bool isSale,
+            long fee,
+            long weeklyWage,
+            Finances finances,
+            LineupOutcome lineup)
+        {
+            Player = player;
+            IsSale = isSale;
+            Fee = fee;
+            WeeklyWage = weeklyWage;
+            Finances = finances;
+            Lineup = lineup;
+        }
+
         /// <summary>The player who moved.</summary>
-        public Player Player { get; init; }
+        public Player Player { get; }
 
         /// <summary>True for a sale, false for a signing.</summary>
-        public bool IsSale { get; init; }
+        public bool IsSale { get; }
 
         /// <summary>The fee that moved (always positive; the direction is <see cref="IsSale"/>).</summary>
-        public long Fee { get; init; }
+        public long Fee { get; }
 
         /// <summary>His weekly wage — leaving the bill on a sale, joining it on a signing.</summary>
-        public long WeeklyWage { get; init; }
+        public long WeeklyWage { get; }
 
         /// <summary>The club's money after the transfer.</summary>
-        public Finances Finances { get; init; }
+        public Finances Finances { get; }
 
         /// <summary>The team sheet re-picked from the new roster.</summary>
-        public LineupOutcome Lineup { get; init; }
+        public LineupOutcome Lineup { get; }
     }
 }

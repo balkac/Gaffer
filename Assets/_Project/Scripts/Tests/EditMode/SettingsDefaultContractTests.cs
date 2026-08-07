@@ -20,9 +20,9 @@ namespace Gaffer.Tests
     ///
     /// <para><b>The convention</b>, for every settings type under <c>Gaffer.Application</c>:</para>
     /// <list type="number">
-    /// <item>Every property is <c>{ get; init; }</c> (C# 9). The object is immutable once built;
-    /// object-initializer ergonomics at construction sites are unchanged, which is why <c>init</c> and
-    /// not a constructor.</item>
+    /// <item>Every property is get-only (<c>{ get; }</c>), set by one constructor whose parameters are
+    /// all optional and defaulted to the calibrated value — so <c>new DramaSettings(maxEventsPerSeason: 0)</c>
+    /// names only what it overrides, and nothing can be written after construction.</item>
     /// <item><c>Default</c> is <c>public static X Default { get; } = new X();</c> — an auto-property
     /// initializer, evaluated once and cached. Never <c>=> new X()</c>: an expression-bodied property
     /// is a method body and re-allocates on every single access (PERFORMANCE.md §8, "Shared preset
@@ -37,6 +37,21 @@ namespace Gaffer.Tests
     /// <para>(1) is what makes (2) safe, and they are one change, not two: caching an instance whose
     /// properties still had public setters would hand every caller the same mutable object — a
     /// process-wide shared-state bug instead of a wasted allocation.</para>
+    ///
+    /// <para><b>The cost of (1), which must not be a surprise later.</b> Putting the defaults in the
+    /// constructor signature means C# bakes each one into the <em>calling</em> assembly at the moment
+    /// that caller is compiled — a call to <c>new DramaSettings()</c> in <c>Gaffer.Infrastructure</c>
+    /// carries Infrastructure's copy of the numbers, not Application's. With the layers in separate
+    /// asmdefs, editing a calibrated default in <c>Gaffer.Application</c> therefore reaches
+    /// <c>Gaffer.Infrastructure</c>, <c>Gaffer.Editor</c> and <c>Gaffer.Tests</c> only once each of
+    /// those is rebuilt, so a balance change can half-apply with nothing to show for it.
+    /// <b>After changing any balance default, do a full recompile before trusting the new value
+    /// anywhere.</b> (Unity rebuilds every dependent assembly on a source change, and
+    /// <c>dotnet test</c> compiles the whole bridge in one pass, so both paths normally get this right
+    /// on their own; the hazard is a stale or incremental build, and the fix is always the same —
+    /// rebuild everything.) A stale caller is invisible at the call site, which is why it is written
+    /// down here rather than left to be rediscovered. Whichever way, <c>Default</c> itself is built
+    /// inside <c>Gaffer.Application</c> and is always current.</para>
     ///
     /// <para>The tests below discover the settings types by reflection rather than a hand-kept list, so
     /// a new one is held to the convention the day it is written.</para>
@@ -118,26 +133,15 @@ namespace Gaffer.Tests
                 foreach (PropertyInfo property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
                 {
                     MethodInfo setter = property.SetMethod;
-                    if (setter == null || !setter.IsPublic)
-                    {
-                        continue;
-                    }
 
-                    // An `init` accessor is an ordinary setter carrying a required custom modifier of
-                    // System.Runtime.CompilerServices.IsExternalInit on its signature — that modreq is
-                    // the whole difference, and it is what stops a caller writing to a shared Default.
-                    bool initOnly = false;
-                    foreach (Type modifier in setter.ReturnParameter.GetRequiredCustomModifiers())
-                    {
-                        if (modifier.Name == "IsExternalInit")
-                        {
-                            initOnly = true;
-                        }
-                    }
-
-                    Assert.That(initOnly, Is.True,
+                    // Get-only: no public setter of any kind, which is strictly stronger than `init`
+                    // (an `init` accessor IS a public setter — one the compiler happens to police at
+                    // the call site). Nothing can write to a cached shared Default, at any point in the
+                    // object's life, by any route the CLR offers.
+                    Assert.That(setter == null || !setter.IsPublic, Is.True,
                         type.Name + "." + property.Name + " has a public setter. Default is a cached shared " +
-                        "instance, so a settable property is process-wide mutable state — make it `{ get; init; }`.");
+                        "instance, so a settable property is process-wide mutable state — make it `{ get; }` " +
+                        "and set it from the constructor.");
                 }
             }
         }
@@ -163,22 +167,20 @@ namespace Gaffer.Tests
         // out here, not read from RenewalSettings, so this is a real comparison and not a tautology.
         private static RenewalSettings TheOldLiterals()
         {
-            return new RenewalSettings
-            {
-                YouthMinAbilityOffset = -25,
-                YouthMinAbilityFloor = 25,
-                YouthMinAbilityCeiling = 60,
-                YouthMaxAbilityOffset = -8,
-                YouthMaxAbilityFloor = 35,
-                YouthMaxAbilityCeiling = 72,
-                YouthMinPotentialOffset = -3,
-                YouthMinPotentialFloor = 45,
-                YouthMinPotentialCeiling = 85,
-                YouthMaxPotentialOffset = 18,
-                YouthMaxPotentialFloor = 60,
-                YouthMaxPotentialCeiling = 95,
-                EmptySquadAverageRating = 50,
-            };
+            return new RenewalSettings(
+                youthMinAbilityOffset: -25,
+                youthMinAbilityFloor: 25,
+                youthMinAbilityCeiling: 60,
+                youthMaxAbilityOffset: -8,
+                youthMaxAbilityFloor: 35,
+                youthMaxAbilityCeiling: 72,
+                youthMinPotentialOffset: -3,
+                youthMinPotentialFloor: 45,
+                youthMinPotentialCeiling: 85,
+                youthMaxPotentialOffset: 18,
+                youthMaxPotentialFloor: 60,
+                youthMaxPotentialCeiling: 95,
+                emptySquadAverageRating: 50);
         }
 
         [Test]

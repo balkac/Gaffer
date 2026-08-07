@@ -49,26 +49,24 @@ namespace Gaffer.Infrastructure.Configuration
         public DevelopmentSettings ToSettings()
         {
             ClampToValidRanges();
-            return new DevelopmentSettings
-            {
-                GrowthRateTo20 = growthRateTo20,
-                GrowthRateTo22 = growthRateTo22,
-                GrowthRateTo24 = growthRateTo24,
-                GrowthRateTo26 = growthRateTo26,
-                GrowthRateTo29 = growthRateTo29,
-                MinSeasonVariance = minSeasonVariance,
-                MaxSeasonVariance = maxSeasonVariance,
-                KeeperPeakAge = keeperPeakAge,
-                CentralPeakAge = centralPeakAge,
-                WidePeakAge = widePeakAge,
-                ForwardPeakAge = forwardPeakAge,
-                MinDeclineAge = minDeclineAge,
-                DeclinePerYear = declinePerYear,
-                MaxDeclineYears = maxDeclineYears,
-                GeneralDeclineFactor = generalDeclineFactor,
-                AttributeFloor = attributeFloor,
-                PhysicalFloor = physicalFloor,
-            };
+            return new DevelopmentSettings(
+                growthRateTo20: growthRateTo20,
+                growthRateTo22: growthRateTo22,
+                growthRateTo24: growthRateTo24,
+                growthRateTo26: growthRateTo26,
+                growthRateTo29: growthRateTo29,
+                minSeasonVariance: minSeasonVariance,
+                maxSeasonVariance: maxSeasonVariance,
+                keeperPeakAge: keeperPeakAge,
+                centralPeakAge: centralPeakAge,
+                widePeakAge: widePeakAge,
+                forwardPeakAge: forwardPeakAge,
+                minDeclineAge: minDeclineAge,
+                declinePerYear: declinePerYear,
+                maxDeclineYears: maxDeclineYears,
+                generalDeclineFactor: generalDeclineFactor,
+                attributeFloor: attributeFloor,
+                physicalFloor: physicalFloor);
         }
 
         /// <summary>

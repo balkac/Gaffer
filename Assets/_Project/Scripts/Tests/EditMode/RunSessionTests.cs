@@ -34,23 +34,21 @@ namespace Gaffer.Tests
         // and the tests that measure *drama* force it. Nothing in between is deterministic enough to pin.
         private static RunBalance QuietDrama()
         {
-            return new RunBalance { Drama = new DramaSettings { MaxEventsPerSeason = 0 } };
+            return new RunBalance(drama: new DramaSettings(maxEventsPerSeason: 0));
         }
 
         private static RunSetup Setup()
         {
-            return new RunSetup
-            {
-                TeamCount = ClubCount,
-                Seed = Seed,
-                ManagedClubIndex = ManagedIndex,
-                PromotionPosition = 2,
-                SurvivalPosition = 6,
-                StartingCash = 6_000_000L,
-                WeeklyWageBudget = 400_000L,
-                MarketSize = 12,
-                GuaranteedGems = 2,
-            };
+            return new RunSetup(
+                teamCount: ClubCount,
+                seed: Seed,
+                managedClubIndex: ManagedIndex,
+                promotionPosition: 2,
+                survivalPosition: 6,
+                startingCash: 6_000_000L,
+                weeklyWageBudget: 400_000L,
+                marketSize: 12,
+                guaranteedGems: 2);
         }
 
         private static RunSession StartRun(RunSetup setup, RunBalance balance)
@@ -262,17 +260,13 @@ namespace Gaffer.Tests
 
         private static RunBalance AlwaysFire(DramaEvent forced)
         {
-            return new RunBalance
-            {
-                DramaEvents = new DramaCatalog(new[] { forced }),
-                Drama = new DramaSettings
-                {
-                    MaxEventsPerSeason = 99,
-                    MinWeeksBetweenEvents = 1,
-                    WeeklyChancePerWeight = 1.0,
-                    MaxWeeklyChance = 1.0,
-                },
-            };
+            return new RunBalance(
+                dramaEvents: new DramaCatalog(new[] { forced }),
+                drama: new DramaSettings(
+                    maxEventsPerSeason: 99,
+                    minWeeksBetweenEvents: 1,
+                    weeklyChancePerWeight: 1.0,
+                    maxWeeklyChance: 1.0));
         }
 
         // Choice 0 does all three things at once — that is the point: morale, cash and a forced sale are

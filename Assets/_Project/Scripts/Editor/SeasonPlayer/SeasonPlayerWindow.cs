@@ -193,18 +193,16 @@ namespace Gaffer.Editor.SeasonPlayer
 
         private RunSetup Setup()
         {
-            return new RunSetup
-            {
-                TeamCount = _teamCount,
-                Seed = (ulong)_seed,
-                ManagedClubIndex = _managedIndex,
-                PromotionPosition = _promotionPosition,
-                SurvivalPosition = _survivalPosition,
-                StartingCash = _startingCash,
-                WeeklyWageBudget = _wageBudget,
-                Formation = _formation,
-                Tactics = _tactics,
-            };
+            return new RunSetup(
+                teamCount: _teamCount,
+                seed: (ulong)_seed,
+                managedClubIndex: _managedIndex,
+                promotionPosition: _promotionPosition,
+                survivalPosition: _survivalPosition,
+                startingCash: _startingCash,
+                weeklyWageBudget: _wageBudget,
+                formation: _formation,
+                tactics: _tactics);
         }
 
         // Only the three balance assets this window authors are overridden; everything else — drama, morale,
@@ -212,14 +210,12 @@ namespace Gaffer.Editor.SeasonPlayer
         // fills a null with (ARCHITECTURE §7). The Management window is where every knob is authored.
         private RunBalance Balance()
         {
-            return new RunBalance
-            {
-                Simulation = _simulationBalance != null ? _simulationBalance.ToSettings() : MatchSimulationSettings.Default,
-                TacticsBalance = _simulationBalance != null ? _simulationBalance.ToTacticsSettings() : TacticsSettings.Default,
-                Scorer = _simulationBalance != null ? _simulationBalance.ToScorerWeights() : ScorerWeights.Default,
-                Development = _developmentBalance != null ? _developmentBalance.ToSettings() : DevelopmentSettings.Default,
-                Renewal = _renewalBalance != null ? _renewalBalance.ToSettings() : RenewalSettings.Default,
-            };
+            return new RunBalance(
+                simulation: _simulationBalance != null ? _simulationBalance.ToSettings() : MatchSimulationSettings.Default,
+                tacticsBalance: _simulationBalance != null ? _simulationBalance.ToTacticsSettings() : TacticsSettings.Default,
+                scorer: _simulationBalance != null ? _simulationBalance.ToScorerWeights() : ScorerWeights.Default,
+                development: _developmentBalance != null ? _developmentBalance.ToSettings() : DevelopmentSettings.Default,
+                renewal: _renewalBalance != null ? _renewalBalance.ToSettings() : RenewalSettings.Default);
         }
 
         private void StartSeason()

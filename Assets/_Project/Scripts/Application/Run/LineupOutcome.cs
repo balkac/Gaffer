@@ -15,35 +15,60 @@ namespace Gaffer.Application.Run
     /// </summary>
     public sealed class LineupOutcome
     {
-        public Formation Formation { get; init; }
+        /// <summary>
+        /// Every value is required: this record is only ever built by <see cref="RunSession"/> when it
+        /// binds the eleven, where all of it is known, so there is no default worth having and an omitted
+        /// field should not compile.
+        /// </summary>
+        public LineupOutcome(
+            Formation formation,
+            Tactics tactics,
+            IReadOnlyList<Player> slots,
+            IReadOnlyList<Player> starters,
+            IReadOnlyList<Player> bench,
+            bool isComplete,
+            TeamStrength strength,
+            ChanceProfile chanceProfile)
+        {
+            Formation = formation;
+            Tactics = tactics;
+            Slots = slots;
+            Starters = starters;
+            Bench = bench;
+            IsComplete = isComplete;
+            Strength = strength;
+            ChanceProfile = chanceProfile;
+        }
 
-        public Tactics Tactics { get; init; }
+        public Formation Formation { get; }
+
+        public Tactics Tactics { get; }
 
         /// <summary>
         /// One entry per formation slot, index-aligned with <see cref="Simulation.Formation.Slots"/>;
         /// <c>null</c> where the slot is empty. A snapshot — later commands do not change it.
         /// </summary>
-        public IReadOnlyList<Player> Slots { get; init; }
+        public IReadOnlyList<Player> Slots { get; }
 
         /// <summary>The players actually fielded, in slot order (the non-empty <see cref="Slots"/>).</summary>
-        public IReadOnlyList<Player> Starters { get; init; }
+        public IReadOnlyList<Player> Starters { get; }
 
         /// <summary>Everyone in the squad who is not in a slot, in squad order.</summary>
-        public IReadOnlyList<Player> Bench { get; init; }
+        public IReadOnlyList<Player> Bench { get; }
 
         /// <summary>True when every slot is filled — the eleven the manager will actually field.</summary>
-        public bool IsComplete { get; init; }
+        public bool IsComplete { get; }
 
         /// <summary>
         /// The strength this eleven and these tactics derive to, through the run's own trait catalog and
         /// tactics balance — the same derivation the match uses, so the pills cannot disagree with the sim.
         /// </summary>
-        public TeamStrength Strength { get; init; }
+        public TeamStrength Strength { get; }
 
         /// <summary>
         /// How these tactics shape the side's chances (volume/quality vs balanced), through the run's
         /// tactics balance.
         /// </summary>
-        public ChanceProfile ChanceProfile { get; init; }
+        public ChanceProfile ChanceProfile { get; }
     }
 }

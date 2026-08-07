@@ -190,16 +190,14 @@ namespace Gaffer.Tests
             // floor, so the cumulative vector has runs of equal steps and the binary search must still
             // land on the FIRST index whose cumulative total exceeds the roll — what `roll < cumulative`
             // meant in the linear scan.
-            var weights = new ScorerWeights
-            {
-                OpenPlayFinishing = 0.0,
-                OpenPlayPositioning = 0.0,
-                OpenPlayPace = 0.0,
-                AerialHeading = 0.0,
-                AerialJumping = 0.0,
-                AerialStrength = 0.0,
-                MinOutfielderWeight = 1.0,
-            };
+            var weights = new ScorerWeights(
+                openPlayFinishing: 0.0,
+                openPlayPositioning: 0.0,
+                openPlayPace: 0.0,
+                aerialHeading: 0.0,
+                aerialJumping: 0.0,
+                aerialStrength: 0.0,
+                minOutfielderWeight: 1.0);
             var squads = new List<Squad> { GeneratedSquad(0, 3UL), GeneratedSquad(500, 4UL) };
 
             AssertMatchesOracle(squads, draws: 4000, seed: 555UL, weights: weights);

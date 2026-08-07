@@ -80,7 +80,7 @@ namespace Gaffer.Tests
         // the extra youth that would otherwise change the squad's size and line averages.
         private static RenewalSettings NoIntake()
         {
-            return new RenewalSettings { YouthIntakePerSeason = 0 };
+            return new RenewalSettings(youthIntakePerSeason: 0);
         }
 
         private static Club ClubWithSquad(int id, Squad squad)
@@ -123,7 +123,7 @@ namespace Gaffer.Tests
         public void ToNextSeason_ZeroGrowthSettings_YoungSquadDoesNotStrengthen()
         {
             League league = LeagueWith(ClubWithSquad(0, YoungSquad(50, 85)));
-            var settings = new DevelopmentSettings { GrowthRateTo20 = 0.0 };
+            var settings = new DevelopmentSettings(growthRateTo20: 0.0);
 
             League next = new SeasonTransition(settings, NoIntake()).ToNextSeason(league, 1234UL, 2);
 

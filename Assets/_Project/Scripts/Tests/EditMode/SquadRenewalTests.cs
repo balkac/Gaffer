@@ -204,7 +204,7 @@ namespace Gaffer.Tests
         [Test]
         public void Renew_AtMaxSquadSize_BringsNoExtraIntake()
         {
-            var settings = new RenewalSettings { MaxSquadSize = 3 };
+            var settings = new RenewalSettings(maxSquadSize: 3);
             Squad squad = SquadOf(P(0, PlayerRole.CentreBack, 22), P(1, PlayerRole.Striker, 24), P(2, PlayerRole.Goalkeeper, 26));
             int nextId = 1000;
 
@@ -217,7 +217,7 @@ namespace Gaffer.Tests
         [Test]
         public void Renew_YouthIntakePerSeason_ControlsHowManyJoin()
         {
-            var settings = new RenewalSettings { YouthIntakePerSeason = 2 };
+            var settings = new RenewalSettings(youthIntakePerSeason: 2);
             Squad squad = SquadOf(P(0, PlayerRole.CentreBack, 22), P(1, PlayerRole.Striker, 24), P(2, PlayerRole.Goalkeeper, 26));
             int nextId = 1000;
 
@@ -238,7 +238,7 @@ namespace Gaffer.Tests
             Squad byDefault = new SquadRenewal(new PlayerGenerator()).Renew(squad, 99UL, 2, ref defId);
             Assert.That(HasId(byDefault, 0), Is.True, "default keeps a 33-year-old on the twilight threshold");
 
-            var settings = new RenewalSettings { OutfielderTwilightAge = 30, OutfielderHardAge = 32 };
+            var settings = new RenewalSettings(outfielderTwilightAge: 30, outfielderHardAge: 32);
             int cutId = 2000;
             Squad tuned = new SquadRenewal(new PlayerGenerator(), settings).Renew(squad, 99UL, 2, ref cutId);
             Assert.That(HasId(tuned, 0), Is.False, "a lower hard age forces the 33-year-old out");
@@ -247,7 +247,7 @@ namespace Gaffer.Tests
         [Test]
         public void Renew_HigherGemPotentialSettings_RaiseTheGemCeiling()
         {
-            var settings = new RenewalSettings { GemMinPotential = 95, GemMaxPotential = 96 };
+            var settings = new RenewalSettings(gemMinPotential: 95, gemMaxPotential: 96);
             Squad squad = SquadOf(P(0, PlayerRole.Striker, 40, 60), P(1, PlayerRole.CentreBack, 24, 60));
             int nextId = 1000;
 

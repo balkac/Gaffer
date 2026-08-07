@@ -15,48 +15,85 @@ namespace Gaffer.Application.Run
     /// </summary>
     public sealed class WeekOutcome
     {
+        /// <summary>
+        /// Every value is required: this record is only ever built by <see cref="RunSession"/> at the end
+        /// of a played week, where all of it is known, so there is no default worth having and an omitted
+        /// field should not compile.
+        /// </summary>
+        public WeekOutcome(
+            int round,
+            int playedRounds,
+            int roundCount,
+            bool isSeasonComplete,
+            IReadOnlyList<MatchResult> matches,
+            MatchResult? managedMatch,
+            int tablePosition,
+            int lossStreak,
+            Finances finances,
+            long wagesPaid,
+            TransferWindowPhase windowPhase,
+            PendingDrama drama,
+            SeasonVerdict? verdict,
+            int finalPosition)
+        {
+            Round = round;
+            PlayedRounds = playedRounds;
+            RoundCount = roundCount;
+            IsSeasonComplete = isSeasonComplete;
+            Matches = matches;
+            ManagedMatch = managedMatch;
+            TablePosition = tablePosition;
+            LossStreak = lossStreak;
+            Finances = finances;
+            WagesPaid = wagesPaid;
+            WindowPhase = windowPhase;
+            Drama = drama;
+            Verdict = verdict;
+            FinalPosition = finalPosition;
+        }
+
         /// <summary>The round that was played, 0-based (round + 1 is the "week N" a view shows).</summary>
-        public int Round { get; init; }
+        public int Round { get; }
 
         /// <summary>Rounds played after this week.</summary>
-        public int PlayedRounds { get; init; }
+        public int PlayedRounds { get; }
 
         /// <summary>Rounds in the season.</summary>
-        public int RoundCount { get; init; }
+        public int RoundCount { get; }
 
-        public bool IsSeasonComplete { get; init; }
+        public bool IsSeasonComplete { get; }
 
         /// <summary>Every fixture played this round.</summary>
-        public IReadOnlyList<MatchResult> Matches { get; init; }
+        public IReadOnlyList<MatchResult> Matches { get; }
 
         /// <summary>The managed club's fixture this round, or null if it did not play.</summary>
-        public MatchResult? ManagedMatch { get; init; }
+        public MatchResult? ManagedMatch { get; }
 
         /// <summary>The managed club's league position after this week, 1-based; 0 when unknown.</summary>
-        public int TablePosition { get; init; }
+        public int TablePosition { get; }
 
         /// <summary>Consecutive league defeats the managed club is now on.</summary>
-        public int LossStreak { get; init; }
+        public int LossStreak { get; }
 
         /// <summary>The club's money after the week's wages were paid.</summary>
-        public Finances Finances { get; init; }
+        public Finances Finances { get; }
 
         /// <summary>What the wage bill took out of the transfer cash this week (GDD §4.4).</summary>
-        public long WagesPaid { get; init; }
+        public long WagesPaid { get; }
 
         /// <summary>Which transfer window (if any) is open now that the round has been played.</summary>
-        public TransferWindowPhase WindowPhase { get; init; }
+        public TransferWindowPhase WindowPhase { get; }
 
         /// <summary>
         /// The drama raised this week, or null for a quiet week — by design the common case. A raised
         /// event blocks the next week until <see cref="RunSession.ResolveDrama"/> answers it.
         /// </summary>
-        public PendingDrama Drama { get; init; }
+        public PendingDrama Drama { get; }
 
         /// <summary>The board's verdict, set on the week that completes the season; null otherwise.</summary>
-        public SeasonVerdict? Verdict { get; init; }
+        public SeasonVerdict? Verdict { get; }
 
         /// <summary>The managed club's final position, set with <see cref="Verdict"/>; 0 otherwise.</summary>
-        public int FinalPosition { get; init; }
+        public int FinalPosition { get; }
     }
 }

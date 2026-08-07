@@ -97,20 +97,18 @@ namespace Gaffer.Application.Run
                 return RunBalance.Default;
             }
 
-            return new RunBalance
-            {
-                Simulation = balance.Simulation,
-                TacticsBalance = balance.TacticsBalance ?? Gaffer.Application.Simulation.TacticsSettings.Default,
-                Scorer = balance.Scorer ?? Gaffer.Application.Simulation.ScorerWeights.Default,
-                Development = balance.Development ?? Gaffer.Application.Progression.DevelopmentSettings.Default,
-                Renewal = balance.Renewal ?? RenewalSettings.Default,
-                Drama = balance.Drama ?? Gaffer.Application.Drama.DramaSettings.Default,
-                Morale = balance.Morale ?? Gaffer.Application.Drama.MoraleSettings.Default,
-                Economy = balance.Economy ?? Gaffer.Application.Transfers.EconomySettings.Default,
-                Scouting = balance.Scouting ?? Gaffer.Application.Transfers.ScoutingSettings.Default,
-                Traits = balance.Traits ?? Gaffer.Domain.Traits.TraitCatalog.Default,
-                DramaEvents = balance.DramaEvents ?? Gaffer.Domain.Drama.DramaCatalog.Default,
-            };
+            return new RunBalance(
+                simulation: balance.Simulation,
+                tacticsBalance: balance.TacticsBalance ?? Gaffer.Application.Simulation.TacticsSettings.Default,
+                scorer: balance.Scorer ?? Gaffer.Application.Simulation.ScorerWeights.Default,
+                development: balance.Development ?? Gaffer.Application.Progression.DevelopmentSettings.Default,
+                renewal: balance.Renewal ?? RenewalSettings.Default,
+                drama: balance.Drama ?? Gaffer.Application.Drama.DramaSettings.Default,
+                morale: balance.Morale ?? Gaffer.Application.Drama.MoraleSettings.Default,
+                economy: balance.Economy ?? Gaffer.Application.Transfers.EconomySettings.Default,
+                scouting: balance.Scouting ?? Gaffer.Application.Transfers.ScoutingSettings.Default,
+                traits: balance.Traits ?? Gaffer.Domain.Traits.TraitCatalog.Default,
+                dramaEvents: balance.DramaEvents ?? Gaffer.Domain.Drama.DramaCatalog.Default);
         }
 
         private static int Clamp(int value, int min, int max)

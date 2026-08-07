@@ -40,23 +40,19 @@ namespace Gaffer.Infrastructure.Configuration
         public MoraleSettings ToMoraleSettings()
         {
             ClampToValidRanges();
-            return new MoraleSettings
-            {
-                RatingPerPoint = moraleRatingPerPoint,
-                MaxAbsPoints = moraleMaxAbsPoints,
-            };
+            return new MoraleSettings(
+                ratingPerPoint: moraleRatingPerPoint,
+                maxAbsPoints: moraleMaxAbsPoints);
         }
 
         public DramaSettings ToSettings()
         {
             ClampToValidRanges();
-            return new DramaSettings
-            {
-                MaxEventsPerSeason = maxEventsPerSeason,
-                MinWeeksBetweenEvents = minWeeksBetweenEvents,
-                WeeklyChancePerWeight = weeklyChancePerWeight,
-                MaxWeeklyChance = maxWeeklyChance,
-            };
+            return new DramaSettings(
+                maxEventsPerSeason: maxEventsPerSeason,
+                minWeeksBetweenEvents: minWeeksBetweenEvents,
+                weeklyChancePerWeight: weeklyChancePerWeight,
+                maxWeeklyChance: maxWeeklyChance);
         }
 
         /// <summary>

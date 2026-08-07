@@ -30,11 +30,9 @@ namespace Gaffer.Infrastructure.Configuration
         public ScoutingSettings ToSettings()
         {
             ClampToValidRanges();
-            return new ScoutingSettings
-            {
-                PotentialMaxWidth = potentialMaxWidth,
-                AttributeMaxWidth = attributeMaxWidth,
-            };
+            return new ScoutingSettings(
+                potentialMaxWidth: potentialMaxWidth,
+                attributeMaxWidth: attributeMaxWidth);
         }
 
         /// <summary>

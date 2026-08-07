@@ -19,38 +19,70 @@ namespace Gaffer.Application.Run
     /// </summary>
     public sealed class DramaResolution
     {
-        public DramaEventId EventId { get; init; }
+        /// <summary>
+        /// Every value is required: this record is only ever built by
+        /// <see cref="RunSession.ResolveDrama"/>, at the one point where a resolution has fully happened
+        /// and all of it is known, so there is no default worth having and an omitted field should not
+        /// compile.
+        /// </summary>
+        public DramaResolution(
+            DramaEventId eventId,
+            int choiceIndex,
+            long cashDelta,
+            Finances finances,
+            IReadOnlyList<MoraleChange> moraleChanges,
+            Player soldPlayer,
+            long saleFee,
+            Player traitGrantTarget,
+            TraitId grantedTrait,
+            Player rebuiltPlayer,
+            LineupOutcome lineup)
+        {
+            EventId = eventId;
+            ChoiceIndex = choiceIndex;
+            CashDelta = cashDelta;
+            Finances = finances;
+            MoraleChanges = moraleChanges;
+            SoldPlayer = soldPlayer;
+            SaleFee = saleFee;
+            TraitGrantTarget = traitGrantTarget;
+            GrantedTrait = grantedTrait;
+            RebuiltPlayer = rebuiltPlayer;
+            Lineup = lineup;
+        }
 
-        public int ChoiceIndex { get; init; }
+        public DramaEventId EventId { get; }
+
+        public int ChoiceIndex { get; }
 
         /// <summary>The signed cash consequence of the choice itself (excluding any sale fee).</summary>
-        public long CashDelta { get; init; }
+        public long CashDelta { get; }
 
         /// <summary>The club's money after the cash effect and any forced sale.</summary>
-        public Finances Finances { get; init; }
+        public Finances Finances { get; }
 
         /// <summary>The morale entries that landed on the ledger, in the order they were applied.</summary>
-        public IReadOnlyList<MoraleChange> MoraleChanges { get; init; }
+        public IReadOnlyList<MoraleChange> MoraleChanges { get; }
 
         /// <summary>The player the choice forced out, or null. He is back on the market.</summary>
-        public Player SoldPlayer { get; init; }
+        public Player SoldPlayer { get; }
 
         /// <summary>What the forced sale brought in; 0 when there was none.</summary>
-        public long SaleFee { get; init; }
+        public long SaleFee { get; }
 
         /// <summary>The teammate a trait passed to, as he was before, or null.</summary>
-        public Player TraitGrantTarget { get; init; }
+        public Player TraitGrantTarget { get; }
 
         /// <summary>The trait he received.</summary>
-        public TraitId GrantedTrait { get; init; }
+        public TraitId GrantedTrait { get; }
 
         /// <summary>The same player rebuilt with the trait and swapped into the live squad, or null.</summary>
-        public Player RebuiltPlayer { get; init; }
+        public Player RebuiltPlayer { get; }
 
         /// <summary>
         /// The team sheet after the resolution — re-picked when the squad changed, otherwise the sheet
         /// as it stood. Never null, so a view has one thing to draw either way.
         /// </summary>
-        public LineupOutcome Lineup { get; init; }
+        public LineupOutcome Lineup { get; }
     }
 }
