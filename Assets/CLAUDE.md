@@ -4,7 +4,7 @@ Roguelike futbol menajerliği · Mobil (iOS/Android) · Unity 6 (`6000.3.16f1`) 
 Bu dosya oturum başında okunur ve davranışı belirler. Ayrıntılar için:
 `docs/GDD.md` (ne yapıyoruz), `docs/TDD.md` (oyuna-özel nasıl), `docs/ART_STYLE` (görsel dil).
 
-**➜ Nerede kaldık? `docs/PROGRESS.md`'yi oku** (ilerleme + alınan kararlar + sıradaki adım). `docs/ROADMAP.md` faz durumunu (✅/🟡/⬜) gösterir. Yeni oturuma bu ikisiyle başla. **Testler:** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj`.
+**➜ Nerede kaldık? `docs/PROGRESS.md`'yi oku** (ilerleme + alınan kararlar + sıradaki adım). `docs/ROADMAP.md` faz durumunu (✅/🟡/⬜) gösterir. Yeni oturuma bu ikisiyle başla. **Testler:** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj`. **Bu köprünün kapsamını bil:** yalnız `Common`/`Domain`/`Application` derlenir — `Infrastructure`, `Composition`, `Presentation`, `Editor` **hiçbir derleyici denetiminden geçmez**. Oralarda yeşil test, "derleniyor" demek değildir; Unity'yi açman gerekir. (Gerektiğinde bu katmanları Unity'nin kendi assembly'lerine karşı derleyen tek kullanımlık bir csproj kurulabilir — 2026-08-06 review'unda öyle yapıldı; bkz. PROGRESS.)
 
 **Nasıl inşa edilir → `docs/engineering-standards/`** (`ARCHITECTURE.md`, `CONVENTIONS.md`, `PERFORMANCE.md`, `UNITY.md`, `starter-tree.md`) **bağlayıcıdır.** Katmanlar, assembly'ler, isimlendirme, hata modeli, async sınırı, GC/alloc disiplini, engine yaşam döngüsü, test köprüsü oradan gelir. Çelişkide **standartlar kazanır**; TDD yalnız oyuna-özel kararları taşır.
 
@@ -26,16 +26,18 @@ Simülasyon dramın rakibi değil, toprağıdır. Ali Yılmaz hikayesi *çünkü
 5. **Çekirdekte `throw` değil `Result`.** Beklenen hata `Result`/`Result<T>` (dependency-free `Common`); yalnız bozulan invariant fail-fast. (CONVENTIONS §4)
 6. **Test önce sim.** UI'dan önce maç sim + headless doğrulama. Çekirdek "inandırıcı" olana kadar üstüne bir şey koyma.
 7. **Trait'ler mekanik olarak gerçek.** Sim çıktısını ölçülebilir değiştirmiyorsa flavor text'tir — kabul etme.
-8. **Ham kullanıcı-metni yok.** Tüm UI + anlatı metni localization key'leriyle string table'dan; kodda/veride düz metin yasak.
+8. **Ham kullanıcı-metni yok.** Tüm UI + anlatı metni localization key'leriyle string table'dan; kodda/veride düz metin yasak. Çekirdek **key** üretir (`attr.finishing.abbrev`, `role.centre_back.abbrev`), kelimeyi seçmek Presentation'ın işi. **Tek muafiyet: `Gaffer.Editor` geliştirici araçları** — ship edilmiyorlar, tanımı gereği İngilizce'ler ve karşılık arayacakları string table henüz yok. Muafiyet tek bir yerde toplanır (`Editor/Harness/HarnessLabels.cs`, `internal`), böylece kural derleyiciyle zorlanır: shipping assembly'lerin hiçbiri o sınıfı göremez.
+9. **Enum'lar isimle persist edilir, ordinal'le değil.** Save'de isim (`PersistedPlayerRole`), `.asset`'e serialize olan enum'larda ise Unity int yazdığı için değerler explicit **pinlenir** ve asla yeniden sıralanmaz/kullanılmaz — testle kilitli (`PersistedEnumValueTests`).
 
 ---
 
 ## Katman haritası (bkz. TDD §3 + `starter-tree.md`) — katman başına tek assembly
 ```
-Common  Domain  Application(Simulation/Generation/Drama/Narrative/Season)   → saf C#, UnityEngine YOK
+Common  Domain  Application(Simulation/Generation/Drama/Narrative/Season/Run)   → saf C#, UnityEngine YOK
 Infrastructure(Configuration SO + Persistence + Localization)  Presentation(UI Toolkit)  Composition  → UnityEngine VAR
 Tests (dotnet + Unity)   Tools/SeasonHarness (1000-sezon dotnet konsol)
 ```
+**`Application/Run` = run akışının tek sahibi.** `RunSession` lig + sezon + finans + dram + moral + sezon-no'yu tutar; `RunSessionFactory.Start/Resume` tek kurulum kapısıdır (ctor `internal`). Komutlar outcome döner (`WeekOutcome`, `LineupOutcome`, `DramaResolution`, `TransferOutcome`, `SeasonRollover`) — UI bunları **replay eder**, çekirdeğe uzanıp state diff'lemez (#4). Editör pencereleri ve gelecekteki Presentation, akışın kopyası değil, bunun üstünde ince view'dur.
 `Common/Domain/Application` `.asmdef`'lerinde `noEngineReferences`. `TraitSO`/`DramaEventSO` `Infrastructure`'da authoring yüzeyi; yüklemede saf `Domain` tipine map'lenir. `enum` yerine `Id` (tanım veride).
 
 ## İnşa sırası (bkz. GDD §11 / TDD §14)

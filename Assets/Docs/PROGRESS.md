@@ -6,6 +6,60 @@
 
 ---
 
+## Sertleştirme geçişi · 2026-08-06 (kod review + standart senkronu)
+
+`engineering-standards` en güncel hâline senkronlandı (`README.md` + `REVIEW-CHECKLIST.md` yeni) ve tüm kod bu standartlara karşı review edildi. **Faz sırası değişmedi** — bu bir borç kapatma geçişi. Test: 210 → **300**, kalibrasyon bit-aynı korundu (gol 2.692/maç · favori %51.6 · ev %38.2 · deplasman %35.8) — her dalga sonunda doğrulandı.
+
+**Veri kaybı / sessiz bozulma (kapandı)**
+- **Save v5: enum'lar isimle persist ediliyor.** `PlayerRole` ordinal yazılıyordu; araya rol eklemek her save'deki her oyuncuyu sessizce yeniden mevkilendirirdi ve mevcut testler bunu göremezdi (aynı ordinal'den geçip dönüyorlardı). `PersistedPlayerRole` tek dönüşüm yeri: `TryParse` + `IsDefined` + **metnin `ToName` çıktısının aynısı olma şartı** (yalnız ilk ikisi `"3"` gibi ordinal string'leri kabul ediyordu). v4→v5 zincir adımı gerçek; eski `Role` alanı `int?` legacy olarak duruyor (alan adını string'e çevirmek Newtonsoft'un `11`→`"11"` zorlamasına bel bağlamak olurdu, migrator ham JSON'a uzanamaz).
+- **`.asset`'e serialize olan enum'ların değerleri pinlendi** (`DramaEffectKind`, `DramaCategory`, `PlayerRole`, `Position`), testle kilitli.
+- **Save yazımı atomik.** Düz `File.WriteAllText` hedefi önce truncate ediyordu — arka plana atılırken OS process'i öldürürse run giderdi. Artık temp → flush → `File.Replace` (+ ilk save'de `File.Move` fallback, `.bak`'a düşen load). Catch `IOException`'dan `UnauthorizedAccessException`/`SecurityException`/`NotSupportedException`'a genişletildi — ilki `IOException` değil, boot'ta yakalanmamış exception olarak çıkıyordu.
+- **Config'ten gelen 4 bölen korundu** (aura, `MaxStrengthRatio`, emeklilik bandı, yuvarlama adımı). Sıfır aura `0/0` → NaN ile tüm takım gücünü zehirliyordu ve `NaN < x` hep false olduğu için her downstream dal sessizce yanlış gidiyordu. Tüm balance SO alanlarına `[Range]`/`OnValidate` clamp eklendi (projede daha önce **hiç** yoktu).
+- **İki `switch`'e `default: throw`** (`Position`, `DramaEffectKind`) — yeni enum değeri sessiz no-op oluyordu.
+- **`SeasonEvaluator`** kulüp tabloda yoksa `ordered.Count` dönüp sessizce **kovulma** üretiyordu; artık fail-fast.
+
+**Performans / GC**
+- **`Sort(IComparer<T>)` → cached `Comparison<T>`** (3 yer). Koddaki yorum standardın tam tersini iddia ediyordu; `PERFORMANCE §8` shipped-IL incelemesiyle `IComparer` formunun her çağrıda delegate alloc'ladığını söylüyor. 1000-sezonluk harness'te ~380k gereksiz delegate.
+- **İlk 11 artık cache'li** (`ClubId` bazlı, `UpdateSquad`/`SetFormation` invalidate eder) — sezon başına ~380k karşılaştırma + ~50k rating hesabı geri kazanıldı; **golcü ağırlık vektörü** kümülatif + binary search (bit-identical, 16.000 çekilişlik oracle testiyle kanıtlı).
+- `Squad.Add` 5 → 2 nesne, `PlayerGenerator`'da boxed enumerator'lar, `SquadRenewal`'da per-call `Dictionary` temizlendi.
+- **Settings tipleri `{ get; init; }` + tekil cached `Default`.** İkisi tek iş: sadece cache'lemek paylaşılan-mutable-state hatası yaratırdı (`EconomySettings.Default.ValuationCeiling = x` process'teki her transferi yeniden fiyatlardı). `init` → `Application/IsExternalInit.cs` gerekti; netstandard2.1'de o tip yok, `dotnet test` (net8.0) bunu göremez, Unity CS0518 ile patlardı.
+
+**Mimari**
+- **`Application/Run/RunSession`** — run akışı iki EditorWindow'un içinde iki kez yazılmıştı ve **çoktan sapmıştı** (`ManagementWindow` maaş ödüyor + dram tick'liyor, `SeasonPlayerWindow` ikisini de yapmıyordu). Artık tek sahip; pencereler view. `SeasonPlayerWindow` bu yüzden ekonomi+dram döngüsünü kazandı. `ManagementWindow` 2284 → 1930 satır.
+- **Dram çözümü artık yarım-commit değil.** `Resolve` moral'i çağıranın ledger'ında yerinde uyguluyordu ama nakit/satış/trait'i data olarak dönüyordu — satış başarısız olursa moral çoktan uygulanmış oluyordu. `DramaOutcome` artık `MoraleChange[]` taşıyor; **satış başarısızsa hiçbir şey uygulanmıyor** (replay dürüstlüğü: outcome, çekirdeğin gerçekten içinde olduğu bir durumu anlatmalı).
+- **Rol modeli tek tabloda** (`RoleAttributeWeights`); rating/gelişim/ekran ondan türüyor. Prova iş gördü: rating↔gelişim sapması **yoktu**, ama ekran tablosu kalecinin `AerialReach`'ini ve beklerin `Positioning`'ini göstermiyordu, stoperde sıra tersti. *Tek davranış değişikliği bu (yalnız ekran).*
+- **İçerik katılığı ile save katılığı ayrıldı** (`ARCHITECTURE §11`): authored catalog yüklemesi dangling slug'da gürültülü patlıyor (yazım hatası sessizce flavor text'e dönüşüyordu — NON-NEGOTIABLE #7'nin yasağı), save restore toleranslı kaldı.
+- **Catalog sapması kapandı:** `LeagueGenerator` ve editör pencereleri üç yerde çıplak `new EffectiveStrengthBuilder()` ile *varsayılan* catalog'dan güç hesaplıyordu, sezon ise yapılandırılmış catalog'la koşuyordu.
+
+**Mobil / Unity**
+- HDR kapatıldı, Android ASTC seçildi, bundle id `com.balkac.gaffer` (onay bekliyor), 2D renderer'da gölge + kullanılmayan post-processing shader varyantları strip'lendi, GraphicsSettings'e default URP asset atandı, 14 kullanılmayan modül `manifest.json`'dan çıkarıldı, 2D physics `Script` moduna alındı.
+- **`GameBootstrapper` + `PerformanceSettingsSO`**: `targetFrameRate` repoda hiç set edilmiyordu — `PERFORMANCE §3`'e göre mobilde varsayılan **sabit 30 fps** demek ve `vSyncCount` yok sayılıyor; oyun kalıcı yarı hızda çıkacaktı. `MatchSmokeTest` `#if UNITY_EDITOR` içine alındı (dokümanı "not shipped" diyordu ama gerçekte shipping'e giriyordu).
+
+**Test ağı: 210 → 341**
+- **Alloc guard testi** (`PERFORMANCE §11`) yazıldı — dört ayrı "allocation-free" iddiası vardı, ölçen tek test yoktu; `Sort` yorumunun bir yıl fark edilmeden yanlış kalmasının sebebi buydu. Ölçüm: haftada **4.076 B** (warm), tavan 6 KB; beş bileşen iddiasının her biri ayrıca **gerçek 0 B** ile kilitli. Retained olanlar (maç başına `MatchOutcome`+gol listesi+`MatchResult`) isimlendirildi — `PERFORMANCE §4`: *"'Zero allocation' with no named path is marketing."*
+- **`GC.GetTotalMemory` bu iş için kullanılamaz çıktı** (§11/§9'un uyardığı yanlış-pozitif): `true` ile üç ardışık koşuda 5.4 / 6.4 / **14.5** KB okudu — ölçülen thread'in toplam allocation'ından 3.5 kat fazla, yani imkânsız. Guard `GC.GetAllocatedBytesForCurrentThread()` üzerine kuruldu.
+- **`LeagueTable` ve `QualityChanceResolver`** ilk kez test edildi. 341 testin hiçbiri daha önce **beraberlik üretmiyordu**, yani sezonun en sıra-duyarlı kodu olan 4 kademeli tie-break (özellikle determinizm garantisi diye satılan "düşük kulüp id" kademesi) hiç sınanmamıştı.
+- **Yalanlanamaz ~14 assertion** temizlendi (4 silindi, 10'u gerçek iddiaya çevrildi). Örnek: `ScoutTests` bandın gerçeği içerdiğini iddia ediyordu ama `Scout.Band` zaten `low<=truth<=high`'ı clamp'liyor — yani tamamen bozuk bir offset'te bile geçerdi.
+- `dotnet format --verify-no-changes` artık temiz; `CONVENTIONS.md`'nin "tool-enforced" iddiası doğru hâle geldi.
+
+**Kararlar · 2026-08-07 (sahibi onayladı)**
+- **Bundle id `com.balkac.gaffer`, `companyName: balkac`** — onaylandı. İlk cihaz build'inden önce sabitlendi; bundan sonra değiştirmek `persistentDataPath` anahtarı olduğu için herkesin save'ini yetim bırakır.
+- **Ekran yönü Portrait'e sabitlendi** (`defaultScreenOrientation: 0`, landscape ve upside-down autorotate bayrakları kapatıldı). AutoRotation kasıtlı bir seçim değildi. Gerekçe: tek elle oynanan, menü/tablo/liste ağırlıklı manager UI'ı; **Faz 7 için tek layout** ve safe-area işi yalnız üst/alt bar. Auto-rotate her ekranda iki layout + iki safe-area yolu demek olurdu.
+- **`AndroidTargetSdkVersion: 36`** (auto → pinli). Asıl kusur "build makinesinde kurulu olan SDK" belirsizliğiydi; 36 bu editörün (6000.3.16f1) desteklediği en yüksek seviye — değer Unity'nin kendi `AndroidApiLevel` enum'undan okundu, tahmin edilmedi.
+- **Yaşlanmanın aşındırdığı üç fiziksel attribute rol rating'ine girdi** (kaleci `Jumping`+`Agility` 0.05; stoper `Jumping` 0.10; bek/kanat/forvet `Acceleration` 0.05–0.10, kanat ayrıca `Agility` 0.05; **holding orta saha bilerek üçünü de taşımıyor** — değişmez "her rol hepsini puanlasın" değil, "yaşın aldığı hiçbir şey her yerde görünmez olmasın"). Ağırlıklar rol başına 1.0'a toplanıyor, uniform sayfa identity'si korunuyor. Eski asimetriyi pinleyen test yerini yeni değişmezi pinleyen `Athletic_EveryAttributeAgeErodes_IsRatedBySomeRole`'e bıraktı. Ölçülen etki: 75 OVR'lik bir kanat 36 yaşına kadar **70.4**'e, stoper 74.2'ye iniyor — veteranın düşüşü artık OVR'da görünüyor.
+  - **Ama dikkat: Gate A sayıları bu değişiklikten hiç etkilenmedi ve bu bir *ölçüm boşluğu*, "etki yok" değil.** `BelievabilityTests` `TeamStrength(quality, quality, quality)` ile **sentetik güç** kuruyor; `PlayerRatings`/`EffectiveStrengthBuilder` yolundan hiç geçmiyor. Yani Gate A, şans/gol modelini izole ölçüyor — **gerçek üretilmiş kadrodan güce giden yol (oynanan sezonun kullandığı yol) hiçbir kapı tarafından doğrulanmıyor.** Kapanması gereken açık kalem.
+
+**Açık kalan denge bulguları (kod değil, karar gerektirir)**
+1. **Dram bir akış, kıtlığını yalnız tavanı sağlıyor.** 20 sezon ölçümü: **sezon başına tam 4.00 olay**, yani her sezon `MaxEventsPerSeason` doluyor. Haftalık olasılık (0.10/ağırlık, 0.35 tavan, 4 hafta ara) izin verilen her yerde ateşliyor. Eski test bandı `InRange(0.75, 4.0)` üst sınırı yapısal tavanın *üstünde* olduğu için bunu gizliyordu. Faz 4 kalibrasyonunda karar: frekans zarfı mı gevşetilmeli, tavan mı asıl dial olarak kabul edilmeli?
+2. **Gate A'nın ev-avantajı iddiası tek tohuma dayanıyordu ve bir tohumda tersine dönüyor.** 5 tohumluk süpürme: gol ve favori bantları beşinde de tutuyor, ama `20250101`'de ev %36.3 < deplasman %36.8. Bir sezon 380 maç (SE ≈ 2.5 puan), yani ~3 puanlık fark tek örneklemde tersine dönebilir — sorun kalibrasyonda değil, iddianın *tek sezona* dayandırılmış olmasında. Bant genişletilmedi; iddia havuzlanmış 1.900 maça taşındı (%41.7 vs %34.2). Orijinal tek-tohum değerleri hâlâ birebir pinli.
+3. **Gate A kadro→güç yolunu hiç ölçmüyor** (yukarıda). İnandırıcılık kapısı sentetik güçlerle koşuyor; üretilmiş kadrolardan türeyen güçlerin makul dağıldığı — yani rol ağırlıkları, `EffectiveStrengthBuilder` ve üreteç bandının birlikte inandırıcı bir lig ürettiği — hiçbir yerde doğrulanmıyor. Faz 4 kalibrasyonunda bu yola da bir ölçüm gerek.
+4. **Hissiyat notları (sahibinden, oynarken).** Simülasyonu oynarken hissedilen eksikler ayrıca toplanacak ve dram frekansı + kadro→güç ölçümüyle birlikte tek kalibrasyon geçişinde ele alınacak. *Bu geçiş bunları kapsamadı.*
+
+**Yöntem notu — test köprüsünün kör noktası**
+`dotnet test` yalnız `Common`/`Domain`/`Application`'ı derliyor; `Infrastructure` ve `Editor` hiçbir derleyici denetiminden geçmiyor. Bu geçişte, Unity 6000.3.16f1'in kendi assembly'lerine karşı netstandard2.1 + C# 9 ile o katmanları derleyen **tek kullanımlık bir csproj** kuruldu (depo dışında) ve 3800 satırlık pencere rewiring'i kör değil derleyici denetiminde yapıldı. Kalıcı hâle getirmek isterse: Unity kurulum yolu ve `Library/PackageCache` hash'i makineye özgü olduğu için taşınabilir değil, generate edilmesi gerekir.
+
+---
+
 ## Güncel durum · 2026-07-23
 
 - **Faz 0** ✅ · **Faz 1** ✅ (★ Gate A geçildi) · **Faz 2** 🟡 (çekirdek bitti; JSON adapter **yazıldı** — Unity doğrulaması bekliyor) · **Faz 3** 🟡 (üreteç + kadro→güç + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + **balans-SO** hazır) · **Faz 4** 🟡 (**trait sistemi + dram motoru + moral çekirdeği hazır** — karar #31; SO authoring yüzeyleri yazıldı, Unity doğrulaması bekliyor)
@@ -91,6 +145,7 @@
 - **Faz 4 playtest geri bildirimi (2026-07-18, kullanıcı) — SIRADAKİ DİLİMİN İŞİ:**
   1. **Dram kartları yapay hissettiriyor.** Kart şu an humanize edilmiş slug + jenerik bir dev-cümlesi gösteriyor (localization key'lerin arkasında henüz kopya yok). Çözüm yönü: olaylara özne/bağlam-farkında gerçek kopya (EN referans; string table Faz 7), gövde metninde skor-durumu/hafta/isim geçmesi; "yazılmış gibi" hissin asıl kaynağı Faz 5 anlatı+hafıza katmanı — dram kartını JourneyLog beat'lerine bağlamak oraya.
   2. **Gece kulübü skandalı çok sık.** Teşhis: özne-gerektiren olaylarda **her uygun oyuncu ayrı aday** → olayın etkin ağırlığı uygun-oyuncu-sayısıyla çarpılıyor (skandal `MaxSubjectAge 30` → kadroda ~15 uygun × 0.8 ≈ 12 ağırlık; transfer-talebi/wonderkid gibi dar filtreli olaylar 0–2 aday) ve ateşleme olasılığı toplam ağırlıkla ölçekli → geniş-filtreli olay hem ateşlemeyi hem seçimi domine ediyor. Çözüm yönü (çekirdek): olay-başına adaylığı **özne-sayısına normalize et** — olay tek aday olsun (ağırlık = taban × ortalama/maks özne-bias'ı), özne ikinci bir çekilişle seçilsin; ardından **frekans-karışımı regresyon testi** (uzun simde olay-başına pay bandı — hiçbir olay toplamın ~%40'ından fazlasını alamaz). Ağırlıklar artık asset'ten de ayarlanabilir ama yapısal düzeltme çekirdeğe ait.
+  2b. **(2026-08-07 ölçümü — yukarıdaki teşhisi doğruluyor ve genişletiyor.)** 20 sezonluk ölçüm: **sezon başına tam 4.00 olay**, yani dram *her* sezon `MaxEventsPerSeason`'a dayanıyor. Yani kıtlığı sağlayan tek şey tavan; haftalık olasılık zarfı (0.10/ağırlık, 0.35 tavan, 4 hafta ara) izin verilen her yerde ateşliyor. Bu, "skandal çok sık" hissinin ikinci yarısı: özne-sayısı normalizasyonu *hangi* olayın seçildiğini düzeltir, ama **kaç olay çıktığını** düzeltmez — onun için frekans zarfının kendisi gevşetilmeli ya da tavan bilinçli olarak "asıl dial" ilan edilmeli. Eski regresyon bandı `InRange(0.75, 4.0)` üst sınırı yapısal tavanın *üstünde* olduğu için bunu yıllardır gizliyordu; artık 4.00 birebir pinli, yani zarf değişince test kırılıp haber verecek.
   3. **Seçimin +'sı/-'si anlaşılmıyor.** Karar kartı seçenek düğmelerinde **etki önizlemesi** göstermeli (moral ±N kim/kaç hafta, nakit ±, satış, trait-devri — `DramaEffect` verisinden türetilebilir, ek veri gerekmez); çözüm sonrası "ne oldu" satırı var ama etkinin sonraki haftalara dokunduğu **görünmüyor** → roster'da aktif moral göstergesi (± rozet/renk) eklenmeli. Shipped UI'de bu kopya localization'dan gelecek; editör kartı dev-metniyle şimdi gösterebilir.
 - ✅ **İçerik SO'ları üretilip editöre atandı (bu geri bildirimle birlikte):** `ContentAssets` (Editor/Content) — ilk kullanımda `TraitCatalog.Default`/`DramaCatalog.Default`'tan **trait-başına + olay-başına asset** üretir (`Assets/_Project/Settings/Content/{Traits,Drama}/`, Unity API'siyle — elle YAML yok, karar #28 kuralı), katalog asset'lerine bağlar; **var olan asset'e asla dokunmaz** → Inspector'da yapılan ayar kalıcı. `ManagementWindow` açılışta balance SO'ları gibi katalogları da otomatik atar; `Gaffer/Content/Create Default Content Assets` menüsü de var. SO'lara `Author(saf-tanım)` metodları eklendi (tersine map). *(Unity'de derle + asset'lerin oluştuğunu gözle doğrula.)*
 
@@ -104,7 +159,8 @@
 
 ## Nasıl koşulur (hatırlatma)
 
-- **Testler:** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj`
+- **Testler:** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj` — **341 yeşil**. Yalnız `Common`/`Domain`/`Application` derlenir; `Infrastructure` ve `Editor` bu köprüde **yok**, oraları ancak Unity (veya geçici bir typecheck csproj'u) doğrular.
+- **Biçim:** `PATH="$HOME/.dotnet:$PATH" dotnet format tests/Gaffer.Tests.csproj --verify-no-changes` — temiz olmalı (`CONVENTIONS.md` mekanik kuralları "tool-enforced" sayıyor).
 - **Harness:** Unity → menü **`Gaffer > Season Harness`** → Run
 - **Management (birleşik demo):** Unity → menü **`Gaffer > Management`** → Start Season → Advance Week (nakit erir) + Summer/Winter'da Sign/Sell (canlı kadro)
 - **Season Player (demo):** Unity → menü **`Gaffer > Season Player`** → Start Season → Advance Week
