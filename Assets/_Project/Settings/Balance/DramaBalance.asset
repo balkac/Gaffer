@@ -16,3 +16,5 @@ MonoBehaviour:
   minWeeksBetweenEvents: 4
   weeklyChancePerWeight: 0.1
   maxWeeklyChance: 0.35
+  moraleRatingPerPoint: 0.012
+  moraleMaxAbsPoints: 8

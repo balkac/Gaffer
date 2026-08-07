@@ -24,3 +24,18 @@ MonoBehaviour:
   gemMaxPotential: 96
   youthMinAge: 16
   youthMaxAge: 18
+  youthIntakePerSeason: 1
+  maxSquadSize: 25
+  youthMinAbilityOffset: -25
+  youthMinAbilityFloor: 25
+  youthMinAbilityCeiling: 60
+  youthMaxAbilityOffset: -8
+  youthMaxAbilityFloor: 35
+  youthMaxAbilityCeiling: 72
+  youthMinPotentialOffset: -3
+  youthMinPotentialFloor: 45
+  youthMinPotentialCeiling: 85
+  youthMaxPotentialOffset: 18
+  youthMaxPotentialFloor: 60
+  youthMaxPotentialCeiling: 95
+  emptySquadAverageRating: 50
