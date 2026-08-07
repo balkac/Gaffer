@@ -1,7 +1,7 @@
-using Gaffer.Domain.Clubs;
 using Gaffer.Application.Simulation;
+using Gaffer.Domain.Clubs;
 
-namespace Gaffer.Editor.Harness
+namespace Gaffer.Tools.SeasonHarness
 {
     /// <summary>A league team: its pre-season quality rank (0 = strongest) and its match strength.</summary>
     public sealed class TeamProfile

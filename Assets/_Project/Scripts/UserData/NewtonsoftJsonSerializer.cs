@@ -4,7 +4,22 @@ using Gaffer.Application.Serialization;
 using Gaffer.Common;
 using Newtonsoft.Json;
 
-namespace Gaffer.Infrastructure.Persistence
+// ASSEMBLY NOTE — Gaffer.UserData (the pure save-data adapter assembly, ARCHITECTURE §1 / starter-tree
+// "The optional pure-adapter assemblies"). Newtonsoft is a plain .NET library, so this adapter has no
+// reason to live in the Unity-coupled Infrastructure assembly; here it is `noEngineReferences: true` and
+// joins the `dotnet test` bridge, which is what lets SaveJsonRoundTripTests exercise the shipped
+// JsonSerializerSettings headlessly.
+//
+// DELIBERATE DEVIATION from starter-tree's literal `UserData → Common` shape: that shape assumes the save
+// DTOs live in this assembly too. Ours do not — `Application/Serialization` owns the ISerializer port, the
+// wire DTOs and the DTO↔domain mapper, which is exactly what starter-tree's Application table row sanctions
+// ("ISerializer port + wire DTOs + DTO→domain mapping (consumer-owned contract; pure)"), and SeasonSaveMapper
+// needs Gaffer.Domain so it cannot follow the adapter down here without dragging Domain along. Referencing
+// Gaffer.Application from this adapter is therefore the chosen compromise: the arrow still points inward,
+// Application stays free of any third-party dependency (Newtonsoft is referenced here and nowhere in the
+// core), and the DTOs keep a single owner. The rule this does NOT bend: nothing here may reference
+// Gaffer.Content or any other adapter assembly (ARCHITECTURE §11 — content and saved data stay separate).
+namespace Gaffer.UserData
 {
     /// <summary>
     /// The JSON adapter for <see cref="ISerializer"/> (TDD §10): Newtonsoft turns a save payload into text

@@ -5,6 +5,8 @@
         "Gaffer.Domain",
         "Gaffer.Application",
         "Gaffer.Common",
+        "Gaffer.UserData",
+        "Gaffer.Tools.SeasonHarness",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

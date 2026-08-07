@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Gaffer.Editor.Harness
+namespace Gaffer.Tools.SeasonHarness
 {
     // One immutable payload the writers render — grouped DTOs (CONVENTIONS §2 payload exception).
 

@@ -1,14 +1,10 @@
 {
-    "name": "Gaffer.Editor",
-    "rootNamespace": "Gaffer.Editor",
+    "name": "Gaffer.Tools.SeasonHarness",
+    "rootNamespace": "Gaffer.Tools.SeasonHarness",
     "references": [
         "Gaffer.Common",
         "Gaffer.Domain",
-        "Gaffer.Application",
-        "Gaffer.Infrastructure",
-        "Gaffer.Presentation",
-        "Gaffer.UserData",
-        "Gaffer.Tools.SeasonHarness"
+        "Gaffer.Application"
     ],
     "includePlatforms": [
         "Editor"
@@ -20,5 +16,5 @@
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
-    "noEngineReferences": false
+    "noEngineReferences": true
 }

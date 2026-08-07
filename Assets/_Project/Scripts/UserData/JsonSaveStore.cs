@@ -5,7 +5,7 @@ using System.Text;
 using Gaffer.Application.Serialization;
 using Gaffer.Common;
 
-namespace Gaffer.Infrastructure.Persistence
+namespace Gaffer.UserData
 {
     /// <summary>
     /// Reads and writes a save payload to a file. Save serializes and writes; Load reads, deserializes, and

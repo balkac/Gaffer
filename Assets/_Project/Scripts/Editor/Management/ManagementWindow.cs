@@ -14,7 +14,7 @@ using Gaffer.Editor.Balance;
 using Gaffer.Editor.Content;
 using Gaffer.Editor.Harness;
 using Gaffer.Infrastructure.Configuration;
-using Gaffer.Infrastructure.Persistence;
+using Gaffer.UserData;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;

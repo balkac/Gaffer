@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
+using Gaffer.Tools.SeasonHarness;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;

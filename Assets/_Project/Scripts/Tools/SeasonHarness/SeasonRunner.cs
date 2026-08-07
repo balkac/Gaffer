@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
 
-namespace Gaffer.Editor.Harness
+namespace Gaffer.Tools.SeasonHarness
 {
     /// <summary>Plays one season as a double round-robin and folds every result into the statistics.</summary>
     public sealed class SeasonRunner

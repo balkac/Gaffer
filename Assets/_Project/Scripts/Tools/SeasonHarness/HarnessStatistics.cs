@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Gaffer.Application.Simulation;
 
-namespace Gaffer.Editor.Harness
+namespace Gaffer.Tools.SeasonHarness
 {
     /// <summary>
     /// Folds every match and season into running totals, then turns them into the immutable

@@ -22,6 +22,11 @@
     <Compile Include="../Assets/_Project/Scripts/Common/**/*.cs" />
     <Compile Include="../Assets/_Project/Scripts/Domain/**/*.cs" />
     <Compile Include="../Assets/_Project/Scripts/Application/**/*.cs" />
+    <!-- Pure adapter assemblies: framework-free, so they belong in the bridge (ARCHITECTURE §1).
+         UserData is the shipped save serializer + file store; Tools/SeasonHarness is the
+         believability instrument, editor-only but pure C#. -->
+    <Compile Include="../Assets/_Project/Scripts/UserData/**/*.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Tools/SeasonHarness/**/*.cs" />
     <Compile Include="../Assets/_Project/Scripts/Tests/EditMode/**/*.cs" />
   </ItemGroup>
 
