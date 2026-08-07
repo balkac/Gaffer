@@ -16,7 +16,7 @@ namespace Gaffer.Tests
         [Test]
         public void FromTactics_Balanced_IsNeutral()
         {
-            ChanceProfile profile = ChanceProfile.FromTactics(Tactics.Balanced);
+            var profile = ChanceProfile.FromTactics(Tactics.Balanced);
 
             Assert.That(profile.Volume, Is.EqualTo(1.0).Within(1e-9));
             Assert.That(profile.Quality, Is.EqualTo(1.0).Within(1e-9));
@@ -25,7 +25,7 @@ namespace Gaffer.Tests
         [Test]
         public void FromTactics_Counter_MakesFewerButSharperChances()
         {
-            ChanceProfile profile = ChanceProfile.FromTactics(
+            var profile = ChanceProfile.FromTactics(
                 new Tactics(Mentality.Balanced, Tempo.Standard, Pressing.Standard, Approach.Counter));
 
             Assert.That(profile.Volume, Is.LessThan(1.0));
@@ -35,7 +35,7 @@ namespace Gaffer.Tests
         [Test]
         public void FromTactics_Possession_MakesMoreButTamerChances()
         {
-            ChanceProfile profile = ChanceProfile.FromTactics(
+            var profile = ChanceProfile.FromTactics(
                 new Tactics(Mentality.Balanced, Tempo.Standard, Pressing.Standard, Approach.Possession));
 
             Assert.That(profile.Volume, Is.GreaterThan(1.0));
@@ -45,8 +45,8 @@ namespace Gaffer.Tests
         [Test]
         public void FromTactics_Tempo_DrivesVolumeOnly()
         {
-            ChanceProfile intense = ChanceProfile.FromTactics(new Tactics(Mentality.Balanced, Tempo.Intense, Pressing.Standard));
-            ChanceProfile patient = ChanceProfile.FromTactics(new Tactics(Mentality.Balanced, Tempo.Patient, Pressing.Standard));
+            var intense = ChanceProfile.FromTactics(new Tactics(Mentality.Balanced, Tempo.Intense, Pressing.Standard));
+            var patient = ChanceProfile.FromTactics(new Tactics(Mentality.Balanced, Tempo.Patient, Pressing.Standard));
 
             Assert.That(intense.Volume, Is.GreaterThan(1.0));
             Assert.That(patient.Volume, Is.LessThan(1.0));
@@ -59,7 +59,7 @@ namespace Gaffer.Tests
         {
             var generator = new PoissonChanceGenerator(MatchSimulationSettings.Default);
             var strength = new TeamStrength(60, 60, 60);
-            ChanceProfile counter = ChanceProfile.FromTactics(
+            var counter = ChanceProfile.FromTactics(
                 new Tactics(Mentality.Balanced, Tempo.Standard, Pressing.Standard, Approach.Counter));
 
             var counterCommand = new MatchCommand(strength, strength, null, null, counter, ChanceProfile.Neutral, Context());

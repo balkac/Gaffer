@@ -33,11 +33,16 @@ namespace Gaffer.Tests
         {
             Squad squad = Generator().Generate(0, new GenerationContext(), new SplitMix64RandomNumberGenerator(1));
 
-            Assert.That(squad.Count, Is.EqualTo(SquadGenerator.SquadSize));
-            Assert.That(CountAt(squad, Position.Goalkeeper), Is.EqualTo(SquadGenerator.Goalkeepers));
-            Assert.That(CountAt(squad, Position.Defender), Is.EqualTo(SquadGenerator.Defenders));
-            Assert.That(CountAt(squad, Position.Midfielder), Is.EqualTo(SquadGenerator.Midfielders));
-            Assert.That(CountAt(squad, Position.Forward), Is.EqualTo(SquadGenerator.Forwards));
+            // The designed line-up, as literals. Read from SquadGenerator's own constants this compared
+            // the generator against itself: editing Defenders to 3 would have changed what is generated
+            // AND what is expected, and the test would still pass on a squad that cannot field a back
+            // four. These numbers are the contract — 2 keepers, 6 defenders, 7 midfielders, 5 forwards,
+            // 20 in all, enough for any formation the lineup selector fills.
+            Assert.That(squad.Count, Is.EqualTo(20));
+            Assert.That(CountAt(squad, Position.Goalkeeper), Is.EqualTo(2));
+            Assert.That(CountAt(squad, Position.Defender), Is.EqualTo(6));
+            Assert.That(CountAt(squad, Position.Midfielder), Is.EqualTo(7));
+            Assert.That(CountAt(squad, Position.Forward), Is.EqualTo(5));
         }
 
         [Test]

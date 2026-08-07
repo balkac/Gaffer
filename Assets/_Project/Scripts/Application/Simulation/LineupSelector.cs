@@ -17,10 +17,24 @@ namespace Gaffer.Application.Simulation
     public sealed class LineupSelector
     {
         // Scratch pool of not-yet-picked players, reused across calls (cleared each time) so the
-        // per-club-per-match auto-pick allocates only the eleven it returns (PERFORMANCE §8). The
-        // core is synchronous and single-threaded, so one buffer is safe.
+        // per-club-per-match auto-pick allocates nothing (PERFORMANCE §8). The core is synchronous
+        // and single-threaded, so one buffer is safe.
         private readonly List<Player> _available = new List<Player>(32);
 
+        // The returned eleven, on the same reuse contract as _available — the class already owned a
+        // scratch buffer and then allocated a fresh List per call for the result, which is the same
+        // per-action allocation the buffer exists to avoid (PERFORMANCE §4 "reuse scratch
+        // collections"). Pre-sized past the eleven slots any formation asks for, so it never grows.
+        private readonly List<Player> _chosen = new List<Player>(16);
+
+        /// <summary>
+        /// The best eleven for this formation, best-first by slot order.
+        /// <para><b>Buffer lifetime:</b> the returned list is a buffer owned by this selector and is
+        /// <b>valid only until the next <see cref="SelectBest"/> call on this instance</b> — the next
+        /// call overwrites it in place. Consume it synchronously (read it, or copy out what you keep);
+        /// a caller that stores the reference will silently see a later club's eleven. Give a caller
+        /// that needs to retain an eleven its own <see cref="LineupSelector"/> or its own copy.</para>
+        /// </summary>
         public IReadOnlyList<Player> SelectBest(Squad squad, Formation formation)
         {
             List<Player> available = _available;
@@ -32,7 +46,8 @@ namespace Gaffer.Application.Simulation
             }
 
             IReadOnlyList<PlayerRole> slots = formation.Slots;
-            var chosen = new List<Player>(slots.Count);
+            List<Player> chosen = _chosen;
+            chosen.Clear();
             for (int i = 0; i < slots.Count; i++)
             {
                 Player pick = PickForSlot(available, slots[i]);
@@ -77,10 +92,10 @@ namespace Gaffer.Application.Simulation
                     continue;
                 }
 
-                if (IsBetter(player, bestRating, bestId))
+                if (IsBetter(player, bestRating, bestId, out double rating))
                 {
                     best = player;
-                    bestRating = PlayerRatings.ForRole(player);
+                    bestRating = rating;
                     bestId = player.Id.Value;
                 }
             }
@@ -95,10 +110,10 @@ namespace Gaffer.Application.Simulation
             int bestId = int.MaxValue;
             foreach (Player player in available)
             {
-                if (IsBetter(player, bestRating, bestId))
+                if (IsBetter(player, bestRating, bestId, out double rating))
                 {
                     best = player;
-                    bestRating = PlayerRatings.ForRole(player);
+                    bestRating = rating;
                     bestId = player.Id.Value;
                 }
             }
@@ -106,9 +121,13 @@ namespace Gaffer.Application.Simulation
             return best;
         }
 
-        private static bool IsBetter(Player candidate, double bestRating, int bestId)
+        // Hands the rating back so the caller does not recompute it for the candidate it just accepted
+        // — the comparison and the record-keeping were each evaluating ForRole over the whole squad
+        // (PERFORMANCE §6: the cost of a query is the contract of the API you asked it through). The
+        // returned value is the same double the caller used to assign, so ordering is unchanged.
+        private static bool IsBetter(Player candidate, double bestRating, int bestId, out double rating)
         {
-            double rating = PlayerRatings.ForRole(candidate);
+            rating = PlayerRatings.ForRole(candidate);
             if (rating > bestRating)
             {
                 return true;

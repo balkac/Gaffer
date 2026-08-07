@@ -43,6 +43,11 @@ namespace Gaffer.Editor.Balance
             return LoadOrCreate<EconomyBalanceSO>("EconomyBalance");
         }
 
+        public static ScoutingBalanceSO Scouting()
+        {
+            return LoadOrCreate<ScoutingBalanceSO>("ScoutingBalance");
+        }
+
         [MenuItem("Gaffer/Balance/Create Default Balance Assets")]
         public static void CreateAll()
         {
@@ -51,6 +56,7 @@ namespace Gaffer.Editor.Balance
             Renewal();
             Drama();
             Economy();
+            Scouting();
             EditorUtility.DisplayDialog("Gaffer Balance", "Default balance assets are in " + Dir + ".", "OK");
         }
 

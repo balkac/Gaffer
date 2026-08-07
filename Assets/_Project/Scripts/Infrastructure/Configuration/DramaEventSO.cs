@@ -11,6 +11,21 @@ namespace Gaffer.Infrastructure.Configuration
     /// asset). Mirrors the pure <see cref="DramaEvent"/> record — trigger, weight, cooldown, trait
     /// biases, and the choices with their effects — and <see cref="ToEvent"/> maps to it. All copy
     /// fields hold localization keys, never display text.
+    /// <para>
+    /// STRICTNESS POSTURE (ARCHITECTURE §11), stated rather than defaulted: this content ships INSIDE the
+    /// build, so the asset and the class that reads it are atomic and there is no acceptance policy to
+    /// tune — a field that no longer matches is an authoring mistake that must break CI, not something to
+    /// tolerate at runtime. That is the opposite of the save path, where player data outlives the build and
+    /// the reader is deliberately tolerant (see <c>SeasonSaveData</c> and <c>NewtonsoftJsonSerializer</c>).
+    /// The day content stops travelling with the binary, this is the choice that inverts.
+    /// </para>
+    /// <para>
+    /// ENUM ORDINALS ARE THE ASSET'S WIRE FORMAT. Unity serializes an enum field as its NUMBER, with no way
+    /// to ask for the name, so reordering <see cref="DramaEffectKind"/> or <see cref="DramaCategory"/>
+    /// silently re-points every authored asset — no error, no possible after-the-fact migration
+    /// (UNITY.md §7). Both enums therefore carry pinned explicit values and a test that fails by name if any
+    /// of them moves. A new member is APPENDED; a retired one keeps its number forever.
+    /// </para>
     /// </summary>
     [CreateAssetMenu(menuName = "Gaffer/Content/Drama Event", fileName = "DramaEvent")]
     public sealed class DramaEventSO : ScriptableObject
@@ -28,6 +43,10 @@ namespace Gaffer.Infrastructure.Configuration
         [Serializable]
         public sealed class EffectDef
         {
+            /// <summary>Stored in the asset as this enum's pinned NUMBER — see the type doc: never reorder
+            /// <see cref="DramaEffectKind"/>, or every authored effect in every shipped asset changes
+            /// meaning silently.</summary>
+            [Tooltip("Which state lever this effect pulls.")]
             public DramaEffectKind kind;
 
             [Tooltip("Signed size: morale points, flat cash, or a cash fraction — per the kind.")]
@@ -52,6 +71,8 @@ namespace Gaffer.Infrastructure.Configuration
         [Tooltip("Stable id slug, e.g. 'transfer-request'.")]
         [SerializeField] private string slug = "new-event";
 
+        /// <summary>Stored in the asset as this enum's pinned NUMBER — see the type doc.</summary>
+        [Tooltip("Which GDD §4.7 event family this belongs to.")]
         [SerializeField] private DramaCategory category = DramaCategory.Personal;
 
         [Tooltip("Localization key for the title.")]
@@ -188,11 +209,15 @@ namespace Gaffer.Infrastructure.Configuration
             return mapped;
         }
 
+        /// <summary>"No biases" is an empty list, never null: null would make every consumer in the pure core
+        /// carry a null check for a case that simply means "this event has no trait biases", which is the
+        /// neutral answer, not a missing one (CONVENTIONS §4). <see cref="Array.Empty{T}"/> allocates
+        /// nothing (PERFORMANCE §8).</summary>
         private static IReadOnlyList<DramaTraitBias> MapBiases(List<BiasDef> biases)
         {
             if (biases == null || biases.Count == 0)
             {
-                return null;
+                return Array.Empty<DramaTraitBias>();
             }
 
             var mapped = new List<DramaTraitBias>(biases.Count);

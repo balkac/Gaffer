@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Gaffer.Editor.Harness
@@ -5,6 +6,11 @@ namespace Gaffer.Editor.Harness
     /// <summary>A season's league table: accumulates results by team and orders them by the usual tiebreaks.</summary>
     public sealed class Standings
     {
+        // PERFORMANCE §8: the allocation-free sort overload is Sort(Comparison<T>) with a *cached*
+        // delegate. C# 9 caches no method group, so passing CompareForTable inline allocated a fresh
+        // delegate per Ordered() — once per season in a 1000-season harness run.
+        private static readonly Comparison<StandingsRow> ByTablePosition = CompareForTable;
+
         private readonly List<StandingsRow> _rows;
         private readonly Dictionary<int, StandingsRow> _byRank;
 
@@ -28,7 +34,7 @@ namespace Gaffer.Editor.Harness
         public IReadOnlyList<StandingsRow> Ordered()
         {
             var ordered = new List<StandingsRow>(_rows);
-            ordered.Sort(CompareForTable);
+            ordered.Sort(ByTablePosition);
             return ordered;
         }
 

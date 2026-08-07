@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Gaffer.Domain.Clubs;
 
@@ -9,6 +10,12 @@ namespace Gaffer.Application.Season
     /// </summary>
     public sealed class LeagueTable
     {
+        // PERFORMANCE §8: List<T>.Sort(Comparison<T>) with a *cached* delegate is the one
+        // allocation-free sort overload on this baseline. C# 9 caches no method group (C# 11 would
+        // cache a static one, Unity 6 is C# 9), so passing CompareForTable inline allocated a fresh
+        // delegate on every Ordered() call — once per table render.
+        private static readonly Comparison<LeagueTableRow> ByTablePosition = CompareForTable;
+
         private readonly List<LeagueTableRow> _rows;
         private readonly Dictionary<ClubId, LeagueTableRow> _byClub;
 
@@ -33,7 +40,7 @@ namespace Gaffer.Application.Season
         public IReadOnlyList<LeagueTableRow> Ordered()
         {
             var ordered = new List<LeagueTableRow>(_rows);
-            ordered.Sort(CompareForTable);
+            ordered.Sort(ByTablePosition);
             return ordered;
         }
 

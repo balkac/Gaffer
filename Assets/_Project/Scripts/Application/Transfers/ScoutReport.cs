@@ -8,14 +8,21 @@ namespace Gaffer.Application.Transfers
     /// </summary>
     public readonly struct AttributeEstimate
     {
-        public AttributeEstimate(string label, int low, int high)
+        public AttributeEstimate(string labelKey, int low, int high)
         {
-            Label = label;
+            LabelKey = labelKey;
             Low = low;
             High = high;
         }
 
-        public string Label { get; }
+        /// <summary>
+        /// The attribute's localization key ("attr.finishing.abbrev"), not the word. A scout report is
+        /// core data that reaches the player, and raw display text in the core is forbidden
+        /// (NON-NEGOTIABLE #8) — Presentation resolves this against the string table. It was named
+        /// <c>Label</c> while already carrying a key, which is exactly how a key ends up rendered
+        /// verbatim to a player.
+        /// </summary>
+        public string LabelKey { get; }
 
         public int Low { get; }
 

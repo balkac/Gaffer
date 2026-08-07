@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Gaffer.Application.Drama;
 using Gaffer.Application.Simulation;
@@ -17,14 +18,29 @@ namespace Gaffer.Application.Season
     /// </summary>
     public sealed class LeagueSeason
     {
+        // "Nothing happened this week" is a constant, so it is allocated once instead of costing a
+        // List plus its backing array per call on a completed season (PERFORMANCE §8).
+        private static readonly IReadOnlyList<MatchResult> NoMatches = Array.Empty<MatchResult>();
+
         private readonly Dictionary<ClubId, Club> _clubsById;
         private readonly Dictionary<int, List<Fixture>> _fixturesByRound;
         private readonly Dictionary<ClubId, Tactics> _tacticsByClub;
         private readonly Dictionary<ClubId, Formation> _formationByClub;
         private readonly Dictionary<ClubId, IReadOnlyList<Player>> _startersByClub;
+
+        // The auto-picked eleven per club, memoised (PERFORMANCE §6). LineupSelector.SelectBest is a
+        // pure function of (squad, formation) and both are stable for a whole season unless
+        // UpdateSquad or SetFormation is called — which is exactly where this is dropped — so the
+        // per-match re-pick was recomputing an answer that never changed: ~380k comparisons and ~50k
+        // role-rating evaluations over a 20-club, 380-match season. Entries hold their own list, not
+        // the selector's reusable buffer (see LineupSelector.SelectBest's lifetime contract). A
+        // restored season is a fresh LeagueSeason, so no cache survives Restore.
+        private readonly Dictionary<ClubId, List<Player>> _autoElevenByClub;
+
         private readonly TacticsSettings _tacticsSettings;
         private readonly EffectiveStrengthBuilder _strengthBuilder;
         private readonly LineupSelector _lineupSelector;
+        private readonly MatchSimulator _simulator;
         private readonly LeagueTable _table;
         private readonly List<MatchResult> _playedResults;
 
@@ -34,23 +50,18 @@ namespace Gaffer.Application.Season
         private readonly SplitMix64RandomNumberGenerator _matchRng = new SplitMix64RandomNumberGenerator(0);
         private int _currentRound;
 
-        public LeagueSeason(League league)
-            : this(league, null, null, null)
+        /// <summary>
+        /// The only form: every collaborator — the trait catalog the strength step resolves through, the
+        /// tactics and morale balance, and the match simulator — is injected here, so ownership of the
+        /// object graph is settled once, at construction, rather than a concrete simulator arriving as an
+        /// argument on every <see cref="AdvanceWeek"/> call (ARCHITECTURE §6). Null catalogs and settings
+        /// fall back to the calibrated defaults; a null <paramref name="simulator"/> builds a season that
+        /// cannot be played (<see cref="AdvanceWeek"/> throws) and is only useful as a table/history
+        /// carrier — see <see cref="Gaffer.Application.Serialization.SeasonSaveMapper"/>.
+        /// </summary>
+        public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits, TacticsSettings tacticsSettings, MoraleSettings moraleSettings, MatchSimulator simulator)
         {
-        }
-
-        /// <summary>Runs the season on a specific trait catalog (from config assets) — the strength step
-        /// resolves each player's traits through it. Null falls back to the built-in default.</summary>
-        public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits)
-            : this(league, traits, null, null)
-        {
-        }
-
-        /// <summary>Also takes tactics and morale balance (from config assets): tactics settings shape
-        /// how far mentality/pressing/tempo/approach bend each club's strength and chance profile, and
-        /// morale settings how hard drama bites on the pitch. Nulls fall back to the calibrated defaults.</summary>
-        public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits, TacticsSettings tacticsSettings, MoraleSettings moraleSettings)
-        {
+            _simulator = simulator;
             _clubsById = new Dictionary<ClubId, Club>(league.Clubs.Count);
             var clubIds = new List<ClubId>(league.Clubs.Count);
             foreach (Club club in league.Clubs)
@@ -75,6 +86,7 @@ namespace Gaffer.Application.Season
             _tacticsByClub = new Dictionary<ClubId, Tactics>();
             _formationByClub = new Dictionary<ClubId, Formation>();
             _startersByClub = new Dictionary<ClubId, IReadOnlyList<Player>>();
+            _autoElevenByClub = new Dictionary<ClubId, List<Player>>(league.Clubs.Count);
             _tacticsSettings = tacticsSettings ?? TacticsSettings.Default;
             _strengthBuilder = new EffectiveStrengthBuilder(traits ?? Gaffer.Domain.Traits.TraitCatalog.Default, _tacticsSettings);
             _lineupSelector = new LineupSelector();
@@ -100,6 +112,7 @@ namespace Gaffer.Application.Season
         public void SetFormation(ClubId club, Formation formation)
         {
             _formationByClub[club] = formation;
+            _autoElevenByClub.Remove(club);
         }
 
         /// <summary>Sets the exact eleven a club fields; overrides the auto-pick until changed.</summary>
@@ -123,6 +136,7 @@ namespace Gaffer.Application.Season
 
             _clubsById[club] = new Club(current.Id, current.Name, squad, current.Strength);
             _startersByClub.Remove(club);
+            _autoElevenByClub.Remove(club);
         }
 
         /// <summary>The club's current roster, or <c>null</c> for a squad-less (strength-only) club.</summary>
@@ -141,10 +155,13 @@ namespace Gaffer.Application.Season
 
         public IReadOnlyList<MatchResult> PlayedResults => _playedResults;
 
-        /// <summary>Rebuilds a season part-way through from its saved result history (save/load).</summary>
-        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults, Gaffer.Domain.Traits.TraitCatalog traits = null, TacticsSettings tacticsSettings = null, MoraleSettings moraleSettings = null)
+        /// <summary>Rebuilds a season part-way through from its saved result history (save/load) on an
+        /// injected simulator, so a resumed season is wired exactly like a fresh one. A null
+        /// <paramref name="simulator"/> carries the same meaning as on the constructor: the rebuilt season
+        /// holds the table and the history but cannot be played.</summary>
+        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults, Gaffer.Domain.Traits.TraitCatalog traits, TacticsSettings tacticsSettings, MoraleSettings moraleSettings, MatchSimulator simulator)
         {
-            var season = new LeagueSeason(league, traits, tacticsSettings, moraleSettings);
+            var season = new LeagueSeason(league, traits, tacticsSettings, moraleSettings, simulator);
             foreach (MatchResult result in playedResults)
             {
                 season._table.RecordMatch(result.Home, result.Away, result.HomeGoals, result.AwayGoals);
@@ -155,11 +172,25 @@ namespace Gaffer.Application.Season
             return season;
         }
 
-        public WeekResult AdvanceWeek(MatchSimulator simulator, MatchContext context, ulong seasonSeed)
+        /// <summary>
+        /// Plays the next round on the simulator this season was constructed with, folds the results
+        /// into the table and returns them for the presentation to replay.
+        /// </summary>
+        public WeekResult AdvanceWeek(MatchContext context, ulong seasonSeed)
         {
+            if (_simulator == null)
+            {
+                // Asking a season with no simulator to play is a wiring mistake, not a state the caller
+                // can recover from — fail fast rather than return an empty week that looks like a
+                // finished season (CONVENTIONS §4).
+                throw new InvalidOperationException(
+                    "This LeagueSeason was constructed without a MatchSimulator, so it cannot play a week. " +
+                    "Pass one to the constructor (or to LeagueSeason.Restore).");
+            }
+
             if (IsComplete)
             {
-                return new WeekResult(_currentRound, new List<MatchResult>());
+                return new WeekResult(_currentRound, NoMatches);
             }
 
             List<Fixture> roundFixtures = _fixturesByRound[_currentRound];
@@ -179,7 +210,7 @@ namespace Gaffer.Application.Season
                 // so a change to one club's tactics only reshapes its own matches — the rest of the league's
                 // results stay byte-identical, and a resumed save reproduces the remaining fixtures exactly.
                 _matchRng.Reseed(MixSeed(seasonSeed, _currentRound, fixture.Home.Value, fixture.Away.Value));
-                MatchOutcome outcome = simulator.Simulate(command, _matchRng);
+                MatchOutcome outcome = _simulator.Simulate(command, _matchRng);
 
                 _table.RecordMatch(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals);
                 matches.Add(new MatchResult(fixture.Home, fixture.Away, outcome.HomeGoals, outcome.AwayGoals, outcome.HomeShots, outcome.AwayShots, outcome.Events));
@@ -232,7 +263,23 @@ namespace Gaffer.Application.Season
                 return starters;
             }
 
-            return _lineupSelector.SelectBest(club.Squad, FormationOf(club.Id));
+            if (_autoElevenByClub.TryGetValue(club.Id, out List<Player> cached))
+            {
+                return cached;
+            }
+
+            // Copied out of the selector's reusable return buffer, whose documented lifetime ends at the
+            // next SelectBest call — the away side of this same fixture would overwrite it. One list per
+            // club per roster/formation change, instead of one per club per match.
+            IReadOnlyList<Player> picked = _lineupSelector.SelectBest(club.Squad, FormationOf(club.Id));
+            var owned = new List<Player>(picked.Count);
+            for (int i = 0; i < picked.Count; i++)
+            {
+                owned.Add(picked[i]);
+            }
+
+            _autoElevenByClub[club.Id] = owned;
+            return owned;
         }
 
         private Formation FormationOf(ClubId club)

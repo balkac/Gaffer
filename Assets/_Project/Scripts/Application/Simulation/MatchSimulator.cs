@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
@@ -14,9 +15,13 @@ namespace Gaffer.Application.Simulation
     /// </summary>
     public sealed class MatchSimulator
     {
-        // Sort(Comparison<T>) wraps the delegate in a fresh comparer per call on Mono; a cached
-        // IComparer<T> singleton keeps the per-match path allocation-free (PERFORMANCE §8).
-        private static readonly IComparer<MatchEvent> ByMinute = new MinuteComparer();
+        // PERFORMANCE §8, verified against this Unity version's shipped IL: List<T>.Sort(Comparison<T>)
+        // with a *cached* delegate is the one allocation-free overload — the comparison is passed raw
+        // through the sort, no wrapper object. Sort() and Sort(IComparer<T>) are the trap: both allocate
+        // a Comparison<T> per call from the comparer.Compare method-group conversion inside
+        // ArraySortHelper. Cached in a static readonly field because C# 9 caches no method group
+        // (C# 11 would cache the static one; Unity 6 is C# 9).
+        private static readonly Comparison<MatchEvent> ByMinute = CompareByMinute;
 
         private readonly IChanceGenerator _chanceGenerator;
         private readonly IChanceResolver _chanceResolver;
@@ -79,12 +84,14 @@ namespace Gaffer.Application.Simulation
             return new MatchOutcome(homeGoals, awayGoals, homeShots, awayShots, goals);
         }
 
-        private sealed class MinuteComparer : IComparer<MatchEvent>
+        // Orders the goals as they happened. Deliberately keyed on the minute alone: two goals in the
+        // same minute compare equal, and the sort (introsort, unstable on both overloads) settles them
+        // by the same deterministic swap sequence for a given input — so the same seed still reproduces
+        // the same event list. Adding a tie-break here would reorder same-minute goals, which is a
+        // behaviour change, not an optimisation.
+        private static int CompareByMinute(MatchEvent left, MatchEvent right)
         {
-            public int Compare(MatchEvent left, MatchEvent right)
-            {
-                return left.Minute.CompareTo(right.Minute);
-            }
+            return left.Minute.CompareTo(right.Minute);
         }
     }
 }

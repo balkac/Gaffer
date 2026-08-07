@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
@@ -20,6 +21,15 @@ namespace Gaffer.Application.Simulation
     /// </summary>
     public sealed class EffectiveStrengthBuilder
     {
+        // A trait's teammate aura is both a factor of the lineup product and the divisor that takes a
+        // player back out of it, so a zero (or a negative, or a NaN from a half-authored asset) would
+        // not raise anything — it would make 0/0 and poison every axis, and NaN then makes every
+        // downstream `if (x < limit)` take the wrong branch (CONVENTIONS §6). Clamping the factor at
+        // the boundary keeps the divisor strictly positive. The band is far wider than any authored
+        // aura (the calibrated catalog's only one is 1.03), so no calibrated result moves.
+        private const double MinAuraFactor = 0.01;
+        private const double MaxAuraFactor = 100.0;
+
         private readonly TraitCatalog _traits;
         private readonly TacticsSettings _tactics;
 
@@ -114,6 +124,14 @@ namespace Gaffer.Application.Simulation
                         defensiveTotal += rating;
                         defensiveCount++;
                         break;
+                    default:
+                        // A new Position with no axis here is a broken invariant, not a recoverable
+                        // outcome (CONVENTIONS §1/§4): it would still land in lineupTotal, so it would
+                        // silently dilute attack, midfield and defence in every match ever played.
+                        throw new ArgumentOutOfRangeException(
+                            nameof(players),
+                            player.Position,
+                            $"Position '{player.Position}' mans no line, so it contributes to no strength axis.");
                 }
             }
 
@@ -216,11 +234,24 @@ namespace Gaffer.Application.Simulation
                 Trait trait = _traits.Find(traits[i]);
                 if (trait != null)
                 {
-                    aura *= trait.TeammateAura;
+                    aura *= ClampAuraFactor(trait.TeammateAura);
                 }
             }
 
             return aura;
+        }
+
+        // Written as a failed lower-bound test rather than `factor < MinAuraFactor` so a NaN factor
+        // lands on the floor too — every comparison with NaN is false, so the naive form would let it
+        // straight through (CONVENTIONS §6).
+        private static double ClampAuraFactor(double factor)
+        {
+            if (!(factor >= MinAuraFactor))
+            {
+                return MinAuraFactor;
+            }
+
+            return factor > MaxAuraFactor ? MaxAuraFactor : factor;
         }
     }
 }

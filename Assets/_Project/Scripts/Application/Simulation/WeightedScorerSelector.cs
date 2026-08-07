@@ -13,10 +13,27 @@ namespace Gaffer.Application.Simulation
     /// striker is far the likeliest, a midfielder less so, a defender occasionally (mostly with his head),
     /// a keeper almost never — but not never: a keeper up for a last-minute corner is a rare, legendary
     /// beat the game wants to keep possible. One rng draw per goal, so the same seed names the same
-    /// scorers. The weights come from an injected <see cref="ScorerWeights"/> (data-driven, NON-NEGOTIABLE #3).
+    /// scorers. The weights come from an injected <see cref="ScorerWeights"/> (data-driven, NON-NEGOTIABLE #3),
+    /// which — as its own docs require — is treated as immutable once built, so a squad's weight vector
+    /// can be memoised across the goals of a match.
     /// </summary>
     public sealed class WeightedScorerSelector : IScorerSelector
     {
+        // Cumulative weight vectors, memoised per squad (PERFORMANCE §6). A player's weight is a pure
+        // function of (his attributes, ScorerWeights) — both constant for the life of a Squad instance,
+        // which is immutable, so a roster change hands over a *new* instance and a stale vector can
+        // never be read. Two slots because a match alternates between exactly two squads; a goal used
+        // to walk the whole roster twice (up to 2 × 25 Weight() calls, each copying the 29-field
+        // Attributes struct by value) — ~50,000 evaluations over a season's ~1,000 goals. Bounded at
+        // two entries on purpose: a dictionary keyed by squad would grow with every transfer (§16).
+        // The core is synchronous and single-threaded, so unsynchronised slots are safe.
+        private const int CacheSlots = 2;
+
+        private readonly Squad[] _cachedSquads = new Squad[CacheSlots];
+        private readonly double[][] _cachedCumulative = new double[CacheSlots][];
+        private readonly int[] _cachedCounts = new int[CacheSlots];
+        private int _nextSlot;
+
         private readonly ScorerWeights _weights;
 
         public WeightedScorerSelector()
@@ -39,25 +56,71 @@ namespace Gaffer.Application.Simulation
             }
 
             IReadOnlyList<Player> players = squad.Players;
+            double[] cumulative = CumulativeWeightsOf(squad, players, out int count);
 
-            double total = 0.0;
-            for (int i = 0; i < players.Count; i++)
-            {
-                total += Weight(players[i]);
-            }
-
+            // The vector is accumulated in roster order from 0.0, exactly as the old two-pass scan
+            // accumulated its running total, so the last entry is bit-identical to that scan's total —
+            // and so is every partial sum the roll is compared against. The draw stays in the same
+            // place and still consumes exactly one value.
+            double total = cumulative[count - 1];
             double roll = rng.NextDouble() * total;
-            double cumulative = 0.0;
-            for (int i = 0; i < players.Count; i++)
+
+            // Binary search for the first index whose cumulative weight exceeds the roll — precisely
+            // the index the linear scan returned (same strict `roll < cumulative` boundary, and the
+            // same "no index qualifies → the last player" fallback, since the search converges on
+            // count - 1 in that case). O(log n) per goal instead of O(n) with a struct copy per step.
+            int lo = 0;
+            int hi = count - 1;
+            while (lo < hi)
             {
-                cumulative += Weight(players[i]);
-                if (roll < cumulative)
+                int mid = lo + ((hi - lo) >> 1);
+                if (roll < cumulative[mid])
                 {
-                    return players[i].Id;
+                    hi = mid;
+                }
+                else
+                {
+                    lo = mid + 1;
                 }
             }
 
-            return players[players.Count - 1].Id;
+            return players[lo].Id;
+        }
+
+        // Returns this squad's cumulative weight vector, building it on a miss. Slots are replaced
+        // round-robin, which for the two squads of a match means each keeps its own.
+        private double[] CumulativeWeightsOf(Squad squad, IReadOnlyList<Player> players, out int count)
+        {
+            for (int slot = 0; slot < CacheSlots; slot++)
+            {
+                if (ReferenceEquals(_cachedSquads[slot], squad))
+                {
+                    count = _cachedCounts[slot];
+                    return _cachedCumulative[slot];
+                }
+            }
+
+            int target = _nextSlot;
+            _nextSlot = (_nextSlot + 1) % CacheSlots;
+
+            double[] buffer = _cachedCumulative[target];
+            if (buffer == null || buffer.Length < players.Count)
+            {
+                buffer = new double[players.Count];
+                _cachedCumulative[target] = buffer;
+            }
+
+            double running = 0.0;
+            for (int i = 0; i < players.Count; i++)
+            {
+                running += Weight(players[i]);
+                buffer[i] = running;
+            }
+
+            _cachedSquads[target] = squad;
+            _cachedCounts[target] = players.Count;
+            count = players.Count;
+            return buffer;
         }
 
         private double Weight(Player player)

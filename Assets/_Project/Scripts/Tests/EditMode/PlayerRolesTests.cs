@@ -39,14 +39,18 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void Abbrev_IsShortAndDistinctPerRole()
+        public void GetShortLabelKey_IsAUniqueLocalizationKeyPerRole()
         {
+            // NON-NEGOTIABLE #8: the Domain names the role and hands out a key; the string table owns the
+            // words. The literal Abbrev/GetShortLabel pair this replaced is gone from Domain entirely —
+            // the only short words left live in Gaffer.Editor's HarnessLabels, which no shipped assembly
+            // references, so "Domain holds no display text" is now enforced by the compiler.
             var seen = new System.Collections.Generic.HashSet<string>();
             foreach (PlayerRole role in (PlayerRole[])Enum.GetValues(typeof(PlayerRole)))
             {
-                string abbrev = PlayerRoles.Abbrev(role);
-                Assert.That(abbrev, Is.Not.Empty);
-                Assert.That(seen.Add(abbrev), Is.True, $"Abbreviation '{abbrev}' is used by more than one role.");
+                string key = PlayerRoles.GetShortLabelKey(role);
+                Assert.That(key, Does.StartWith("role."), role.ToString());
+                Assert.That(seen.Add(key), Is.True, $"Localization key '{key}' is used by more than one role.");
             }
         }
     }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Simulation;
@@ -29,6 +30,14 @@ namespace Gaffer.Application.Season
         // decisions are sequential, and reseeding reproduces the exact per-seed streams, so
         // determinism is unchanged.
         private readonly SplitMix64RandomNumberGenerator _rng = new SplitMix64RandomNumberGenerator(0);
+
+        // The thinnest-role search runs once per academy youth, per club, per season, so its working sets
+        // are fields cleared and refilled per call rather than a fresh Dictionary and List each time
+        // (PERFORMANCE §4). Both are indexed by (int)PlayerRole — the role set is a fixed, dense
+        // 0..11 enum — so there is no hashing and no enum comparer, which also sidesteps the IL2CPP
+        // enum-key boxing hazard. AllRoles must stay in step with the enum for the indexing to hold.
+        private readonly int[] _roleCounts = new int[AllRoles.Length];
+        private readonly PlayerRole[] _thinnestCandidates = new PlayerRole[AllRoles.Length];
 
         public SquadRenewal(PlayerGenerator generator)
             : this(generator, RenewalSettings.Default)
@@ -94,7 +103,9 @@ namespace Gaffer.Application.Season
                 }
             }
 
-            return new Squad(kept);
+            // `kept` was built here and is handed over — nothing else holds it — so the squad takes it
+            // rather than copying a roster-sized list per club per season (PERFORMANCE §8).
+            return Squad.Owning(kept);
         }
 
         // Every specific role, so a thinnest-role search sees positions the squad has none of as well.
@@ -109,43 +120,42 @@ namespace Gaffer.Application.Season
         // The role the squad is thinnest in (counting the youths already planned this intake), so successive
         // academy arrivals spread across the positions of need. Ties are broken by the deterministic pick rng,
         // so a thin squad does not always fill the same role first and the choice still reproduces.
-        private static PlayerRole ThinnestRole(List<Player> kept, List<PlayerRole> planned, IRandom rng)
+        private PlayerRole ThinnestRole(List<Player> kept, List<PlayerRole> planned, IRandom rng)
         {
-            var counts = new Dictionary<PlayerRole, int>(AllRoles.Length);
-            foreach (PlayerRole role in AllRoles)
-            {
-                counts[role] = 0;
-            }
+            Array.Clear(_roleCounts, 0, _roleCounts.Length);
 
             foreach (Player player in kept)
             {
-                counts[player.Role]++;
+                _roleCounts[(int)player.Role]++;
             }
 
             foreach (PlayerRole role in planned)
             {
-                counts[role]++;
+                _roleCounts[(int)role]++;
             }
 
             int min = int.MaxValue;
-            foreach (PlayerRole role in AllRoles)
+            for (int i = 0; i < AllRoles.Length; i++)
             {
-                if (counts[role] < min)
+                int count = _roleCounts[(int)AllRoles[i]];
+                if (count < min)
                 {
-                    min = counts[role];
+                    min = count;
                 }
             }
 
-            var candidates = new List<PlayerRole>();
-            foreach (PlayerRole role in AllRoles)
+            // Candidates are collected in AllRoles order and picked by index, exactly as before, so the
+            // tie-break draws the same role from the same rng stream (NON-NEGOTIABLE #2).
+            int candidateCount = 0;
+            for (int i = 0; i < AllRoles.Length; i++)
             {
-                if (counts[role] == min)
+                if (_roleCounts[(int)AllRoles[i]] == min)
                 {
-                    candidates.Add(role);
+                    _thinnestCandidates[candidateCount++] = AllRoles[i];
                 }
             }
 
-            return candidates[rng.NextInt(candidates.Count)];
+            return _thinnestCandidates[rng.NextInt(candidateCount)];
         }
 
         // Twilight is where retirement starts to bite and Hard is where it is certain — both later for
@@ -167,7 +177,13 @@ namespace Gaffer.Application.Season
                 return false;
             }
 
-            double progress = (double)(player.Age - twilight) / (hard - twilight);
+            // The twilight band is the divisor. A config where Hard is not past Twilight would make it
+            // zero, and 0/0 is NaN — `rng.NextDouble() < NaN` is false, so nobody would ever retire and
+            // squads would age forever with nothing thrown anywhere (CONVENTIONS §6). Clamping the band
+            // keeps the answer sensible instead of resting on the two returns above happening to cover
+            // that config today. A no-op for every Hard > Twilight, which is every shipped value.
+            int twilightBand = hard > twilight ? hard - twilight : 1;
+            double progress = (double)(player.Age - twilight) / twilightBand;
             double rating = PlayerRatings.ForRole(player);
             double chance = progress * (1.0 - (_settings.RetirementRatingEase * (rating / 100.0)));
             return rng.NextDouble() < chance;
@@ -191,6 +207,8 @@ namespace Gaffer.Application.Season
 
         // Youth arrive raw but with a ceiling, drawn from a band around the club's current level — so a
         // strong squad's intake is stronger and its best prospects can climb past today's first team.
+        // Every number in that band is balance and comes from the settings (NON-NEGOTIABLE #3); it used
+        // to be literals here, beside the gem band that was already config.
         private GenerationContext YouthContext(Squad squad)
         {
             int average = AverageRating(squad);
@@ -198,19 +216,19 @@ namespace Gaffer.Application.Season
             {
                 MinAge = _settings.YouthMinAge,
                 MaxAge = _settings.YouthMaxAge,
-                MinAbility = (byte)Clamp(average - 25, 25, 60),
-                MaxAbility = (byte)Clamp(average - 8, 35, 72),
-                MinPotential = (byte)Clamp(average - 3, 45, 85),
-                MaxPotential = (byte)Clamp(average + 18, 60, 95),
+                MinAbility = (byte)Clamp(average + _settings.YouthMinAbilityOffset, _settings.YouthMinAbilityFloor, _settings.YouthMinAbilityCeiling),
+                MaxAbility = (byte)Clamp(average + _settings.YouthMaxAbilityOffset, _settings.YouthMaxAbilityFloor, _settings.YouthMaxAbilityCeiling),
+                MinPotential = (byte)Clamp(average + _settings.YouthMinPotentialOffset, _settings.YouthMinPotentialFloor, _settings.YouthMinPotentialCeiling),
+                MaxPotential = (byte)Clamp(average + _settings.YouthMaxPotentialOffset, _settings.YouthMaxPotentialFloor, _settings.YouthMaxPotentialCeiling),
             };
         }
 
-        private static int AverageRating(Squad squad)
+        private int AverageRating(Squad squad)
         {
             IReadOnlyList<Player> players = squad.Players;
             if (players.Count == 0)
             {
-                return 50;
+                return _settings.EmptySquadAverageRating;
             }
 
             double total = 0.0;

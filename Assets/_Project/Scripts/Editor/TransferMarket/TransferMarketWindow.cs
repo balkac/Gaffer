@@ -367,7 +367,7 @@ namespace Gaffer.Editor.TransferMarket
             line.style.flexDirection = FlexDirection.Row;
             line.style.alignItems = Align.Center;
 
-            var name = Text(player.Name + "  ·  " + PlayerRoles.Abbrev(player.Role) + "  ·  " + player.Age, 12, HarnessPalette.Chalk, bold: true);
+            var name = Text(player.Name + "  ·  " + HarnessLabels.RoleLabel(player.Role) + "  ·  " + player.Age, 12, HarnessPalette.Chalk, bold: true);
             name.style.flexGrow = 1;
             line.Add(name);
             if (showRating)
@@ -426,7 +426,7 @@ namespace Gaffer.Editor.TransferMarket
                 string band = estimate.Low == estimate.High
                     ? estimate.Low.ToString()
                     : estimate.Low + "–" + estimate.High;
-                parts.Add(estimate.Label + " " + band);
+                parts.Add(HarnessLabels.LabelForKey(estimate.LabelKey) + " " + band);
             }
 
             return string.Join("   ", parts);

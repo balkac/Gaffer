@@ -25,13 +25,35 @@ namespace Gaffer.Tests
         {
             var attributes = new Attributes
             {
-                Finishing = stat, Technique = stat, FirstTouch = stat, Dribbling = stat, Passing = stat,
-                Crossing = stat, Heading = stat, LongShots = stat, Marking = stat, Tackling = stat,
-                Penalties = stat, FreeKicks = stat, Corners = stat, LongThrows = stat,
-                Pace = stat, Acceleration = stat, Stamina = stat, Strength = stat, Agility = stat,
-                Jumping = stat, Balance = stat, Positioning = stat,
-                Reflexes = stat, Handling = stat, AerialReach = stat, CommandOfArea = stat,
-                OneOnOnes = stat, Kicking = stat, GkPositioning = stat,
+                Finishing = stat,
+                Technique = stat,
+                FirstTouch = stat,
+                Dribbling = stat,
+                Passing = stat,
+                Crossing = stat,
+                Heading = stat,
+                LongShots = stat,
+                Marking = stat,
+                Tackling = stat,
+                Penalties = stat,
+                FreeKicks = stat,
+                Corners = stat,
+                LongThrows = stat,
+                Pace = stat,
+                Acceleration = stat,
+                Stamina = stat,
+                Strength = stat,
+                Agility = stat,
+                Jumping = stat,
+                Balance = stat,
+                Positioning = stat,
+                Reflexes = stat,
+                Handling = stat,
+                AerialReach = stat,
+                CommandOfArea = stat,
+                OneOnOnes = stat,
+                Kicking = stat,
+                GkPositioning = stat,
             };
 
             var ids = new List<TraitId>(traits.Length);
@@ -48,12 +70,14 @@ namespace Gaffer.Tests
             return new DramaWeekContext(squad, starters, tablePosition, lossStreak, windowOpen);
         }
 
-        private static DramaSettings AlwaysFire()
+        // Settings are init-only, so the envelope a test wants to vary is a parameter here rather than
+        // an assignment on the returned object.
+        private static DramaSettings AlwaysFire(int maxEventsPerSeason = 99, int minWeeksBetweenEvents = 1)
         {
             return new DramaSettings
             {
-                MaxEventsPerSeason = 99,
-                MinWeeksBetweenEvents = 1,
+                MaxEventsPerSeason = maxEventsPerSeason,
+                MinWeeksBetweenEvents = minWeeksBetweenEvents,
                 WeeklyChancePerWeight = 1.0,
                 MaxWeeklyChance = 1.0,
             };
@@ -115,8 +139,7 @@ namespace Gaffer.Tests
         [Test]
         public void TickWeek_SeasonBudget_CapsEventsPerSeason()
         {
-            DramaSettings settings = AlwaysFire();
-            settings.MaxEventsPerSeason = 4;
+            DramaSettings settings = AlwaysFire(maxEventsPerSeason: 4);
             var catalog = new DramaCatalog(new[] { SoloEvent("always", new DramaTrigger()) });
             var engine = new DramaEngine(catalog, settings);
             var squad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60) };
@@ -140,8 +163,7 @@ namespace Gaffer.Tests
         [Test]
         public void TickWeek_MinimumGap_KeepsEventsApart()
         {
-            DramaSettings settings = AlwaysFire();
-            settings.MinWeeksBetweenEvents = 4;
+            DramaSettings settings = AlwaysFire(minWeeksBetweenEvents: 4);
             var catalog = new DramaCatalog(new[] { SoloEvent("always", new DramaTrigger()) });
             var engine = new DramaEngine(catalog, settings);
             var squad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60) };
@@ -258,7 +280,10 @@ namespace Gaffer.Tests
             });
             var settings = new DramaSettings
             {
-                MaxEventsPerSeason = 99, MinWeeksBetweenEvents = 1, WeeklyChancePerWeight = 0.3, MaxWeeklyChance = 1.0,
+                MaxEventsPerSeason = 99,
+                MinWeeksBetweenEvents = 1,
+                WeeklyChancePerWeight = 0.3,
+                MaxWeeklyChance = 1.0,
             };
 
             var plainSquad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60) };
@@ -318,13 +343,34 @@ namespace Gaffer.Tests
                     }
                 }
 
-                Assert.That(inSeason, Is.LessThanOrEqualTo(DramaSettings.Default.MaxEventsPerSeason));
                 totalEvents += inSeason;
             }
 
             double perSeason = totalEvents / (double)seasons;
-            // Scarcity keeps drama valuable, silence kills it: a couple of events a season, never a feed.
-            Assert.That(perSeason, Is.InRange(0.75, 4.0));
+
+            // Both assertions here used to be unfalsifiable, and replacing them turned up a balance
+            // finding rather than a test bug.
+            //
+            // The old code asserted `inSeason <= DramaSettings.Default.MaxEventsPerSeason` — the very
+            // number the engine reads, so it agreed with itself at any value — and then
+            // `perSeason InRange(0.75, 4.0)`, whose upper bound is that same cap. No run of capped
+            // seasons can average ABOVE its cap, so the upper bound was unreachable and only the lower
+            // one could ever fire. The test could report "rare" no matter how relentless drama became.
+            //
+            // MEASURED, default catalog and default settings: 4.00 events per season, in all 20 of the
+            // 20 seasons. The budget is saturated every single season, so the only thing making drama
+            // scarce is the hard cap — the weekly probability (WeeklyChancePerWeight 0.10, capped at
+            // MaxWeeklyChance 0.35, with a 4-week minimum gap) fires whenever it is allowed to. That is
+            // the "feed" the design says to avoid, held back by a ceiling rather than by rarity, and it
+            // is why the old band's dead upper bound mattered. Pinned exactly here so the number is
+            // visible and any recalibration is a deliberate, reviewed change; the lower bound stays as
+            // the "drama must not go silent" guard.
+            Assert.That(perSeason, Is.GreaterThan(0.75),
+                $"Drama went quiet: {perSeason:F2} events a season over {seasons} seasons.");
+            Assert.That(perSeason, Is.EqualTo(4.0).Within(1e-9),
+                $"Drama frequency moved to {perSeason:F2}/season (was a saturated 4.00 — every season at " +
+                "the MaxEventsPerSeason cap). If this is the intended recalibration, update the number " +
+                "and the note above it.");
         }
 
         [Test]
@@ -370,16 +416,15 @@ namespace Gaffer.Tests
             Player heir = PlayerOf(1, PlayerRole.CentralMidfield, 58, age: 20, potential: 85);
             Player veteran = PlayerOf(2, PlayerRole.Striker, 70, age: 28);
             var squad = new List<Player> { captain, heir, veteran };
-            var morale = new MoraleLedger();
 
             var pending = new PendingDrama(succession, captain, ContextOf(squad));
-            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 0, morale);
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 0);
 
             Assert.That(outcome.IsSuccess, Is.True);
             // Youth outranks raw rating for the armband's future — the 20-year-old, not the better veteran.
             Assert.That(outcome.Value.TraitGrantTarget.Id, Is.EqualTo(heir.Id));
             Assert.That(outcome.Value.GrantedTrait, Is.EqualTo(new TraitId("dressing-room-leader")));
-            Assert.That(morale.PointsOf(veteran.Id), Is.EqualTo(1.0).Within(1e-9), "the room lifts with the ceremony");
+            Assert.That(LedgerOf(outcome.Value).PointsOf(veteran.Id), Is.EqualTo(1.0).Within(1e-9), "the room lifts with the ceremony");
         }
 
         [Test]
@@ -388,13 +433,12 @@ namespace Gaffer.Tests
             DramaEvent standoff = DramaCatalog.Default.Find(new DramaEventId("contract-standoff"));
             Player veteran = PlayerOf(0, PlayerRole.Striker, 66, age: 31);
             var pending = new PendingDrama(standoff, veteran, ContextOf(new List<Player> { veteran }));
-            var morale = new MoraleLedger();
 
-            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 0, morale);
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 0);
 
             Assert.That(outcome.IsSuccess, Is.True);
             Assert.That(outcome.Value.CashDelta, Is.EqualTo(-500_000));
-            Assert.That(morale.PointsOf(veteran.Id), Is.EqualTo(2.0).Within(1e-9));
+            Assert.That(LedgerOf(outcome.Value).PointsOf(veteran.Id), Is.EqualTo(2.0).Within(1e-9));
         }
 
         [Test]
@@ -404,12 +448,12 @@ namespace Gaffer.Tests
             Player subject = PlayerOf(3, PlayerRole.RightWing, 64, age: 23);
             var squad = new List<Player> { subject, PlayerOf(4, PlayerRole.Striker, 60) };
             var pending = new PendingDrama(scandal, subject, ContextOf(squad));
-            var morale = new MoraleLedger();
 
-            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 0, morale);
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 0);
 
             Assert.That(outcome.IsSuccess, Is.True);
             Assert.That(outcome.Value.CashDelta, Is.EqualTo(PlayerWage.Weekly(subject)));
+            MoraleLedger morale = LedgerOf(outcome.Value);
             Assert.That(morale.PointsOf(subject.Id), Is.EqualTo(-2.0).Within(1e-9));
             Assert.That(morale.RatingMultiplierOf(subject.Id), Is.LessThan(1.0));
             Assert.That(morale.RatingMultiplierOf(squad[1].Id), Is.EqualTo(1.0).Within(1e-9), "the fine is personal, not team-wide");
@@ -421,15 +465,53 @@ namespace Gaffer.Tests
             DramaEvent rift = DramaCatalog.Default.Find(new DramaEventId("dressing-room-rift"));
             var squad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60), PlayerOf(1, PlayerRole.CentreBack, 60) };
             var pending = new PendingDrama(rift, null, ContextOf(squad, lossStreak: 3));
-            var morale = new MoraleLedger();
 
-            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 1, morale);
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 1);
 
             Assert.That(outcome.IsSuccess, Is.True);
+            MoraleLedger morale = LedgerOf(outcome.Value);
             foreach (Player player in squad)
             {
                 Assert.That(morale.PointsOf(player.Id), Is.EqualTo(-2.0).Within(1e-9));
             }
+        }
+
+        [Test]
+        public void Resolve_MoraleEffects_AreDescribedInTheOutcomeAndAppliedNowhere()
+        {
+            // The half-committed transaction this closes: Resolve used to write morale into the caller's
+            // ledger in place, so an outcome did not describe everything it changed and a sale that then
+            // failed left the wound applied (ARCHITECTURE §8/§8a). Nothing may move until an owner applies it.
+            DramaEvent rift = DramaCatalog.Default.Find(new DramaEventId("dressing-room-rift"));
+            var squad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60), PlayerOf(1, PlayerRole.CentreBack, 60) };
+            var pending = new PendingDrama(rift, null, ContextOf(squad, lossStreak: 3));
+            var untouched = new MoraleLedger();
+
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 1);
+
+            Assert.That(outcome.IsSuccess, Is.True);
+            Assert.That(outcome.Value.MoraleChanges.Count, Is.EqualTo(squad.Count), "one entry per player in the room");
+            foreach (MoraleChange change in outcome.Value.MoraleChanges)
+            {
+                Assert.That(change.Points, Is.EqualTo(-2.0).Within(1e-9));
+                Assert.That(change.Weeks, Is.GreaterThan(0));
+                Assert.That(untouched.PointsOf(change.Player), Is.EqualTo(0.0).Within(1e-9),
+                    "resolving describes the morale change; it does not apply it");
+            }
+        }
+
+        // Replays an outcome's morale entries onto a fresh ledger, exactly as RunSession.ResolveDrama
+        // does — the outcome is now the only source of a morale change, so the test builds the ledger
+        // from it rather than handing one in for the engine to write behind its back.
+        private static MoraleLedger LedgerOf(DramaOutcome outcome)
+        {
+            var morale = new MoraleLedger();
+            foreach (MoraleChange change in outcome.MoraleChanges)
+            {
+                morale.Apply(change.Player, change.Points, change.Weeks);
+            }
+
+            return morale;
         }
 
         [Test]
@@ -445,7 +527,7 @@ namespace Gaffer.Tests
 
             var pending = new PendingDrama(request, star, ContextOf(squadList, windowOpen: true));
 
-            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 1, new MoraleLedger());
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 1);
 
             Assert.That(outcome.IsSuccess, Is.True);
             Assert.That(outcome.Value.PlayerToSell, Is.SameAs(star));
@@ -465,7 +547,7 @@ namespace Gaffer.Tests
             var squad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60) };
             var pending = new PendingDrama(cut, null, ContextOf(squad));
 
-            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 0, new MoraleLedger(), currentCash: 10_000_000);
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 0, currentCash: 10_000_000);
 
             Assert.That(outcome.IsSuccess, Is.True);
             Assert.That(outcome.Value.CashDelta, Is.EqualTo(-2_000_000));
@@ -477,9 +559,164 @@ namespace Gaffer.Tests
             DramaEvent cut = DramaCatalog.Default.Find(new DramaEventId("budget-cut"));
             var pending = new PendingDrama(cut, null, ContextOf(new List<Player>()));
 
-            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 5, new MoraleLedger());
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, 5);
 
             Assert.That(outcome.IsSuccess, Is.False);
+        }
+
+        [Test]
+        public void Resolve_NegativeChoiceIndex_FailsWithResult()
+        {
+            // The other end of the range check. `>= Count` alone would let -1 through to an index-out-of
+            // -range throw, which is not how an expected failure leaves the core (§4).
+            DramaEvent cut = DramaCatalog.Default.Find(new DramaEventId("budget-cut"));
+            var pending = new PendingDrama(cut, null, ContextOf(new List<Player>()));
+
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(pending, -1);
+
+            Assert.That(outcome.IsSuccess, Is.False);
+        }
+
+        [Test]
+        public void Resolve_NoPendingDrama_FailsWithResultRatherThanThrowing()
+        {
+            // Answering a drama that is not there is a UI double-click, not a broken invariant, so it
+            // comes back as a Result the caller can ignore (§4). Without the guard this is a
+            // NullReferenceException out of the core.
+            Result<DramaOutcome> outcome = new DramaEngine().Resolve(null, 0);
+
+            Assert.That(outcome.IsFailure, Is.True);
+            Assert.That(outcome.Error, Is.Not.Null.And.Not.Empty);
+            Assert.That(outcome.Value, Is.Null);
+        }
+
+        // --- Trigger fields. Each of these gates which events can fire; each is asserted in BOTH
+        // --- directions, because a condition that only ever passes and a condition that is inverted
+        // --- look identical from one side (CONVENTIONS §5).
+
+        // True when the event fired at least once over a fixed run of weeks under the given context.
+        private static bool Fires(DramaTrigger trigger, DramaWeekContext context, bool requiresSubject = false)
+        {
+            var catalog = new DramaCatalog(new[] { SoloEvent("gated", trigger, requiresSubject: requiresSubject) });
+            var engine = new DramaEngine(catalog, AlwaysFire());
+            for (int week = 0; week < 20; week++)
+            {
+                if (engine.TickWeek(context, new SplitMix64RandomNumberGenerator((ulong)week)) != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        [Test]
+        public void TickWeek_MinTablePosition_FiresOnlyWhenTheClubIsThatFarDown()
+        {
+            // "At or below this 1-based position" — 18th is in trouble, 3rd is not.
+            var trigger = new DramaTrigger { MinTablePosition = 17 };
+            var squad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60) };
+
+            Assert.That(Fires(trigger, ContextOf(squad, tablePosition: 18)), Is.True, "18th is at or below 17th");
+            Assert.That(Fires(trigger, ContextOf(squad, tablePosition: 17)), Is.True, "the boundary position itself qualifies");
+            Assert.That(Fires(trigger, ContextOf(squad, tablePosition: 16)), Is.False, "16th is above the pressure line");
+            Assert.That(Fires(trigger, ContextOf(squad, tablePosition: 3)), Is.False);
+        }
+
+        [Test]
+        public void TickWeek_RequiresOpenWindow_FiresOnlyWhileTheWindowIsOpen()
+        {
+            var trigger = new DramaTrigger { RequiresOpenWindow = true };
+            var squad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60) };
+
+            Assert.That(Fires(trigger, ContextOf(squad, windowOpen: true)), Is.True);
+            Assert.That(Fires(trigger, ContextOf(squad, windowOpen: false)), Is.False,
+                "A transfer-flavoured event out of season would offer a move that cannot happen.");
+        }
+
+        [Test]
+        public void TickWeek_MaxSubjectAge_PicksOnlyPlayersUpToThatAge()
+        {
+            var trigger = new DramaTrigger { MaxSubjectAge = 21 };
+            var young = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60, age: 21) };
+            var old = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60, age: 22) };
+
+            Assert.That(Fires(trigger, ContextOf(young), requiresSubject: true), Is.True, "21 is at most 21");
+            Assert.That(Fires(trigger, ContextOf(old), requiresSubject: true), Is.False);
+        }
+
+        [Test]
+        public void TickWeek_MinSubjectAge_PicksOnlyPlayersFromThatAgeUp()
+        {
+            var trigger = new DramaTrigger { MinSubjectAge = 30 };
+            var veteran = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60, age: 30) };
+            var youngster = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60, age: 29) };
+
+            Assert.That(Fires(trigger, ContextOf(veteran), requiresSubject: true), Is.True, "30 is at least 30");
+            Assert.That(Fires(trigger, ContextOf(youngster), requiresSubject: true), Is.False);
+        }
+
+        [Test]
+        public void TickWeek_MinSubjectPotentialGap_PicksTheWonderkidNotTheFinishedArticle()
+        {
+            // The gap is potential minus CURRENT rating, so the filter has to be stated against a real
+            // rating: both players below are rated by the same stat line, and only their ceilings differ.
+            var trigger = new DramaTrigger { MinSubjectPotentialGap = 20.0 };
+            Player wonderkid = PlayerOf(0, PlayerRole.Striker, 50, age: 18, potential: 95);
+            Player finished = PlayerOf(0, PlayerRole.Striker, 50, age: 18, potential: 52);
+
+            Assert.That(Fires(trigger, ContextOf(new List<Player> { wonderkid }), requiresSubject: true), Is.True);
+            Assert.That(Fires(trigger, ContextOf(new List<Player> { finished }), requiresSubject: true), Is.False,
+                "A player already at his ceiling has no 'he could be so much more' story.");
+        }
+
+        [Test]
+        public void TickWeek_SubjectBenched_PicksTheReserveAndNeverTheStarter()
+        {
+            // The double negative in the engine reads "reject if he IS a starter". Inverting the inner
+            // IsStarter call flips which player gets the grievance while leaving the event firing at the
+            // same rate — so both directions are asserted, plus the unknown-lineup case.
+            var trigger = new DramaTrigger { SubjectBenched = true };
+            Player starter = PlayerOf(0, PlayerRole.Striker, 60);
+            Player reserve = PlayerOf(1, PlayerRole.CentreBack, 60);
+            var squad = new List<Player> { starter, reserve };
+            var eleven = new List<Player> { starter };
+
+            var catalog = new DramaCatalog(new[] { SoloEvent("benched", trigger, requiresSubject: true) });
+            var subjects = new List<int>();
+            for (ulong seed = 0; seed < 40; seed++)
+            {
+                PendingDrama pending = new DramaEngine(catalog, AlwaysFire())
+                    .TickWeek(ContextOf(squad, starters: eleven), new SplitMix64RandomNumberGenerator(seed));
+                if (pending != null)
+                {
+                    subjects.Add(pending.Subject.Id.Value);
+                }
+            }
+
+            Assert.That(subjects, Is.Not.Empty, "the bench grievance must be reachable at all");
+            Assert.That(subjects, Has.All.EqualTo(reserve.Id.Value),
+                "Only the man out of the eleven has a bench grievance.");
+
+            // And with no lineup known, nobody can be shown to be benched, so it must stay quiet rather
+            // than treat "unknown" as "benched".
+            Assert.That(Fires(trigger, ContextOf(squad, starters: null), requiresSubject: true), Is.False);
+
+            // Sanity: without the flag the same squad and seeds do reach the starter, so the assertion
+            // above is a real restriction and not an artefact of how the subject is drawn.
+            var ungatedSubjects = new List<int>();
+            var ungated = new DramaCatalog(new[] { SoloEvent("anyone", new DramaTrigger(), requiresSubject: true) });
+            for (ulong seed = 0; seed < 40; seed++)
+            {
+                PendingDrama pending = new DramaEngine(ungated, AlwaysFire())
+                    .TickWeek(ContextOf(squad, starters: eleven), new SplitMix64RandomNumberGenerator(seed));
+                if (pending != null)
+                {
+                    ungatedSubjects.Add(pending.Subject.Id.Value);
+                }
+            }
+
+            Assert.That(ungatedSubjects, Has.Some.EqualTo(starter.Id.Value));
         }
 
         [Test]
@@ -508,6 +745,74 @@ namespace Gaffer.Tests
             morale.Apply(player, -20.0, 4);
 
             Assert.That(morale.RatingMultiplierOf(player), Is.EqualTo(1.0 - (0.012 * 8.0)).Within(1e-9));
+        }
+
+        [Test]
+        public void MoraleLedger_StackedGoodNews_IsClampedToo()
+        {
+            // The clamp is two-sided and only the negative arm was covered. A run of good weeks must not
+            // be able to buy an unbounded rating multiplier — believability breaks in both directions.
+            var morale = new MoraleLedger();
+            var player = new PlayerId(7);
+
+            morale.Apply(player, 20.0, 4);
+            morale.Apply(player, 20.0, 4);
+
+            Assert.That(morale.PointsOf(player), Is.EqualTo(MoraleSettings.Default.MaxAbsPoints).Within(1e-9));
+            Assert.That(morale.RatingMultiplierOf(player), Is.EqualTo(1.0 + (0.012 * 8.0)).Within(1e-9));
+        }
+
+        [Test]
+        public void MoraleLedger_TwoWoundsOfDifferentLengths_ExpireIndependently()
+        {
+            // Entries are stacked and each carries its own clock. A tick that dropped the whole player
+            // when any one entry ran out — or that kept them all until the longest did — passes the
+            // single-entry expiry test above; only overlapping durations tell them apart.
+            var morale = new MoraleLedger();
+            var player = new PlayerId(7);
+
+            morale.Apply(player, -3.0, 2);
+            morale.Apply(player, -1.0, 4);
+            Assert.That(morale.PointsOf(player), Is.EqualTo(-4.0).Within(1e-9));
+
+            morale.TickWeek();
+            Assert.That(morale.PointsOf(player), Is.EqualTo(-4.0).Within(1e-9), "both still open in week two");
+
+            morale.TickWeek();
+            Assert.That(morale.PointsOf(player), Is.EqualTo(-1.0).Within(1e-9),
+                "the two-week wound has faded; the four-week one has not");
+
+            morale.TickWeek();
+            Assert.That(morale.PointsOf(player), Is.EqualTo(-1.0).Within(1e-9));
+
+            morale.TickWeek();
+            Assert.That(morale.PointsOf(player), Is.Zero, "and now the long one is gone too");
+        }
+
+        [Test]
+        public void MoraleLedger_AfterAWoundFades_ReturnsExactlyToBaseline()
+        {
+            // "Fades on schedule" has to mean back to neutral, not merely smaller: a player who has been
+            // through drama and out the other side must rate exactly like one who never did.
+            var morale = new MoraleLedger();
+            var scarred = new PlayerId(1);
+            var untouched = new PlayerId(2);
+
+            morale.Apply(scarred, -6.0, 3);
+            for (int week = 0; week < 3; week++)
+            {
+                morale.TickWeek();
+            }
+
+            Assert.That(morale.PointsOf(scarred), Is.Zero);
+            Assert.That(morale.PointsOf(scarred), Is.EqualTo(morale.PointsOf(untouched)));
+            Assert.That(morale.RatingMultiplierOf(scarred), Is.EqualTo(1.0).Within(1e-12));
+            Assert.That(morale.RatingMultiplierOf(scarred), Is.EqualTo(morale.RatingMultiplierOf(untouched)));
+
+            // And the ledger lets go of him entirely rather than keeping a spent entry forever.
+            morale.Apply(scarred, -1.0, 1);
+            morale.TickWeek();
+            Assert.That(morale.PointsOf(scarred), Is.Zero);
         }
 
         [Test]
@@ -540,9 +845,8 @@ namespace Gaffer.Tests
         {
             // Two identical leagues, same seed — in one, the home dressing room takes a team-wide hit
             // before the round. The drama must be felt in the scoreline, end to end.
-            LeagueSeason untouched = new LeagueSeason(TwoClubLeague());
-            LeagueSeason wounded = new LeagueSeason(TwoClubLeague());
-            MatchSimulator simulator = CreateSimulator();
+            var untouched = new LeagueSeason(TwoClubLeague(), null, null, null, CreateSimulator());
+            var wounded = new LeagueSeason(TwoClubLeague(), null, null, null, CreateSimulator());
             var context = new MatchContext(MatchImportance.Normal, 10000, false, false);
 
             foreach (Player player in wounded.SquadOf(new ClubId(0)).Players)
@@ -550,8 +854,8 @@ namespace Gaffer.Tests
                 wounded.Morale.Apply(player.Id, -8.0, 4);
             }
 
-            WeekResult plainWeek = untouched.AdvanceWeek(simulator, context, 91UL);
-            WeekResult woundedWeek = wounded.AdvanceWeek(simulator, context, 91UL);
+            WeekResult plainWeek = untouched.AdvanceWeek(context, 91UL);
+            WeekResult woundedWeek = wounded.AdvanceWeek(context, 91UL);
 
             MatchResult plainMatch = plainWeek.Matches[0];
             MatchResult woundedMatch = woundedWeek.Matches[0];

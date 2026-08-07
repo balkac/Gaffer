@@ -10,7 +10,11 @@ namespace Gaffer.Tests
         {
             var attributes = new Attributes
             {
-                Finishing = level, Pace = level, Technique = level, Positioning = level, Dribbling = level,
+                Finishing = level,
+                Pace = level,
+                Technique = level,
+                Positioning = level,
+                Dribbling = level,
             };
             return new Player(new PlayerId(1), "Test Forward", "England", Position.Forward, 25, attributes, 70);
         }

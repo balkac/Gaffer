@@ -10,7 +10,11 @@ namespace Gaffer.Tests
         {
             var attributes = new Attributes
             {
-                Finishing = level, Pace = level, Technique = level, Positioning = level, Dribbling = level,
+                Finishing = level,
+                Pace = level,
+                Technique = level,
+                Positioning = level,
+                Dribbling = level,
             };
             return new Player(new PlayerId(1), "Test Forward", "England", Position.Forward, age, attributes, potential);
         }
@@ -44,12 +48,25 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void Value_IsNonNegativeAndRounded()
+        public void Value_IsRoundedAndRisesWithAbility()
         {
-            long value = PlayerValuation.Value(Forward(40, 30));
+            // `>= 0` restated the Math.Max(0, ...) on the last line of Value and could not fail for any
+            // input. The rounding assertion is real and stays; what replaces the dead half is the
+            // property a valuation must have to be a market at all — a better player is never cheaper.
+            Assert.That(PlayerValuation.Value(Forward(40, 30)) % 50_000, Is.EqualTo(0));
 
-            Assert.That(value, Is.GreaterThanOrEqualTo(0));
-            Assert.That(value % 50_000, Is.EqualTo(0));
+            long previous = -1;
+            bool everRose = false;
+            for (byte ability = 30; ability <= 95; ability += 5)
+            {
+                long value = PlayerValuation.Value(Forward(ability, 26));
+                Assert.That(value % 50_000, Is.EqualTo(0), $"ability {ability} priced off the rounding step");
+                Assert.That(value, Is.GreaterThanOrEqualTo(previous), $"ability {ability} was cheaper than {ability - 5}");
+                everRose |= value > previous && previous >= 0;
+                previous = value;
+            }
+
+            Assert.That(everRose, Is.True, "A flat curve would satisfy 'never cheaper' while pricing nothing.");
         }
 
         [Test]

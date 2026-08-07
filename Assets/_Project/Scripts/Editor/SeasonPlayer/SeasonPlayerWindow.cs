@@ -1,13 +1,14 @@
 using System.Collections.Generic;
 using System.IO;
-using Gaffer.Application.Generation;
+using Gaffer.Application.Drama;
 using Gaffer.Application.Progression;
+using Gaffer.Application.Run;
 using Gaffer.Application.Season;
 using Gaffer.Application.Serialization;
 using Gaffer.Application.Simulation;
+using Gaffer.Application.Transfers;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
-using Gaffer.Domain.Leagues;
 using Gaffer.Domain.Players;
 using Gaffer.Editor.Balance;
 using Gaffer.Editor.Harness;
@@ -24,40 +25,46 @@ namespace Gaffer.Editor.SeasonPlayer
     /// <summary>
     /// An early playable demo: manage one club through league seasons on the real Application core.
     /// Advance week by week, watch the table move, and get the board's verdict at the end — promoted,
-    /// retained, or sacked — then Start Next Season to roll the whole league on a year (SeasonTransition
-    /// ages and develops every squad), so gems grow and veterans fade across a run. Styled in the
-    /// ART_STYLE broadcast identity. Not shipped; a preview of the run the real UI (Faz 7) will present.
+    /// retained, or sacked — then Start Next Season to roll the whole league on a year (squads age,
+    /// develop and renew), so gems grow and veterans fade across a run. Styled in the ART_STYLE broadcast
+    /// identity. Not shipped; a preview of the run the real UI (Faz 7) will present.
+    ///
+    /// <para><b>A view over <see cref="RunSession"/>.</b> This window and the Management window each used
+    /// to own a private copy of the run loop, and the copies had drifted: that one paid the weekly wage
+    /// bill and ticked drama, this one did neither, and this one read the managed squad off the
+    /// generation-time league rather than the live season. Both now send commands to one session and
+    /// replay its outcomes (ARCHITECTURE §8), so this window has the economy and the drama beats it was
+    /// silently missing — the divergence was the bug, not the feature set.</para>
     /// </summary>
     public sealed class SeasonPlayerWindow : EditorWindow
     {
-        private const int MaxTeams = 64;
-
         private int _teamCount = 20;
         private long _seed = 20260707L;
         private int _managedIndex = 15;
         private int _promotionPosition = 3;
         private int _survivalPosition = 17;
+        private long _startingCash = 6_000_000L;
+        private long _wageBudget = 160_000L;
+
+        // The shape and setup the run is on, re-synced from every outcome so a restart or a resume picks up
+        // what the manager was actually playing (a save carries neither).
         private Tactics _tactics = Tactics.Balanced;
         private Formation _formation = Formation.F442;
-        private Player[] _lineup;
+
+        private RunSession _session;
+        private LineupOutcome _lineup;
+        private WeekOutcome _lastWeek;
+        private SeasonRollover _summer;
+
         private int _dragFromSlot = -1;
-        private int _dragFromBenchId = -1;
+        private int _dragPlayerId = -1;
         private string _lineupStatus;
         private VisualElement _dragGhost;
         private readonly List<VisualElement> _slotTokens = new List<VisualElement>();
 
-        private League _league;
-        private LeagueSeason _season;
-        private ClubId _managedClub;
-        private BoardTarget _target;
-        private MatchSimulator _simulator;
-        private MatchContext _context;
-        private SeasonVerdict? _verdict;
-        private WeekResult _lastWeek;
-        private int _seasonNumber = 1;
-        private List<Player> _retired;
-        private List<Player> _arrived;
         private string _saveStatus;
+        private string _dramaStatus;
+
         private SimulationBalanceSO _simulationBalance;
         private DevelopmentBalanceSO _developmentBalance;
         private RenewalBalanceSO _renewalBalance;
@@ -105,6 +112,14 @@ namespace Gaffer.Editor.SeasonPlayer
             ((VisualElement)_body[0]).Add(MakeLabel("Set it up, then Start Season.", 12, HarnessPalette.Muted));
         }
 
+        // The drag ghost is parented to the window root, outside the body Refresh rebuilds, so a window
+        // closed mid-drag would otherwise leave it behind (UNITY.md §5).
+        private void OnDisable()
+        {
+            EndGhost();
+            _slotTokens.Clear();
+        }
+
         private VisualElement BuildSetup()
         {
             VisualElement card = MakeCard();
@@ -128,6 +143,20 @@ namespace Gaffer.Editor.SeasonPlayer
             var survival = new IntegerField("Survive by position") { value = _survivalPosition };
             survival.RegisterValueChangedCallback(e => _survivalPosition = e.newValue);
             card.Add(survival);
+
+            // The economy the run is played under — the wage bill leaves this cash every single week
+            // (GDD §4.4). This window used to skip the payment entirely, so its books never moved.
+            Label money = MakeLabel("Economy", 10, HarnessPalette.Muted, bold: true);
+            money.style.marginTop = 6;
+            card.Add(money);
+
+            var cash = new LongField("Transfer cash (€)") { value = _startingCash };
+            cash.RegisterValueChangedCallback(e => _startingCash = e.newValue);
+            card.Add(cash);
+
+            var wageBudget = new LongField("Wage budget (€/wk)") { value = _wageBudget };
+            wageBudget.RegisterValueChangedCallback(e => _wageBudget = e.newValue);
+            card.Add(wageBudget);
 
             // Optional balance assets — assign a Balance SO to retune the run, leave empty for the calibrated
             // defaults. Simulation applies on Start Season; development and renewal apply on Start Next Season.
@@ -160,103 +189,112 @@ namespace Gaffer.Editor.SeasonPlayer
             return card;
         }
 
-        // The balance the run reads — from an assigned config asset, or the calibrated default. Assign a
-        // Balance SO in the setup to retune scoring, development, or renewal and watch the run respond.
-        private MatchSimulationSettings SimSettings()
+        // ----- The run's wiring seam -----------------------------------------------------------------------
+
+        private RunSetup Setup()
         {
-            return _simulationBalance != null ? _simulationBalance.ToSettings() : MatchSimulationSettings.Default;
+            return new RunSetup
+            {
+                TeamCount = _teamCount,
+                Seed = (ulong)_seed,
+                ManagedClubIndex = _managedIndex,
+                PromotionPosition = _promotionPosition,
+                SurvivalPosition = _survivalPosition,
+                StartingCash = _startingCash,
+                WeeklyWageBudget = _wageBudget,
+                Formation = _formation,
+                Tactics = _tactics,
+            };
         }
 
-        private DevelopmentSettings DevSettings()
+        // Only the three balance assets this window authors are overridden; everything else — drama, morale,
+        // the economy, the trait and drama catalogs — takes the calibrated default, which is what the factory
+        // fills a null with (ARCHITECTURE §7). The Management window is where every knob is authored.
+        private RunBalance Balance()
         {
-            return _developmentBalance != null ? _developmentBalance.ToSettings() : DevelopmentSettings.Default;
-        }
-
-        private RenewalSettings RenewSettings()
-        {
-            return _renewalBalance != null ? _renewalBalance.ToSettings() : RenewalSettings.Default;
-        }
-
-        private TacticsSettings TacticsTuning()
-        {
-            return _simulationBalance != null ? _simulationBalance.ToTacticsSettings() : TacticsSettings.Default;
-        }
-
-        private ScorerWeights ScorerTuning()
-        {
-            return _simulationBalance != null ? _simulationBalance.ToScorerWeights() : ScorerWeights.Default;
+            return new RunBalance
+            {
+                Simulation = _simulationBalance != null ? _simulationBalance.ToSettings() : MatchSimulationSettings.Default,
+                TacticsBalance = _simulationBalance != null ? _simulationBalance.ToTacticsSettings() : TacticsSettings.Default,
+                Scorer = _simulationBalance != null ? _simulationBalance.ToScorerWeights() : ScorerWeights.Default,
+                Development = _developmentBalance != null ? _developmentBalance.ToSettings() : DevelopmentSettings.Default,
+                Renewal = _renewalBalance != null ? _renewalBalance.ToSettings() : RenewalSettings.Default,
+            };
         }
 
         private void StartSeason()
         {
-            int count = Mathf.Clamp(_teamCount, 4, MaxTeams);
-            _league = BuildLeague(count);
-            _season = new LeagueSeason(_league, null, TacticsTuning(), null);
-            _simulator = new MatchSimulator(
-                new PoissonChanceGenerator(SimSettings()),
-                new QualityChanceResolver(),
-                new WeightedScorerSelector(ScorerTuning()));
-            _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
-            _managedClub = new ClubId(Mathf.Clamp(_managedIndex, 0, count - 1));
-            _target = new BoardTarget(_promotionPosition, _survivalPosition);
-            _seasonNumber = 1;
-            _retired = null;
-            _arrived = null;
-            AutoPickStarters();
-            _season.SetFormation(_managedClub, _formation);
-            _season.SetStarters(_managedClub, CurrentStarters());
-            _season.SetTactics(_managedClub, _tactics);
-            _verdict = null;
-            _lastWeek = null;
+            Result<RunSession> started = RunSessionFactory.Start(Setup(), Balance());
+            if (started.IsFailure)
+            {
+                _saveStatus = started.Error;
+                Refresh();
+                return;
+            }
 
+            Adopt(started.Value, null);
+        }
+
+        private void Adopt(RunSession session, string status)
+        {
+            _session = session;
+            Replay(session.Lineup());
+            _lastWeek = null;
+            _summer = null;
+            _lineupStatus = null;
+            _dramaStatus = null;
+            _saveStatus = status;
             Refresh();
         }
 
-        // Rolls the whole league on a year (SeasonTransition ages + develops every squad), then starts a
-        // fresh season with the same clubs — so you watch your gems grow and your veterans fade across a run,
-        // and the table's spread shifts. Formation, tactics, and board target carry over; the eleven is
-        // re-picked from the developed squad. The same seed keeps the run reproducible.
-        private void StartNextSeason()
+        private void Replay(LineupOutcome lineup)
         {
-            IReadOnlyList<Player> before = ManagedSquad().Players;
+            if (lineup == null)
+            {
+                return;
+            }
 
-            _seasonNumber++;
-            _league = new SeasonTransition(DevSettings(), RenewSettings()).ToNextSeason(_league, (ulong)_seed, _seasonNumber);
-            _season = new LeagueSeason(_league, null, TacticsTuning(), null);
-            ComputeSummer(before, ManagedSquad().Players);
-            AutoPickStarters();
-            _season.SetFormation(_managedClub, _formation);
-            _season.SetStarters(_managedClub, CurrentStarters());
-            _season.SetTactics(_managedClub, _tactics);
-            _verdict = null;
-            _lastWeek = null;
+            _lineup = lineup;
+            _formation = lineup.Formation;
+            _tactics = lineup.Tactics;
+        }
+
+        private void Apply(Result<LineupOutcome> result)
+        {
+            if (result.IsFailure)
+            {
+                _lineupStatus = result.Error;
+            }
+            else
+            {
+                _lineupStatus = null;
+                Replay(result.Value);
+            }
 
             Refresh();
         }
 
         // Writes the whole run — every club's squad, the season number, the table, and the seed — to a JSON
         // file through the real Infrastructure adapter (NewtonsoftJsonSerializer + JsonSaveStore), the same
-        // path the shipped game will use. Development and renewal survive a reload because the full rosters go
-        // to disk (save schema v3), not just strength.
+        // path the shipped game will use. The session captures the document with the managed club's live
+        // roster already folded back in, which is the ordering a window used to have to remember.
         private void SaveRun()
         {
-            if (_season == null)
+            if (_session == null)
             {
                 _saveStatus = "Start a season before saving.";
                 Refresh();
                 return;
             }
 
-            SeasonSaveData data = new SeasonSaveMapper().Capture(_league, _season, (ulong)_seed, _seasonNumber);
-            Result result = SaveStore().Save(SavePath, data);
+            Result result = SaveStore().Save(SavePath, _session.Capture());
             _saveStatus = result.IsSuccess ? "Saved run to " + SavePath : result.Error;
             Refresh();
         }
 
-        // Reads the run back, migrates it to the current schema, and rebuilds the league (with full squads),
-        // the resumed season, and the season number. Formation, tactics, and the board target are session
-        // settings, not saved, so they default from the current setup — the run state (rosters, table) is
-        // what persists.
+        // Reads the run back, migrates it to the current schema, and resumes it on the save's own match seed.
+        // Formation, tactics, the economy and drama state are session settings, not saved, so they come from
+        // the setup — the run state (rosters, table, season number) is what persists.
         private void LoadRun()
         {
             Result<SeasonSaveData> loaded = SaveStore().Load(SavePath);
@@ -267,24 +305,15 @@ namespace Gaffer.Editor.SeasonPlayer
                 return;
             }
 
-            RestoredSeason restored = new SeasonSaveMapper().Restore(loaded.Value, null, TacticsTuning(), null);
-            _league = restored.League;
-            _season = restored.Season;
-            _seasonNumber = restored.SeasonNumber < 1 ? 1 : restored.SeasonNumber;
+            Result<RunSession> resumed = RunSessionFactory.Resume(Setup(), Balance(), loaded.Value);
+            if (resumed.IsFailure)
+            {
+                _saveStatus = resumed.Error;
+                Refresh();
+                return;
+            }
 
-            EnsureRuntime();
-            _managedClub = new ClubId(Mathf.Clamp(_managedIndex, 0, _league.Clubs.Count - 1));
-            AutoPickStarters();
-            _season.SetFormation(_managedClub, _formation);
-            _season.SetStarters(_managedClub, CurrentStarters());
-            _season.SetTactics(_managedClub, _tactics);
-            _verdict = null;
-            _lastWeek = null;
-            _retired = null;
-            _arrived = null;
-            CheckComplete();
-            _saveStatus = "Loaded run from " + SavePath;
-            Refresh();
+            Adopt(resumed.Value, "Loaded run from " + SavePath);
         }
 
         private static JsonSaveStore SaveStore()
@@ -292,274 +321,211 @@ namespace Gaffer.Editor.SeasonPlayer
             return new JsonSaveStore(new NewtonsoftJsonSerializer(), new SaveMigrator());
         }
 
-        // Establishes the sim, match context, and board target after a load (a load can happen before a
-        // Start Season would set them). Cheap to build, so just set them rather than null-guard structs.
-        private void EnsureRuntime()
-        {
-            _simulator = new MatchSimulator(
-                new PoissonChanceGenerator(SimSettings()),
-                new QualityChanceResolver(),
-                new WeightedScorerSelector(ScorerTuning()));
-            _context = new MatchContext(MatchImportance.Normal, 12000, isTitleDecider: false, isRivalry: false);
-            _target = new BoardTarget(_promotionPosition, _survivalPosition);
-        }
-
-        // Diffs your squad across the summer by id: who is gone (retired) and who is new (came through the
-        // youth intake). Surfaced as a transient card so a run reads like a story — names leaving, names arriving.
-        private void ComputeSummer(IReadOnlyList<Player> before, IReadOnlyList<Player> after)
-        {
-            var afterIds = new HashSet<int>();
-            foreach (Player p in after)
-            {
-                afterIds.Add(p.Id.Value);
-            }
-
-            var beforeIds = new HashSet<int>();
-            foreach (Player p in before)
-            {
-                beforeIds.Add(p.Id.Value);
-            }
-
-            _retired = new List<Player>();
-            foreach (Player p in before)
-            {
-                if (!afterIds.Contains(p.Id.Value))
-                {
-                    _retired.Add(p);
-                }
-            }
-
-            _arrived = new List<Player>();
-            foreach (Player p in after)
-            {
-                if (!beforeIds.Contains(p.Id.Value))
-                {
-                    _arrived.Add(p);
-                }
-            }
-        }
-
-        private Squad ManagedSquad()
-        {
-            return _league.Clubs[_managedClub.Value].Squad;
-        }
-
-        // Fills each formation slot with the best eleven for the current formation — the default a manager tweaks.
-        private void AutoPickStarters()
-        {
-            IReadOnlyList<Player> eleven = new LineupSelector().SelectBest(ManagedSquad(), _formation);
-            _lineup = new Player[_formation.Total];
-            for (int i = 0; i < eleven.Count && i < _lineup.Length; i++)
-            {
-                _lineup[i] = eleven[i];
-            }
-        }
-
-        private IReadOnlyList<Player> CurrentStarters()
-        {
-            var starters = new List<Player>();
-            if (_lineup != null)
-            {
-                foreach (Player player in _lineup)
-                {
-                    if (player != null)
-                    {
-                        starters.Add(player);
-                    }
-                }
-            }
-
-            return starters;
-        }
-
-        private List<Player> BenchPlayers()
-        {
-            var bench = new List<Player>();
-            foreach (Player player in ManagedSquad().Players)
-            {
-                if (SlotOf(player.Id.Value) < 0)
-                {
-                    bench.Add(player);
-                }
-            }
-
-            return bench;
-        }
-
-        private int SlotOf(int playerId)
-        {
-            if (_lineup != null)
-            {
-                for (int i = 0; i < _lineup.Length; i++)
-                {
-                    if (_lineup[i] != null && _lineup[i].Id.Value == playerId)
-                    {
-                        return i;
-                    }
-                }
-            }
-
-            return -1;
-        }
-
-        private bool IsStarting(int playerId)
-        {
-            return SlotOf(playerId) >= 0;
-        }
-
-        // Drops a player into a slot: if he was already on the pitch the two swap; if he came off the bench he
-        // takes the slot and whoever was there is benched.
-        private void PlaceInSlot(int slot, Player player)
-        {
-            int from = SlotOf(player.Id.Value);
-            if (from == slot)
-            {
-                return;
-            }
-
-            Player occupant = _lineup[slot];
-            _lineup[slot] = player;
-            if (from >= 0)
-            {
-                _lineup[from] = occupant;
-            }
-
-            CommitLineup();
-        }
-
-        private void ToggleStarter(int playerId)
-        {
-            int slot = SlotOf(playerId);
-            if (slot >= 0)
-            {
-                _lineup[slot] = null;
-                CommitLineup();
-                return;
-            }
-
-            for (int i = 0; i < _lineup.Length; i++)
-            {
-                if (_lineup[i] == null)
-                {
-                    _lineup[i] = FindInSquad(playerId);
-                    CommitLineup();
-                    return;
-                }
-            }
-
-            _lineupStatus = "The eleven is full — bench someone first.";
-            Refresh();
-        }
-
-        private Player FindInSquad(int playerId)
-        {
-            foreach (Player player in ManagedSquad().Players)
-            {
-                if (player.Id.Value == playerId)
-                {
-                    return player;
-                }
-            }
-
-            return null;
-        }
-
-        private void CommitLineup()
-        {
-            _season.SetStarters(_managedClub, CurrentStarters());
-            Refresh();
-        }
-
-        private void ChangeFormation(string formationName)
-        {
-            foreach (Formation preset in Formation.Presets)
-            {
-                if (preset.Name == formationName)
-                {
-                    _formation = preset;
-                    break;
-                }
-            }
-
-            AutoPickStarters();
-            _season.SetFormation(_managedClub, _formation);
-            _season.SetStarters(_managedClub, CurrentStarters());
-            Refresh();
-        }
-
-        private League BuildLeague(int count)
-        {
-            // The whole world is generated now: LeagueGenerator names the league and every club, fields each a
-            // tier-scaled squad, and derives strength from the roster. A separate rng stream keeps squad and
-            // name generation from disturbing match determinism.
-            var generator = new LeagueGenerator(new SquadGenerator(new PlayerGenerator()));
-            var genRng = new SplitMix64RandomNumberGenerator((ulong)_seed ^ 0x5EEDD5EEDUL);
-            return generator.Generate(count, genRng);
-        }
+        // ----- Season loop ---------------------------------------------------------------------------------
 
         private void AdvanceOneWeek()
         {
-            if (_season == null || _season.IsComplete)
+            Result<WeekOutcome> week = _session.AdvanceWeek();
+            if (week.IsFailure)
             {
+                _dramaStatus = week.Error;
+                Refresh();
                 return;
             }
 
-            _lastWeek = _season.AdvanceWeek(_simulator, _context, (ulong)_seed);
-            CheckComplete();
+            ReplayWeek(week.Value);
             Refresh();
         }
 
         private void PlayToEnd()
         {
-            if (_season == null)
+            Result<IReadOnlyList<WeekOutcome>> weeks = _session.AdvanceToEndOfSeason();
+            if (weeks.IsFailure)
             {
+                _dramaStatus = weeks.Error;
+                Refresh();
                 return;
             }
 
-            int guard = 0;
-            while (!_season.IsComplete && guard < 1000)
+            IReadOnlyList<WeekOutcome> played = weeks.Value;
+            for (int i = 0; i < played.Count; i++)
             {
-                WeekResult week = _season.AdvanceWeek(_simulator, _context, (ulong)_seed);
-                if (week.Matches.Count > 0)
-                {
-                    _lastWeek = week;
-                }
-
-                guard++;
+                ReplayWeek(played[i]);
             }
 
-            CheckComplete();
             Refresh();
         }
 
-        private void CheckComplete()
+        // The week's outcome carries the position, the losing run, the wages paid and the verdict — every
+        // number this window used to re-derive by walking the season's own table and result history.
+        private void ReplayWeek(WeekOutcome week)
         {
-            if (_season.IsComplete && _verdict == null)
+            if (week.Matches.Count > 0)
             {
-                _verdict = new SeasonEvaluator().Evaluate(_season.Table, _managedClub, _target);
+                _lastWeek = week;
             }
         }
+
+        private void StartNextSeason()
+        {
+            Result<SeasonRollover> rolled = _session.StartNextSeason();
+            if (rolled.IsFailure)
+            {
+                _saveStatus = rolled.Error;
+                Refresh();
+                return;
+            }
+
+            _summer = rolled.Value;
+            Replay(_summer.Lineup);
+            _lastWeek = null;
+            _dramaStatus = null;
+            Refresh();
+        }
+
+        // ----- Drama ---------------------------------------------------------------------------------------
+
+        private void ResolveDrama(int choiceIndex)
+        {
+            Result<DramaResolution> result = _session.ResolveDrama(choiceIndex);
+            if (result.IsFailure)
+            {
+                _dramaStatus = result.Error;
+                Refresh();
+                return;
+            }
+
+            DramaResolution resolution = result.Value;
+            Replay(resolution.Lineup);
+            _dramaStatus = Describe(resolution);
+            Refresh();
+        }
+
+        private static string Describe(DramaResolution resolution)
+        {
+            string text = Humanize(resolution.EventId.Value) + " — resolved.";
+            if (resolution.CashDelta != 0)
+            {
+                text += " Cash " + (resolution.CashDelta > 0 ? "+" : "") + FormatValue(resolution.CashDelta) + ".";
+            }
+
+            if (resolution.SoldPlayer != null)
+            {
+                text += " " + resolution.SoldPlayer.Name + " sold for " + FormatValue(resolution.SaleFee) + ".";
+            }
+
+            if (resolution.RebuiltPlayer != null)
+            {
+                text += " " + resolution.RebuiltPlayer.Name + " is now a " + Humanize(resolution.GrantedTrait.Value) + ".";
+            }
+
+            return text;
+        }
+
+        // Dev-tool copy: the shipped UI reads localized text through the event's keys; the workbench
+        // humanizes the slugs so the loop is playable today (see HarnessLabels on why that is allowed here).
+        private static string Humanize(string slug)
+        {
+            string spaced = slug.Replace('-', ' ').Replace('_', ' ');
+            return spaced.Length == 0 ? spaced : char.ToUpperInvariant(spaced[0]) + spaced.Substring(1);
+        }
+
+        private static string ChoiceLabel(string labelKey)
+        {
+            int lastDot = labelKey.LastIndexOf('.');
+            return Humanize(lastDot >= 0 ? labelKey.Substring(lastDot + 1) : labelKey);
+        }
+
+        private VisualElement BuildDramaCard(PendingDrama pending)
+        {
+            VisualElement card = MakeCard();
+            card.style.borderLeftWidth = 3;
+            card.style.borderLeftColor = HarnessPalette.Accent;
+
+            card.Add(MakeLabel("DRAMA · WEEK " + _session.PlayedRounds, 11, HarnessPalette.Accent, bold: true));
+            card.Add(MakeLabel(Humanize(pending.Event.Id.Value).ToUpperInvariant(), 15, HarnessPalette.Chalk, bold: true));
+
+            if (pending.Subject != null)
+            {
+                Player subject = pending.Subject;
+                card.Add(MakeLabel(
+                    subject.Name + "  ·  " + HarnessLabels.RoleLabel(subject.Role) + "  ·  " + subject.Age +
+                    "  ·  OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(subject)), 11, HarnessPalette.Chalk));
+            }
+
+            card.Add(MakeLabel("The decision is yours — it will be felt on the pitch and in the books.", 10, HarnessPalette.Muted));
+
+            var buttons = new VisualElement();
+            buttons.style.flexDirection = FlexDirection.Row;
+            buttons.style.marginTop = 8;
+            for (int i = 0; i < pending.Event.Choices.Count; i++)
+            {
+                int index = i;
+                var choice = new Button(() => ResolveDrama(index)) { text = ChoiceLabel(pending.Event.Choices[i].LabelKey) };
+                choice.style.flexGrow = 1;
+                choice.style.height = 26;
+                if (i > 0)
+                {
+                    choice.style.marginLeft = 6;
+                }
+
+                choice.style.backgroundColor = HarnessPalette.Accent;
+                choice.style.color = HarnessPalette.Pitch;
+                choice.style.unityFontStyleAndWeight = FontStyle.Bold;
+                SetRadius(choice, 4);
+                buttons.Add(choice);
+            }
+
+            card.Add(buttons);
+            return card;
+        }
+
+        // ----- Render --------------------------------------------------------------------------------------
 
         private void Refresh()
         {
             _body.Clear();
-            if (_season == null)
+            if (_session == null)
             {
                 return;
             }
-
-            string managedName = _league.Clubs[_managedClub.Value].Name;
 
             VisualElement header = MakeCard();
             var top = new VisualElement();
             top.style.flexDirection = FlexDirection.Row;
             top.style.justifyContent = Justify.SpaceBetween;
-            top.Add(MakeLabel("YOU MANAGE  " + managedName.ToUpperInvariant(), 13, HarnessPalette.Accent, bold: true));
-            top.Add(MakeLabel("Season " + _seasonNumber + "  ·  Week " + _season.CurrentRound + " / " + _season.RoundCount, 12, HarnessPalette.Muted));
+            top.Add(MakeLabel("YOU MANAGE  " + _session.ManagedClubName.ToUpperInvariant(), 13, HarnessPalette.Accent, bold: true));
+            top.Add(MakeLabel(
+                "Season " + _session.SeasonNumber + "  ·  Week " + _session.PlayedRounds + " / " + _session.RoundCount,
+                12, HarnessPalette.Muted));
             header.Add(top);
+
+            BoardTarget target = _session.BoardTarget;
             header.Add(MakeLabel(
-                "Board target: finish top " + _target.PromotionPosition + " to go up, stay above " +
-                _target.SurvivalPosition + " to keep your job.", 11, HarnessPalette.Muted));
+                "Board target: finish top " + target.PromotionPosition + " to go up, stay above " +
+                target.SurvivalPosition + " to keep your job.", 11, HarnessPalette.Muted));
+
+            // Replayed from the last week's outcome, not re-derived from the live table.
+            if (_lastWeek != null)
+            {
+                header.Add(MakeLabel(
+                    "Position " + _lastWeek.TablePosition + "  ·  " + FormOf(_lastWeek.LossStreak) +
+                    "  ·  wages " + FormatValue(_lastWeek.WagesPaid) + " paid last week",
+                    10, _lastWeek.LossStreak >= 3 ? HarnessPalette.Loss : HarnessPalette.Muted));
+            }
+
+            Finances finances = _session.Finances;
+            var moneyRow = new VisualElement();
+            moneyRow.style.flexDirection = FlexDirection.Row;
+            moneyRow.style.justifyContent = Justify.SpaceBetween;
+            moneyRow.style.marginTop = 8;
+            Color cashColor = finances.Cash < 0 ? HarnessPalette.Loss : HarnessPalette.Accent;
+            moneyRow.Add(MakeLabel("CASH  " + FormatValue(finances.Cash), 15, cashColor, bold: true));
+            Color wageColor = finances.WageHeadroom < 0 ? HarnessPalette.Loss : HarnessPalette.Muted;
+            moneyRow.Add(MakeLabel(
+                "Wages " + FormatValue(finances.WeeklyWageBill) + " / " + FormatValue(finances.WeeklyWageBudget) +
+                "/wk  ·  " + FormatValue(finances.WageHeadroom) + "/wk free", 11, wageColor));
+            header.Add(moneyRow);
 
             var saveRow = new VisualElement();
             saveRow.style.flexDirection = FlexDirection.Row;
@@ -584,13 +550,19 @@ namespace Gaffer.Editor.SeasonPlayer
 
             _body.Add(header);
 
-            if (!_season.IsComplete)
+            PendingDrama pending = _session.PendingDrama;
+            if (pending != null)
+            {
+                // A raised event blocks the week until answered — drama is a decision, not a notification.
+                _body.Add(BuildDramaCard(pending));
+            }
+            else if (!_session.IsSeasonComplete)
             {
                 var controls = new VisualElement();
                 controls.style.flexDirection = FlexDirection.Row;
                 controls.style.marginTop = 8;
 
-                var advance = new Button(AdvanceOneWeek) { text = "Advance Week" };
+                var advance = new Button(AdvanceOneWeek) { text = "Advance Week  ·  pay wages" };
                 advance.style.backgroundColor = HarnessPalette.Accent;
                 advance.style.color = HarnessPalette.Pitch;
                 advance.style.unityFontStyleAndWeight = FontStyle.Bold;
@@ -621,7 +593,14 @@ namespace Gaffer.Editor.SeasonPlayer
                 _body.Add(next);
             }
 
-            if (_retired != null && (_retired.Count > 0 || _arrived.Count > 0))
+            if (!string.IsNullOrEmpty(_dramaStatus) && pending == null)
+            {
+                Label dramaNote = MakeLabel(_dramaStatus, 10, HarnessPalette.Draw);
+                dramaNote.style.marginTop = 4;
+                _body.Add(dramaNote);
+            }
+
+            if (_summer != null && (_summer.Retired.Count > 0 || _summer.Arrived.Count > 0))
             {
                 _body.Add(BuildSummerCard());
             }
@@ -637,30 +616,40 @@ namespace Gaffer.Editor.SeasonPlayer
             }
         }
 
+        private static string FormOf(int lossStreak)
+        {
+            if (lossStreak == 0)
+            {
+                return "no losing run";
+            }
+
+            return lossStreak == 1 ? "1 defeat on the bounce" : lossStreak + " defeats on the bounce";
+        }
+
         // The summer's comings and goings for your club — who retired, who came through the academy.
         private VisualElement BuildSummerCard()
         {
             VisualElement card = MakeCard();
-            card.Add(MakeLabel("SUMMER " + _seasonNumber, 11, HarnessPalette.Muted, bold: true));
+            card.Add(MakeLabel("SUMMER " + _summer.SeasonNumber, 11, HarnessPalette.Muted, bold: true));
 
-            if (_retired.Count > 0)
+            if (_summer.Retired.Count > 0)
             {
-                var outLine = new List<string>();
-                foreach (Player p in _retired)
+                var outLine = new List<string>(_summer.Retired.Count);
+                foreach (Player p in _summer.Retired)
                 {
-                    outLine.Add(p.Name + " (" + PlayerRoles.Abbrev(p.Role) + " " + p.Age + ")");
+                    outLine.Add(p.Name + " (" + HarnessLabels.RoleLabel(p.Role) + " " + p.Age + ")");
                 }
 
                 card.Add(MakeLabel("Retired:  " + string.Join(",   ", outLine), 11, HarnessPalette.Loss));
             }
 
-            if (_arrived.Count > 0)
+            if (_summer.Arrived.Count > 0)
             {
-                var inLine = new List<string>();
-                foreach (Player p in _arrived)
+                var inLine = new List<string>(_summer.Arrived.Count);
+                foreach (Player p in _summer.Arrived)
                 {
                     int ovr = Mathf.RoundToInt((float)PlayerRatings.ForRole(p));
-                    inLine.Add(p.Name + " (" + PlayerRoles.Abbrev(p.Role) + " " + p.Age + ", OVR " + ovr + ")");
+                    inLine.Add(p.Name + " (" + HarnessLabels.RoleLabel(p.Role) + " " + p.Age + ", OVR " + ovr + ")");
                 }
 
                 card.Add(MakeLabel("Youth in:  " + string.Join(",   ", inLine), 11, HarnessPalette.Accent));
@@ -674,11 +663,10 @@ namespace Gaffer.Editor.SeasonPlayer
             VisualElement card = MakeCard();
             card.Add(MakeLabel("LINEUP", 11, HarnessPalette.Muted, bold: true));
 
-            int starting = CurrentStarters().Count;
-            bool full = starting == _formation.Total;
             card.Add(MakeLabel(
-                "Starting XI: " + starting + "/" + _formation.Total + "   ·   drag players on the pitch, or up from the bench",
-                10, full ? HarnessPalette.Muted : HarnessPalette.Loss));
+                "Starting XI: " + _lineup.Starters.Count + "/" + _lineup.Formation.Total +
+                "   ·   drag players on the pitch, or up from the bench",
+                10, _lineup.IsComplete ? HarnessPalette.Muted : HarnessPalette.Loss));
 
             if (!string.IsNullOrEmpty(_lineupStatus))
             {
@@ -701,12 +689,25 @@ namespace Gaffer.Editor.SeasonPlayer
             return card;
         }
 
+        private void ChangeFormation(string formationName)
+        {
+            IReadOnlyList<Formation> presets = Formation.Presets;
+            for (int i = 0; i < presets.Count; i++)
+            {
+                if (presets[i].Name == formationName)
+                {
+                    Apply(_session.SetFormation(presets[i]));
+                    return;
+                }
+            }
+        }
+
         private int IndexOfFormation()
         {
             IReadOnlyList<Formation> presets = Formation.Presets;
             for (int i = 0; i < presets.Count; i++)
             {
-                if (presets[i].Name == _formation.Name)
+                if (presets[i].Name == _lineup.Formation.Name)
                 {
                     return i;
                 }
@@ -740,12 +741,13 @@ namespace Gaffer.Editor.SeasonPlayer
             pitch.Add(halfway);
 
             _slotTokens.Clear();
-            Vector2[] positions = SlotPositions();
-            for (int i = 0; i < _formation.Total; i++)
+            Formation shape = _lineup.Formation;
+            IReadOnlyList<Player> slots = _lineup.Slots;
+            Vector2[] positions = SlotPositions(shape);
+            for (int i = 0; i < shape.Total; i++)
             {
-                Player player = _lineup != null && i < _lineup.Length ? _lineup[i] : null;
-                PlayerRole role = _formation.Slots[i];
-                VisualElement token = MakePitchToken(player, role, i, positions[i]);
+                Player player = i < slots.Count ? slots[i] : null;
+                VisualElement token = MakePitchToken(player, shape.Slots[i], i, positions[i]);
                 _slotTokens.Add(token);
                 pitch.Add(token);
             }
@@ -770,7 +772,7 @@ namespace Gaffer.Editor.SeasonPlayer
             token.style.backgroundColor = empty ? new Color(0, 0, 0, 0) : HarnessPalette.PitchRaised;
             SetBorder(token, empty ? HarnessPalette.PitchLine : HarnessPalette.Accent, empty ? 1 : 2);
 
-            token.Add(MakeLabel(PlayerRoles.Abbrev(slotRole), 9, HarnessPalette.Muted, bold: true));
+            token.Add(MakeLabel(HarnessLabels.RoleLabel(slotRole), 9, HarnessPalette.Muted, bold: true));
             if (!empty)
             {
                 var name = MakeLabel(Surname(player.Name), 10, HarnessPalette.Chalk, bold: true);
@@ -793,7 +795,7 @@ namespace Gaffer.Editor.SeasonPlayer
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
             row.style.flexWrap = Wrap.Wrap;
-            foreach (Player player in BenchPlayers())
+            foreach (Player player in _lineup.Bench)
             {
                 var chip = new VisualElement();
                 chip.style.flexDirection = FlexDirection.Row;
@@ -806,7 +808,7 @@ namespace Gaffer.Editor.SeasonPlayer
                 chip.style.backgroundColor = HarnessPalette.PitchRaised;
                 SetBorder(chip, HarnessPalette.PitchLine, 1);
                 SetRadius(chip, 6);
-                chip.Add(MakeLabel(PlayerRoles.Abbrev(player.Role) + " " + Surname(player.Name), 10, HarnessPalette.Muted));
+                chip.Add(MakeLabel(HarnessLabels.RoleLabel(player.Role) + " " + Surname(player.Name), 10, HarnessPalette.Muted));
                 chip.Add(MakeLabel("  " + Mathf.RoundToInt((float)PlayerRatings.ForRole(player)), 10, HarnessPalette.Accent, bold: true));
 
                 RegisterDrag(chip, -1, player.Id.Value);
@@ -819,12 +821,14 @@ namespace Gaffer.Editor.SeasonPlayer
 
         // Pointer-capture drag: pick up a token (from a slot or the bench), let it follow the cursor, and on
         // release drop it onto whichever pitch slot is under the pointer — or off the pitch to bench a starter.
+        // The callbacks live exactly as long as the token they sit on: every one of these elements is discarded
+        // by the next Refresh's _body.Clear(), which is the removal UNITY.md §5 asks for.
         private void RegisterDrag(VisualElement token, int slot, int playerId)
         {
             token.RegisterCallback<PointerDownEvent>(evt =>
             {
                 _dragFromSlot = slot;
-                _dragFromBenchId = slot >= 0 ? -1 : playerId;
+                _dragPlayerId = playerId;
                 token.CapturePointer(evt.pointerId);
                 BeginGhost(playerId, evt.position);
                 evt.StopPropagation();
@@ -875,7 +879,7 @@ namespace Gaffer.Editor.SeasonPlayer
             _dragGhost.style.backgroundColor = HarnessPalette.PitchRaised;
             SetBorder(_dragGhost, HarnessPalette.Accent, 2);
             SetRadius(_dragGhost, 8);
-            _dragGhost.Add(MakeLabel(PlayerRoles.Abbrev(player.Role), 9, HarnessPalette.Muted, bold: true));
+            _dragGhost.Add(MakeLabel(HarnessLabels.RoleLabel(player.Role), 9, HarnessPalette.Muted, bold: true));
             _dragGhost.Add(MakeLabel(Surname(player.Name), 10, HarnessPalette.Chalk, bold: true));
 
             rootVisualElement.Add(_dragGhost);
@@ -903,9 +907,10 @@ namespace Gaffer.Editor.SeasonPlayer
             }
         }
 
+        // Dropping is two commands and nothing else: onto a slot is PlaceInSlot (the session decides whether
+        // that is a swap or a promotion off the bench), off the pitch is ClearSlot.
         private void HandleDrop(Vector2 position)
         {
-            _lineupStatus = null;
             int dropSlot = -1;
             for (int i = 0; i < _slotTokens.Count; i++)
             {
@@ -922,45 +927,35 @@ namespace Gaffer.Editor.SeasonPlayer
                 }
             }
 
-            Player dragged = _dragFromSlot >= 0
-                ? (_dragFromSlot < _lineup.Length ? _lineup[_dragFromSlot] : null)
-                : FindInSquad(_dragFromBenchId);
+            int fromSlot = _dragFromSlot;
+            int playerId = _dragPlayerId;
+            _dragFromSlot = -1;
+            _dragPlayerId = -1;
 
-            if (dropSlot < 0)
+            if (dropSlot >= 0 && playerId >= 0)
             {
-                // Dropped off the slots: bench the player if he was on the pitch.
-                if (_dragFromSlot >= 0)
-                {
-                    _lineup[_dragFromSlot] = null;
-                    CommitLineup();
-                }
-                else
-                {
-                    Refresh();
-                }
+                Apply(_session.PlaceInSlot(dropSlot, new PlayerId(playerId)));
             }
-            else if (dragged != null)
+            else if (dropSlot < 0 && fromSlot >= 0)
             {
-                PlaceInSlot(dropSlot, dragged);
+                Apply(_session.ClearSlot(fromSlot));
             }
             else
             {
+                _lineupStatus = null;
                 Refresh();
             }
-
-            _dragFromSlot = -1;
-            _dragFromBenchId = -1;
         }
 
         // A believable pitch layout: each slot gets a vertical band from its role and an even horizontal
         // spread within that band, with wide roles pushed to the touchlines.
-        private Vector2[] SlotPositions()
+        private static Vector2[] SlotPositions(Formation shape)
         {
             var bands = new Dictionary<float, List<int>>();
-            var y = new float[_formation.Total];
-            for (int i = 0; i < _formation.Total; i++)
+            var y = new float[shape.Total];
+            for (int i = 0; i < shape.Total; i++)
             {
-                y[i] = BandY(_formation.Slots[i]);
+                y[i] = BandY(shape.Slots[i]);
                 if (!bands.TryGetValue(y[i], out List<int> members))
                 {
                     members = new List<int>();
@@ -970,13 +965,13 @@ namespace Gaffer.Editor.SeasonPlayer
                 members.Add(i);
             }
 
-            var positions = new Vector2[_formation.Total];
+            var positions = new Vector2[shape.Total];
             foreach (KeyValuePair<float, List<int>> band in bands)
             {
                 List<int> members = band.Value;
                 members.Sort((a, b) =>
                 {
-                    int byWidth = HorizontalKey(_formation.Slots[a]).CompareTo(HorizontalKey(_formation.Slots[b]));
+                    int byWidth = HorizontalKey(shape.Slots[a]).CompareTo(HorizontalKey(shape.Slots[b]));
                     return byWidth != 0 ? byWidth : a.CompareTo(b);
                 });
 
@@ -1042,29 +1037,32 @@ namespace Gaffer.Editor.SeasonPlayer
             card.Add(MakeLabel("TACTICS", 11, HarnessPalette.Muted, bold: true));
             card.Add(MakeLabel("Applies to your club from next week.", 10, HarnessPalette.Muted));
 
-            var mentality = new EnumField("Mentality", _tactics.Mentality);
+            Tactics current = _lineup.Tactics;
+
+            var mentality = new EnumField("Mentality", current.Mentality);
             mentality.RegisterValueChangedCallback(e =>
-                ChangeTactics(new Tactics((Mentality)e.newValue, _tactics.Tempo, _tactics.Pressing, _tactics.Approach)));
+                ChangeTactics(new Tactics((Mentality)e.newValue, current.Tempo, current.Pressing, current.Approach)));
             card.Add(mentality);
 
-            var tempo = new EnumField("Tempo", _tactics.Tempo);
+            var tempo = new EnumField("Tempo", current.Tempo);
             tempo.RegisterValueChangedCallback(e =>
-                ChangeTactics(new Tactics(_tactics.Mentality, (Tempo)e.newValue, _tactics.Pressing, _tactics.Approach)));
+                ChangeTactics(new Tactics(current.Mentality, (Tempo)e.newValue, current.Pressing, current.Approach)));
             card.Add(tempo);
 
-            var pressing = new EnumField("Pressing", _tactics.Pressing);
+            var pressing = new EnumField("Pressing", current.Pressing);
             pressing.RegisterValueChangedCallback(e =>
-                ChangeTactics(new Tactics(_tactics.Mentality, _tactics.Tempo, (Pressing)e.newValue, _tactics.Approach)));
+                ChangeTactics(new Tactics(current.Mentality, current.Tempo, (Pressing)e.newValue, current.Approach)));
             card.Add(pressing);
 
-            var approach = new EnumField("Approach", _tactics.Approach);
+            var approach = new EnumField("Approach", current.Approach);
             approach.RegisterValueChangedCallback(e =>
-                ChangeTactics(new Tactics(_tactics.Mentality, _tactics.Tempo, _tactics.Pressing, (Approach)e.newValue)));
+                ChangeTactics(new Tactics(current.Mentality, current.Tempo, current.Pressing, (Approach)e.newValue)));
             card.Add(approach);
 
             // Mentality and pressing move the strength axes above; tempo and approach shape the chances.
-            // Shown as a delta from a balanced setup so the trade-off reads at a glance.
-            ChanceProfile profile = ChanceProfile.FromTactics(_tactics);
+            // Shown as a delta from a balanced setup so the trade-off reads at a glance — and taken off the
+            // outcome, so it is the profile the run's own tactics balance produces, not the untuned default.
+            ChanceProfile profile = _lineup.ChanceProfile;
             int volume = Mathf.RoundToInt((float)(profile.Volume * 100f)) - 100;
             int quality = Mathf.RoundToInt((float)(profile.Quality * 100f)) - 100;
             card.Add(MakeLabel(
@@ -1089,29 +1087,24 @@ namespace Gaffer.Editor.SeasonPlayer
 
         private void ChangeTactics(Tactics tactics)
         {
-            _tactics = tactics;
-            if (_season != null)
-            {
-                _season.SetTactics(_managedClub, _tactics);
-            }
-
-            Refresh();
+            Apply(_session.SetTactics(tactics));
         }
 
         private VisualElement BuildSquadCard()
         {
-            Club club = _league.Clubs[_managedClub.Value];
+            // The live roster off the session, not the generation-time league: a squad that drama or a
+            // rollover has changed is reflected here at once. Reading _league.Clubs[i].Squad showed the
+            // roster the world was generated with, however many seasons ago that was.
+            Squad squad = _session.Squad;
             VisualElement card = MakeCard();
-            int starting = CurrentStarters().Count;
             card.Add(MakeLabel(
-                "YOUR SQUAD · " + club.Name.ToUpperInvariant() + "  ·  " + starting + "/" + _formation.Total + " STARTING",
+                "YOUR SQUAD · " + _session.ManagedClubName.ToUpperInvariant() + "  ·  " +
+                _lineup.Starters.Count + "/" + _lineup.Formation.Total + " STARTING",
                 11, HarnessPalette.Muted, bold: true));
 
             // The managed club's axes reflect the chosen eleven and live tactics — the same derivation the
-            // season runs each week, so what you see is what takes the field.
-            TeamStrength strength = club.Squad != null
-                ? new EffectiveStrengthBuilder().Build(CurrentStarters(), _tactics)
-                : club.Strength;
+            // season runs each week, through the run's own trait catalog, so what you see takes the field.
+            TeamStrength strength = _lineup.Strength;
             var axes = new VisualElement();
             axes.style.flexDirection = FlexDirection.Row;
             axes.style.marginTop = 6;
@@ -1121,12 +1114,12 @@ namespace Gaffer.Editor.SeasonPlayer
             axes.Add(MakeAxisPill("DEF", strength.Defence));
             card.Add(axes);
 
-            if (club.Squad != null)
+            if (squad != null)
             {
-                AppendSquadLine(card, "GOALKEEPERS", club.Squad, Position.Goalkeeper);
-                AppendSquadLine(card, "DEFENDERS", club.Squad, Position.Defender);
-                AppendSquadLine(card, "MIDFIELDERS", club.Squad, Position.Midfielder);
-                AppendSquadLine(card, "FORWARDS", club.Squad, Position.Forward);
+                AppendSquadLine(card, "GOALKEEPERS", squad, Position.Goalkeeper);
+                AppendSquadLine(card, "DEFENDERS", squad, Position.Defender);
+                AppendSquadLine(card, "MIDFIELDERS", squad, Position.Midfielder);
+                AppendSquadLine(card, "FORWARDS", squad, Position.Forward);
             }
 
             return card;
@@ -1164,8 +1157,8 @@ namespace Gaffer.Editor.SeasonPlayer
                 row.style.paddingTop = 2;
                 row.style.paddingBottom = 2;
 
-                int playerId = player.Id.Value;
-                var toggle = new Button(() => ToggleStarter(playerId)) { text = starting ? "★" : "·" };
+                var playerId = new PlayerId(player.Id.Value);
+                var toggle = new Button(() => Apply(_session.ToggleStarter(playerId))) { text = starting ? "★" : "·" };
                 toggle.style.width = 22;
                 toggle.style.height = 18;
                 toggle.style.marginRight = 6;
@@ -1177,7 +1170,7 @@ namespace Gaffer.Editor.SeasonPlayer
                 SetRadius(toggle, 4);
                 row.Add(toggle);
 
-                var left = MakeLabel(player.Name + "  ·  " + PlayerRoles.Abbrev(player.Role) + "  ·  " + player.Age, 11,
+                var left = MakeLabel(player.Name + "  ·  " + HarnessLabels.RoleLabel(player.Role) + "  ·  " + player.Age, 11,
                     starting ? HarnessPalette.Chalk : HarnessPalette.Muted);
                 left.style.flexGrow = 1;
                 row.Add(left);
@@ -1193,6 +1186,45 @@ namespace Gaffer.Editor.SeasonPlayer
             }
         }
 
+        private bool IsStarting(int playerId)
+        {
+            IReadOnlyList<Player> slots = _lineup != null ? _lineup.Slots : null;
+            if (slots == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < slots.Count; i++)
+            {
+                if (slots[i] != null && slots[i].Id.Value == playerId)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private Player FindInSquad(int playerId)
+        {
+            Squad squad = _session != null ? _session.Squad : null;
+            if (squad == null)
+            {
+                return null;
+            }
+
+            IReadOnlyList<Player> players = squad.Players;
+            for (int i = 0; i < players.Count; i++)
+            {
+                if (players[i].Id.Value == playerId)
+                {
+                    return players[i];
+                }
+            }
+
+            return null;
+        }
+
         // Shows the role's key attributes (RoleKeyAttributes), each coloured by value on the single accent
         // ramp from ART_STYLE §4.1 — the eye goes to the strong numbers without a second bright colour.
         private static VisualElement BuildKeyStats(Player player)
@@ -1203,7 +1235,7 @@ namespace Gaffer.Editor.SeasonPlayer
             foreach (AttributeKey key in RoleKeyAttributes.For(player.Role))
             {
                 byte value = key.Read(player.Attributes);
-                Label chip = MakeLabel(key.Label + " " + value, 10, AttributeColor(value), value >= 85);
+                Label chip = MakeLabel(HarnessLabels.AttributeLabel(key) + " " + value, 10, AttributeColor(value), value >= 85);
                 chip.style.marginLeft = 10;
                 wrap.Add(chip);
             }
@@ -1241,18 +1273,17 @@ namespace Gaffer.Editor.SeasonPlayer
             VisualElement card = MakeCard();
             card.Add(MakeLabel("LAST WEEK · ROUND " + (_lastWeek.Round + 1), 11, HarnessPalette.Muted, bold: true));
 
+            ClubId managed = _session.ManagedClub;
             foreach (MatchResult match in _lastWeek.Matches)
             {
-                bool involvesManaged = match.Home == _managedClub || match.Away == _managedClub;
+                bool involvesManaged = match.Home == managed || match.Away == managed;
                 Color scoreColor = involvesManaged ? HarnessPalette.Accent : HarnessPalette.Chalk;
 
                 var block = new VisualElement();
                 block.style.marginTop = 6;
 
-                string homeName = _league.Clubs[match.Home.Value].Name;
-                string awayName = _league.Clubs[match.Away.Value].Name;
                 block.Add(MakeLabel(
-                    homeName + "  " + match.HomeGoals + " - " + match.AwayGoals + "  " + awayName,
+                    _session.ClubName(match.Home) + "  " + match.HomeGoals + " - " + match.AwayGoals + "  " + _session.ClubName(match.Away),
                     12, scoreColor, involvesManaged));
 
                 if (match.HomeShots + match.AwayShots > 0)
@@ -1302,12 +1333,12 @@ namespace Gaffer.Editor.SeasonPlayer
             var parts = new List<string>();
             if (home.Count > 0)
             {
-                parts.Add(_league.Clubs[match.Home.Value].Name + "  " + string.Join(", ", home));
+                parts.Add(_session.ClubName(match.Home) + "  " + string.Join(", ", home));
             }
 
             if (away.Count > 0)
             {
-                parts.Add(_league.Clubs[match.Away.Value].Name + "  " + string.Join(", ", away));
+                parts.Add(_session.ClubName(match.Away) + "  " + string.Join(", ", away));
             }
 
             return string.Join("      ", parts);
@@ -1326,56 +1357,30 @@ namespace Gaffer.Editor.SeasonPlayer
                 return string.Empty;
             }
 
-            Squad squad = _league.Clubs[club.Value].Squad;
-            if (squad == null)
-            {
-                return string.Empty;
-            }
-
-            foreach (Player player in squad.Players)
-            {
-                if (player.Id == scorer.Value)
-                {
-                    int space = player.Name.LastIndexOf(' ');
-                    return space >= 0 ? player.Name.Substring(space + 1) : player.Name;
-                }
-            }
-
-            return string.Empty;
+            string name = _session.PlayerName(club, scorer.Value);
+            return name.Length > 0 ? Surname(name) : string.Empty;
         }
 
         private VisualElement BuildVerdictBanner()
         {
-            Color color = _verdict == SeasonVerdict.Promoted ? HarnessPalette.Win
-                : _verdict == SeasonVerdict.Sacked ? HarnessPalette.Loss : HarnessPalette.Chalk;
-            string headline = _verdict == SeasonVerdict.Promoted ? "PROMOTED"
-                : _verdict == SeasonVerdict.Sacked ? "SACKED" : "RETAINED";
+            SeasonVerdict? verdict = _session.Verdict;
+            Color color = verdict == SeasonVerdict.Promoted ? HarnessPalette.Win
+                : verdict == SeasonVerdict.Sacked ? HarnessPalette.Loss : HarnessPalette.Chalk;
+            string headline = verdict == SeasonVerdict.Promoted ? "PROMOTED"
+                : verdict == SeasonVerdict.Sacked ? "SACKED" : "RETAINED";
 
             VisualElement banner = MakeCard();
             banner.style.borderLeftWidth = 4;
             banner.style.borderLeftColor = color;
             banner.style.marginTop = 8;
 
-            int position = FindManagedPosition();
+            // The final standing is on the week that ended the season. A season already finished when the
+            // window met it (a save loaded at full time) has no such outcome, so it falls back to the
+            // session's own render-time query.
+            int position = _lastWeek != null && _lastWeek.FinalPosition > 0 ? _lastWeek.FinalPosition : _session.TablePosition;
             banner.Add(MakeLabel(headline, 24, color, bold: true));
-            banner.Add(MakeLabel(
-                _league.Clubs[_managedClub.Value].Name + " finished " + Ordinal(position) + ".",
-                12, HarnessPalette.Muted));
+            banner.Add(MakeLabel(_session.ManagedClubName + " finished " + Ordinal(position) + ".", 12, HarnessPalette.Muted));
             return banner;
-        }
-
-        private int FindManagedPosition()
-        {
-            IReadOnlyList<LeagueTableRow> ordered = _season.Table.Ordered();
-            for (int i = 0; i < ordered.Count; i++)
-            {
-                if (ordered[i].Club == _managedClub)
-                {
-                    return i + 1;
-                }
-            }
-
-            return ordered.Count;
         }
 
         private VisualElement BuildTableCard()
@@ -1386,21 +1391,23 @@ namespace Gaffer.Editor.SeasonPlayer
             string[] heads = { "#", "Club", "P", "W", "D", "L", "GF", "GA", "GD", "Pts" };
             card.Add(MakeRow(heads, HarnessPalette.Muted, bold: true, background: new Color(0, 0, 0, 0)));
 
-            IReadOnlyList<LeagueTableRow> table = _season.Table.Ordered();
+            ClubId managed = _session.ManagedClub;
+            BoardTarget target = _session.BoardTarget;
+            IReadOnlyList<LeagueTableRow> table = _session.Standings();
             for (int i = 0; i < table.Count; i++)
             {
                 LeagueTableRow row = table[i];
                 int position = i + 1;
-                bool isManaged = row.Club == _managedClub;
+                bool isManaged = row.Club == managed;
 
                 Color background = isManaged ? Tint(HarnessPalette.Accent, 0.16f)
-                    : position <= _target.PromotionPosition ? Tint(HarnessPalette.Win, 0.07f)
-                    : position > _target.SurvivalPosition ? Tint(HarnessPalette.Loss, 0.07f)
+                    : position <= target.PromotionPosition ? Tint(HarnessPalette.Win, 0.07f)
+                    : position > target.SurvivalPosition ? Tint(HarnessPalette.Loss, 0.07f)
                     : new Color(0, 0, 0, 0);
 
                 string[] cells =
                 {
-                    position.ToString(), _league.Clubs[row.Club.Value].Name, row.Played.ToString(),
+                    position.ToString(), _session.ClubName(row.Club), row.Played.ToString(),
                     row.Won.ToString(), row.Drawn.ToString(), row.Lost.ToString(), row.GoalsFor.ToString(),
                     row.GoalsAgainst.ToString(), Signed(row.GoalDifference), row.Points.ToString(),
                 };
@@ -1454,6 +1461,26 @@ namespace Gaffer.Editor.SeasonPlayer
             }
 
             return row;
+        }
+
+        private static string FormatValue(long value)
+        {
+            if (value < 0)
+            {
+                return "-" + FormatValue(-value);
+            }
+
+            if (value >= 1_000_000)
+            {
+                return "€" + (value / 1_000_000.0).ToString("0.0") + "M";
+            }
+
+            if (value >= 1_000)
+            {
+                return "€" + (value / 1_000) + "k";
+            }
+
+            return "€" + value;
         }
 
         private static Label MakeLabel(string text, int size, Color color, bool bold = false)

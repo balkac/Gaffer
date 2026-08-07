@@ -25,6 +25,11 @@ namespace Gaffer.Application.Generation
         private readonly PlayerNameGenerator _names = new PlayerNameGenerator();
         private readonly TraitCatalog _traits;
 
+        // The pool's total assignment weight, summed once. The catalog is immutable, so this is a
+        // constant that the weighted draw was re-deriving on every single generated player — twice, for
+        // a player who draws two traits (PERFORMANCE §6).
+        private readonly double _totalTraitWeight;
+
         public PlayerGenerator()
             : this(TraitCatalog.Default)
         {
@@ -33,6 +38,15 @@ namespace Gaffer.Application.Generation
         public PlayerGenerator(TraitCatalog traits)
         {
             _traits = traits;
+
+            IReadOnlyList<Trait> pool = traits?.Traits;
+            double total = 0.0;
+            for (int i = 0; pool != null && i < pool.Count; i++)
+            {
+                total += pool[i].AssignmentWeight;
+            }
+
+            _totalTraitWeight = total;
         }
 
         public Player Generate(PlayerId id, GenerationContext context, IRandom rng)
@@ -89,13 +103,13 @@ namespace Gaffer.Application.Generation
                 return Array.Empty<TraitId>();
             }
 
-            Trait first = PickWeighted(pool, firstPick);
+            Trait first = PickWeighted(pool, firstPick, _totalTraitWeight);
             if (hasSecond >= context.SecondTraitChance)
             {
                 return new[] { first.Id };
             }
 
-            Trait second = PickWeighted(pool, secondPick);
+            Trait second = PickWeighted(pool, secondPick, _totalTraitWeight);
             if (second == first)
             {
                 // Step to the next definition instead of redrawing, so the draw count stays fixed; with a
@@ -111,22 +125,21 @@ namespace Gaffer.Application.Generation
             return new[] { first.Id, second.Id };
         }
 
-        private static Trait PickWeighted(IReadOnlyList<Trait> pool, double roll)
+        // Indexed, not foreach: the pool is reached through IReadOnlyList<Trait>, whose enumerator is
+        // boxed on every loop — §8's named trap, and ~400 boxed enumerators per generated league here.
+        // Indexer access through the interface is free, which is what IndexOf below already does.
+        // The total is the caller's cached constant; the running sum is accumulated in the same order
+        // from the same 0.0, so every comparison the draw makes is bit-identical to the old two-pass form.
+        private static Trait PickWeighted(IReadOnlyList<Trait> pool, double roll, double total)
         {
-            double total = 0.0;
-            foreach (Trait trait in pool)
-            {
-                total += trait.AssignmentWeight;
-            }
-
             double target = roll * total;
             double cumulative = 0.0;
-            foreach (Trait trait in pool)
+            for (int i = 0; i < pool.Count; i++)
             {
-                cumulative += trait.AssignmentWeight;
+                cumulative += pool[i].AssignmentWeight;
                 if (target < cumulative)
                 {
-                    return trait;
+                    return pool[i];
                 }
             }
 

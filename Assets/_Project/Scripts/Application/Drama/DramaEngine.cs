@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Gaffer.Application.Simulation;
 using Gaffer.Application.Transfers;
@@ -115,11 +116,14 @@ namespace Gaffer.Application.Drama
         }
 
         /// <summary>
-        /// Applies the chosen answer: morale effects land on the given ledger now; cash and any
-        /// forced sale come back in the outcome for their owners. <paramref name="currentCash"/>
-        /// feeds fraction-of-cash effects (a budget cut scales to the club).
+        /// Reads the chosen answer and returns everything it does as data — morale entries, cash, a
+        /// forced sale, a granted trait — applying none of it. Nothing here mutates a ledger, a squad or
+        /// a purse, so a caller can still refuse the whole resolution after seeing it (ARCHITECTURE §8);
+        /// <see cref="Gaffer.Application.Run.RunSession.ResolveDrama"/> is the single owner that applies
+        /// it in order (§8a). <paramref name="currentCash"/> feeds fraction-of-cash effects (a budget cut
+        /// scales to the club).
         /// </summary>
-        public Result<DramaOutcome> Resolve(PendingDrama pending, int choiceIndex, MoraleLedger morale, long currentCash = 0)
+        public Result<DramaOutcome> Resolve(PendingDrama pending, int choiceIndex, long currentCash = 0)
         {
             if (pending == null)
             {
@@ -137,18 +141,21 @@ namespace Gaffer.Application.Drama
             Player playerToSell = null;
             Player traitGrantTarget = null;
             TraitId grantedTrait = default;
+            List<MoraleChange> moraleChanges = null;
 
             foreach (DramaEffect effect in choice.Effects)
             {
                 switch (effect.Kind)
                 {
                     case DramaEffectKind.SubjectMorale:
-                        morale.Apply(pending.Subject.Id, effect.Magnitude, effect.DurationWeeks);
+                        moraleChanges = moraleChanges ?? new List<MoraleChange>(4);
+                        moraleChanges.Add(new MoraleChange(pending.Subject.Id, effect.Magnitude, effect.DurationWeeks));
                         break;
                     case DramaEffectKind.TeamMorale:
+                        moraleChanges = moraleChanges ?? new List<MoraleChange>(pending.Context.Squad.Count);
                         foreach (Player player in pending.Context.Squad)
                         {
-                            morale.Apply(player.Id, effect.Magnitude, effect.DurationWeeks);
+                            moraleChanges.Add(new MoraleChange(player.Id, effect.Magnitude, effect.DurationWeeks));
                         }
 
                         break;
@@ -168,11 +175,20 @@ namespace Gaffer.Application.Drama
                         traitGrantTarget = Successor(pending);
                         grantedTrait = traitGrantTarget != null ? effect.Trait : default;
                         break;
+                    default:
+                        // "Every kind changes real state" (DramaEffect) is the rule this switch enforces.
+                        // A kind with no arm here is a silent no-op — a broken invariant, not the kind of
+                        // expected failure a Result carries (CONVENTIONS §1/§4).
+                        throw new ArgumentOutOfRangeException(
+                            nameof(pending),
+                            effect.Kind,
+                            $"Drama effect kind '{effect.Kind}' has no handler, so choosing it would change nothing.");
                 }
             }
 
-            return Result<DramaOutcome>.Success(
-                new DramaOutcome(pending.Event.Id, choiceIndex, (long)cashDelta, playerToSell, traitGrantTarget, grantedTrait));
+            return Result<DramaOutcome>.Success(new DramaOutcome(
+                pending.Event.Id, choiceIndex, (long)cashDelta, playerToSell,
+                (IReadOnlyList<MoraleChange>)moraleChanges, traitGrantTarget, grantedTrait));
         }
 
         // The heir apparent when a captain anoints a successor: the strongest under-24 teammate, or —

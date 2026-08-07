@@ -23,7 +23,7 @@ namespace Gaffer.Application.Serialization
         {
             var data = new SeasonSaveData
             {
-                SchemaVersion = SaveSchema.CurrentVersion,
+                SchemaVersion = SeasonSaveData.CurrentVersion,
                 LeagueName = league.Name,
                 SeasonNumber = seasonNumber,
                 PlayedRounds = season.CurrentRound,
@@ -92,7 +92,11 @@ namespace Gaffer.Application.Serialization
                 results.Add(new MatchResult(new ClubId(result.Home), new ClubId(result.Away), result.HomeGoals, result.AwayGoals, Array.Empty<MatchEvent>()));
             }
 
-            LeagueSeason season = LeagueSeason.Restore(league, data.PlayedRounds, results, traits, tacticsSettings, moraleSettings);
+            // No simulator: the save adapter rebuilds the table and the result history, it does not own the
+            // run's simulator and must not invent one. The returned season is therefore a carrier, not a
+            // playable season — a caller resuming a run rebuilds it on its own simulator from
+            // CurrentRound/PlayedResults (RunSessionFactory.Resume does exactly that).
+            var season = LeagueSeason.Restore(league, data.PlayedRounds, results, traits, tacticsSettings, moraleSettings, null);
             return new RestoredSeason(league, season, data.SeasonNumber);
         }
 
@@ -111,7 +115,7 @@ namespace Gaffer.Application.Serialization
                     Id = player.Id.Value,
                     Name = player.Name,
                     Nationality = player.Nationality,
-                    Role = (int)player.Role,
+                    RoleName = PersistedPlayerRole.ToName(player.Role),
                     Age = player.Age,
                     HiddenPotential = player.HiddenPotential,
                     Attributes = ToData(player.Attributes),
@@ -133,11 +137,31 @@ namespace Gaffer.Application.Serialization
             foreach (PlayerSaveData p in saved)
             {
                 players.Add(new Player(
-                    new PlayerId(p.Id), p.Name, p.Nationality, (PlayerRole)p.Role, p.Age,
+                    new PlayerId(p.Id), p.Name, p.Nationality, ReadRole(p), p.Age,
                     FromData(p.Attributes), (byte)p.HiddenPotential, RestoreTraits(p.Traits)));
             }
 
             return new Squad(players);
+        }
+
+        /// <summary>
+        /// Resolves a persisted role name. Restore's whole job is mapping a document the caller has already
+        /// had accepted, and <see cref="SaveMigrator.Migrate"/> is the gate that turns an unreadable role
+        /// into an expected <c>Result</c> failure on the load path — so by the time a document reaches here
+        /// an unparseable name means a caller skipped the gate, i.e. a bug in this codebase rather than a bad
+        /// file. That is the fail-fast half of CONVENTIONS §4, and it is deliberately not a silent default:
+        /// defaulting would hand the player a squad quietly re-roled to goalkeeper.
+        /// </summary>
+        private static PlayerRole ReadRole(PlayerSaveData player)
+        {
+            if (!PersistedPlayerRole.TryParse(player.RoleName, out PlayerRole role))
+            {
+                throw new InvalidOperationException(
+                    $"Player {player.Id} ('{player.Name}') has the unreadable role '{player.RoleName}'. " +
+                    "Run SaveMigrator.Migrate before Restore — it converts a pre-v5 ordinal and reports a bad role as a Result failure.");
+            }
+
+            return role;
         }
 
         private static List<string> CaptureTraits(Player player)
@@ -178,14 +202,35 @@ namespace Gaffer.Application.Serialization
         {
             return new AttributesSaveData
             {
-                Finishing = a.Finishing, Technique = a.Technique, FirstTouch = a.FirstTouch, Dribbling = a.Dribbling,
-                Passing = a.Passing, Crossing = a.Crossing, Heading = a.Heading, LongShots = a.LongShots,
-                Marking = a.Marking, Tackling = a.Tackling, Penalties = a.Penalties, FreeKicks = a.FreeKicks,
-                Corners = a.Corners, LongThrows = a.LongThrows, Pace = a.Pace, Acceleration = a.Acceleration,
-                Stamina = a.Stamina, Strength = a.Strength, Agility = a.Agility, Jumping = a.Jumping,
-                Balance = a.Balance, Positioning = a.Positioning, Reflexes = a.Reflexes, Handling = a.Handling,
-                AerialReach = a.AerialReach, CommandOfArea = a.CommandOfArea, OneOnOnes = a.OneOnOnes,
-                Kicking = a.Kicking, GkPositioning = a.GkPositioning,
+                Finishing = a.Finishing,
+                Technique = a.Technique,
+                FirstTouch = a.FirstTouch,
+                Dribbling = a.Dribbling,
+                Passing = a.Passing,
+                Crossing = a.Crossing,
+                Heading = a.Heading,
+                LongShots = a.LongShots,
+                Marking = a.Marking,
+                Tackling = a.Tackling,
+                Penalties = a.Penalties,
+                FreeKicks = a.FreeKicks,
+                Corners = a.Corners,
+                LongThrows = a.LongThrows,
+                Pace = a.Pace,
+                Acceleration = a.Acceleration,
+                Stamina = a.Stamina,
+                Strength = a.Strength,
+                Agility = a.Agility,
+                Jumping = a.Jumping,
+                Balance = a.Balance,
+                Positioning = a.Positioning,
+                Reflexes = a.Reflexes,
+                Handling = a.Handling,
+                AerialReach = a.AerialReach,
+                CommandOfArea = a.CommandOfArea,
+                OneOnOnes = a.OneOnOnes,
+                Kicking = a.Kicking,
+                GkPositioning = a.GkPositioning,
             };
         }
 
@@ -193,14 +238,35 @@ namespace Gaffer.Application.Serialization
         {
             return new Attributes
             {
-                Finishing = d.Finishing, Technique = d.Technique, FirstTouch = d.FirstTouch, Dribbling = d.Dribbling,
-                Passing = d.Passing, Crossing = d.Crossing, Heading = d.Heading, LongShots = d.LongShots,
-                Marking = d.Marking, Tackling = d.Tackling, Penalties = d.Penalties, FreeKicks = d.FreeKicks,
-                Corners = d.Corners, LongThrows = d.LongThrows, Pace = d.Pace, Acceleration = d.Acceleration,
-                Stamina = d.Stamina, Strength = d.Strength, Agility = d.Agility, Jumping = d.Jumping,
-                Balance = d.Balance, Positioning = d.Positioning, Reflexes = d.Reflexes, Handling = d.Handling,
-                AerialReach = d.AerialReach, CommandOfArea = d.CommandOfArea, OneOnOnes = d.OneOnOnes,
-                Kicking = d.Kicking, GkPositioning = d.GkPositioning,
+                Finishing = d.Finishing,
+                Technique = d.Technique,
+                FirstTouch = d.FirstTouch,
+                Dribbling = d.Dribbling,
+                Passing = d.Passing,
+                Crossing = d.Crossing,
+                Heading = d.Heading,
+                LongShots = d.LongShots,
+                Marking = d.Marking,
+                Tackling = d.Tackling,
+                Penalties = d.Penalties,
+                FreeKicks = d.FreeKicks,
+                Corners = d.Corners,
+                LongThrows = d.LongThrows,
+                Pace = d.Pace,
+                Acceleration = d.Acceleration,
+                Stamina = d.Stamina,
+                Strength = d.Strength,
+                Agility = d.Agility,
+                Jumping = d.Jumping,
+                Balance = d.Balance,
+                Positioning = d.Positioning,
+                Reflexes = d.Reflexes,
+                Handling = d.Handling,
+                AerialReach = d.AerialReach,
+                CommandOfArea = d.CommandOfArea,
+                OneOnOnes = d.OneOnOnes,
+                Kicking = d.Kicking,
+                GkPositioning = d.GkPositioning,
             };
         }
     }

@@ -13,24 +13,41 @@ namespace Gaffer.Application.Transfers
     /// </summary>
     public sealed class Scout
     {
-        private const int PotentialMaxWidth = 22;
-        private const int AttributeMaxWidth = 12;
+        private readonly ScoutingSettings _settings;
+
+        public Scout()
+            : this(ScoutingSettings.Default)
+        {
+        }
+
+        /// <summary>Scouts on specific mask calibration (from a config asset). Null falls back to the
+        /// calibrated defaults.</summary>
+        public Scout(ScoutingSettings settings)
+        {
+            _settings = settings ?? ScoutingSettings.Default;
+        }
 
         public ScoutReport Observe(Player player, double accuracy)
         {
             double clamped = Clamp01(accuracy);
 
-            int potentialHalf = HalfWidth(PotentialMaxWidth, clamped);
+            int potentialHalf = HalfWidth(_settings.PotentialMaxWidth, clamped);
             Band(player.HiddenPotential, potentialHalf, Salt(player.Id.Value, 0), out int potLow, out int potHigh);
 
             IReadOnlyList<AttributeKey> keys = RoleKeyAttributes.For(player.Role);
             var estimates = new List<AttributeEstimate>(keys.Count);
-            int attributeHalf = HalfWidth(AttributeMaxWidth, clamped);
+            int attributeHalf = HalfWidth(_settings.AttributeMaxWidth, clamped);
             for (int i = 0; i < keys.Count; i++)
             {
                 AttributeKey key = keys[i];
                 Band(key.Read(player.Attributes), attributeHalf, Salt(player.Id.Value, i + 1), out int low, out int high);
-                estimates.Add(new AttributeEstimate(key.Label, low, high));
+
+                // The estimate carries the attribute's localization KEY, not an English abbreviation:
+                // a scout report is Application data that reaches the player, and raw display text in
+                // the core is forbidden (NON-NEGOTIABLE #8). Presentation resolves it against the
+                // string table; the editor dev-tool windows resolve it through their own exempt
+                // label helper (Gaffer.Editor.Harness.HarnessLabels).
+                estimates.Add(new AttributeEstimate(key.LabelKey, low, high));
             }
 
             return new ScoutReport(clamped, potLow, potHigh, estimates);

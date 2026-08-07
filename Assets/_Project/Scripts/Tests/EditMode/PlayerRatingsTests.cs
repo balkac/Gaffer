@@ -12,13 +12,35 @@ namespace Gaffer.Tests
         {
             return new Attributes
             {
-                Finishing = stat, Technique = stat, FirstTouch = stat, Dribbling = stat, Passing = stat,
-                Crossing = stat, Heading = stat, LongShots = stat, Marking = stat, Tackling = stat,
-                Penalties = stat, FreeKicks = stat, Corners = stat, LongThrows = stat,
-                Pace = stat, Acceleration = stat, Stamina = stat, Strength = stat, Agility = stat,
-                Jumping = stat, Balance = stat, Positioning = stat,
-                Reflexes = stat, Handling = stat, AerialReach = stat, CommandOfArea = stat,
-                OneOnOnes = stat, Kicking = stat, GkPositioning = stat,
+                Finishing = stat,
+                Technique = stat,
+                FirstTouch = stat,
+                Dribbling = stat,
+                Passing = stat,
+                Crossing = stat,
+                Heading = stat,
+                LongShots = stat,
+                Marking = stat,
+                Tackling = stat,
+                Penalties = stat,
+                FreeKicks = stat,
+                Corners = stat,
+                LongThrows = stat,
+                Pace = stat,
+                Acceleration = stat,
+                Stamina = stat,
+                Strength = stat,
+                Agility = stat,
+                Jumping = stat,
+                Balance = stat,
+                Positioning = stat,
+                Reflexes = stat,
+                Handling = stat,
+                AerialReach = stat,
+                CommandOfArea = stat,
+                OneOnOnes = stat,
+                Kicking = stat,
+                GkPositioning = stat,
             };
         }
 
@@ -82,13 +104,25 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void ForRole_PlayerOverload_MatchesRoleAndAttributes()
+        public void ForRole_PlayerOverload_RatesHimInHisOwnRole()
         {
+            // Comparing ForRole(player) against ForRole(player.Role, player.Attributes) restates the
+            // overload's one-line body and agrees with itself even if that body passed a constant role.
+            // What has to be true is that the player's OWN role is the one used: the same attribute sheet
+            // rated as a striker and as a centre-back must come out differently, and each must match the
+            // explicit call for THAT role.
             Attributes a = Uniform(50);
             a.Finishing = 88;
-            var player = new Player(new PlayerId(1), "Test", "England", PlayerRole.Striker, 24, a, 80);
+            var striker = new Player(new PlayerId(1), "Test", "England", PlayerRole.Striker, 24, a, 80);
+            var defender = new Player(new PlayerId(2), "Test", "England", PlayerRole.CentreBack, 24, a, 80);
 
-            Assert.That(PlayerRatings.ForRole(player), Is.EqualTo(PlayerRatings.ForRole(PlayerRole.Striker, a)).Within(1e-9));
+            double asStriker = PlayerRatings.ForRole(striker);
+            double asDefender = PlayerRatings.ForRole(defender);
+
+            Assert.That(asStriker, Is.Not.EqualTo(asDefender).Within(1e-9),
+                "A finisher's sheet cannot be worth the same in both roles, or the role is being ignored.");
+            Assert.That(asStriker, Is.EqualTo(PlayerRatings.ForRole(PlayerRole.Striker, a)).Within(1e-9));
+            Assert.That(asDefender, Is.EqualTo(PlayerRatings.ForRole(PlayerRole.CentreBack, a)).Within(1e-9));
         }
     }
 }

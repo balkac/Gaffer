@@ -23,8 +23,18 @@ namespace Gaffer.Application.Transfers
         {
             double ability = PlayerRatings.ForRole(player) / 100.0;
             double raw = Math.Pow(Math.Max(0.0, ability), 2.0) * economy.WageCeiling;
-            long rounded = (long)Math.Round(raw / economy.WageRounding) * economy.WageRounding;
+            int step = RoundingStep(economy.WageRounding);
+            long rounded = (long)Math.Round(raw / step) * step;
             return Math.Max(economy.WageFloor, rounded);
+        }
+
+        // The rounding step is a config-editable divisor, and a zero one does not throw: raw/0 is
+        // Infinity and the cast to long collapses every wage to the floor, silently (CONVENTIONS §6).
+        // A step below one currency unit has no meaning, so 1 is the true floor and the calibrated 500
+        // passes through untouched.
+        private static int RoundingStep(int configured)
+        {
+            return configured > 0 ? configured : 1;
         }
     }
 }

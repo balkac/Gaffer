@@ -1,3 +1,4 @@
+using System;
 using Gaffer.Application.Simulation;
 using UnityEngine;
 
@@ -88,8 +89,14 @@ namespace Gaffer.Infrastructure.Configuration
         [SerializeField] private double aerialDefender = 0.30;
         [SerializeField] private double aerialGoalkeeper = 0.004;
 
+        private void OnValidate()
+        {
+            ClampToValidRanges();
+        }
+
         public MatchSimulationSettings ToSettings()
         {
+            ClampToValidRanges();
             return new MatchSimulationSettings(
                 baseChancesPerTeam, meanChanceQuality, homeAdvantage, maxStrengthRatio,
                 maxChanceQuality, chanceQualityVariance);
@@ -97,6 +104,7 @@ namespace Gaffer.Infrastructure.Configuration
 
         public TacticsSettings ToTacticsSettings()
         {
+            ClampToValidRanges();
             return new TacticsSettings
             {
                 MentalityAttackStep = mentalityAttackStep,
@@ -114,6 +122,7 @@ namespace Gaffer.Infrastructure.Configuration
 
         public ScorerWeights ToScorerWeights()
         {
+            ClampToValidRanges();
             return new ScorerWeights
             {
                 MinOutfielderWeight = minOutfielderWeight,
@@ -132,6 +141,58 @@ namespace Gaffer.Infrastructure.Configuration
                 AerialDefender = aerialDefender,
                 AerialGoalkeeper = aerialGoalkeeper,
             };
+        }
+
+        /// <summary>
+        /// Holds every serialized number inside the band its consumer can actually make sense of
+        /// (UNITY.md §8). Unity's <c>[Range]</c> only decorates float and int, and this core is
+        /// double-based, so for these fields the clamp *is* the bound — and it is the only place that
+        /// also catches a probability typed as an unbounded double (a <c>maxChanceQuality</c> of 9.5
+        /// is a 40-goal match with no error anywhere). Called from <see cref="OnValidate"/> and from
+        /// every mapper, because the attribute constrains the Inspector, not code that builds the
+        /// settings object from a stale asset or a script. Every band is wider than the calibrated
+        /// value it holds, so a shipping asset passes through untouched.
+        /// </summary>
+        private void ClampToValidRanges()
+        {
+            baseChancesPerTeam = Math.Clamp(baseChancesPerTeam, 0.0, 50.0);
+            meanChanceQuality = Math.Clamp(meanChanceQuality, 0.0, 1.0);
+            homeAdvantage = Math.Clamp(homeAdvantage, 0.5, 2.0);
+            maxStrengthRatio = Math.Clamp(maxStrengthRatio, 1.0, 10.0);
+            maxChanceQuality = Math.Clamp(maxChanceQuality, 0.0, 1.0);
+            chanceQualityVariance = Math.Clamp(chanceQualityVariance, 0.0, 1.0);
+
+            // A mentality/pressing step is applied at up to ±2 scale steps and is subtracted from 1 on
+            // the defence axis, so anything at or above 0.5 would zero (or invert) a team's defence.
+            mentalityAttackStep = Math.Clamp(mentalityAttackStep, 0.0, 0.4);
+            pressingMidfieldStep = Math.Clamp(pressingMidfieldStep, 0.0, 0.4);
+            mentalityDefenceStep = Math.Clamp(mentalityDefenceStep, 0.0, 0.4);
+            pressingDefenceStep = Math.Clamp(pressingDefenceStep, 0.0, 0.4);
+
+            intenseTempoVolume = Math.Clamp(intenseTempoVolume, 0.1, 3.0);
+            patientTempoVolume = Math.Clamp(patientTempoVolume, 0.1, 3.0);
+            counterApproachVolume = Math.Clamp(counterApproachVolume, 0.1, 3.0);
+            counterApproachQuality = Math.Clamp(counterApproachQuality, 0.1, 3.0);
+            possessionApproachVolume = Math.Clamp(possessionApproachVolume, 0.1, 3.0);
+            possessionApproachQuality = Math.Clamp(possessionApproachQuality, 0.1, 3.0);
+
+            // Scorer weights are relative shares: negative is meaningless, and the selector normalises
+            // them, so the only real requirement is a non-negative, finite number.
+            minOutfielderWeight = Math.Clamp(minOutfielderWeight, 0.0, 10.0);
+            openPlayFinishing = Math.Clamp(openPlayFinishing, 0.0, 10.0);
+            openPlayPositioning = Math.Clamp(openPlayPositioning, 0.0, 10.0);
+            openPlayPace = Math.Clamp(openPlayPace, 0.0, 10.0);
+            aerialHeading = Math.Clamp(aerialHeading, 0.0, 10.0);
+            aerialJumping = Math.Clamp(aerialJumping, 0.0, 10.0);
+            aerialStrength = Math.Clamp(aerialStrength, 0.0, 10.0);
+            openPlayForward = Math.Clamp(openPlayForward, 0.0, 10.0);
+            openPlayMidfielder = Math.Clamp(openPlayMidfielder, 0.0, 10.0);
+            openPlayDefender = Math.Clamp(openPlayDefender, 0.0, 10.0);
+            openPlayGoalkeeper = Math.Clamp(openPlayGoalkeeper, 0.0, 10.0);
+            aerialForward = Math.Clamp(aerialForward, 0.0, 10.0);
+            aerialMidfielder = Math.Clamp(aerialMidfielder, 0.0, 10.0);
+            aerialDefender = Math.Clamp(aerialDefender, 0.0, 10.0);
+            aerialGoalkeeper = Math.Clamp(aerialGoalkeeper, 0.0, 10.0);
         }
     }
 }

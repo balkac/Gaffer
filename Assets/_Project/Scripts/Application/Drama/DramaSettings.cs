@@ -9,22 +9,27 @@ namespace Gaffer.Application.Drama
     public sealed class DramaSettings
     {
         /// <summary>Hard cap on events per season — past it the engine stays silent until next year.</summary>
-        public int MaxEventsPerSeason { get; set; } = 4;
+        public int MaxEventsPerSeason { get; init; } = 4;
 
         /// <summary>Weeks that must pass after any event before another may fire.</summary>
-        public int MinWeeksBetweenEvents { get; set; } = 4;
+        public int MinWeeksBetweenEvents { get; init; } = 4;
 
         /// <summary>
         /// Weekly firing probability per unit of candidate weight — the sum of the week's candidate
         /// weights scales the chance anything fires, so a trait that halves an event's weight halves
         /// how often it happens (bias must be frequency-real, not just pick-order — NON-NEGOTIABLE #7).
         /// </summary>
-        public double WeeklyChancePerWeight { get; set; } = 0.10;
+        public double WeeklyChancePerWeight { get; init; } = 0.10;
 
         /// <summary>Ceiling on the weekly firing probability however heavy the week's candidates get.</summary>
-        public double MaxWeeklyChance { get; set; } = 0.35;
+        public double MaxWeeklyChance { get; init; } = 0.35;
 
-        /// <summary>The calibrated defaults — what the core uses when no config asset overrides them.</summary>
-        public static DramaSettings Default => new DramaSettings();
+        /// <summary>
+        /// The calibrated defaults — one cached, shared, immutable instance, the convention every
+        /// settings type in the core follows (spelled out in <c>SettingsDefaultContractTests</c>).
+        /// The auto-property initializer is what caches it; <c>=> new DramaSettings()</c> would be a
+        /// method body and re-allocate on every read (PERFORMANCE §8).
+        /// </summary>
+        public static DramaSettings Default { get; } = new DramaSettings();
     }
 }
