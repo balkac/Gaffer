@@ -1,14 +1,17 @@
 using System;
 using System.IO;
 using System.Security;
-using System.Text;
 using Gaffer.Application.Serialization;
 using Gaffer.Common;
 
 namespace Gaffer.UserData
 {
     /// <summary>
-    /// Reads and writes a save payload to a file. Save serializes and writes; Load reads, deserializes, and
+    /// Reads and writes a save payload to a file. FORMAT-AGNOSTIC despite the name — it hands the injected
+    /// <see cref="ISerializer"/> a stream and knows nothing about what goes on it; the shipped codec is
+    /// <see cref="SaveSerializer"/> (compact binary out, binary or legacy JSON in), and the name is kept
+    /// only because it is what the editor tool windows construct. Save serializes and writes; Load reads,
+    /// deserializes, and
     /// migrates to the current schema — each fallible step returns a <see cref="Result"/>, so a missing or
     /// corrupt file is an expected failure the caller handles, never a crash. Synchronous: a single small
     /// save file for the run. The async I/O boundary (TDD §10) matters once saves grow or move off the main
@@ -30,9 +33,6 @@ namespace Gaffer.UserData
         /// <summary>The previous save, kept by the replace step — the defined fallback when the current file
         /// turns out to be unreadable (UNITY.md §7).</summary>
         private const string BackupSuffix = ".bak";
-
-        // No BOM: the save is machine-read only, and a BOM is a byte every JSON reader has to be told about.
-        private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
         private readonly ISerializer _serializer;
         private readonly SaveMigrator _migrator;
@@ -123,9 +123,10 @@ namespace Gaffer.UserData
             try
             {
                 using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-                using (var reader = new StreamReader(stream, Utf8NoBom, detectEncodingFromByteOrderMarks: true))
                 {
-                    parsed = _serializer.Deserialize(reader);
+                    // The codec owns the encoding (and, for the binary container, the fact that there is
+                    // none) — the store just supplies the bytes.
+                    parsed = _serializer.Deserialize(stream);
                 }
             }
             catch (Exception e) when (IsExpectedFileFailure(e))
@@ -142,17 +143,15 @@ namespace Gaffer.UserData
             return _migrator.Migrate(parsed.Value);
         }
 
-        /// <summary>Serializes straight into the file (PERFORMANCE §4: no multi-hundred-KB intermediate
-        /// string) and forces the bytes past the OS write cache before the swap. Without the
+        /// <summary>Serializes straight into the file (PERFORMANCE §4: no multi-MB intermediate buffer for a
+        /// world-sized save) and forces the bytes past the OS write cache before the swap. Without the
         /// <c>Flush(true)</c> the rename can land while the content is still only in the cache, which is the
         /// zero-length-save-file symptom on a killed app.</summary>
         private void WriteThroughToDisk(string path, SeasonSaveData data)
         {
             using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
-            using (var writer = new StreamWriter(stream, Utf8NoBom))
             {
-                _serializer.Serialize(data, writer);
-                writer.Flush();
+                _serializer.Serialize(data, stream);
                 stream.Flush(flushToDisk: true);
             }
         }

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 using Gaffer.Application.Serialization;
 using Gaffer.Common;
 using Newtonsoft.Json;
@@ -27,11 +28,19 @@ namespace Gaffer.UserData
     /// corrupt or foreign string is an expected failure at the adapter boundary (CONVENTIONS §4), not an
     /// exception the pure core should ever see. The payload is plain DTOs (Application/Serialization).
     /// <para>
-    /// It streams through the caller's reader/writer rather than building the save as one string
-    /// (PERFORMANCE §4) and reuses one cached <see cref="JsonSerializer"/> — building it per call re-reads
-    /// the settings and rebuilds the contract resolver's type cache every save. The cached instance is
-    /// shared, which is safe here because <see cref="JsonSaveStore"/> is synchronous and saves happen on the
-    /// caller's thread; a future async save path must not hand this one instance to two threads at once.
+    /// IT IS NOW THE LEGACY READER. Schema v5 and earlier shipped as indented JSON, which cost 1,070 bytes
+    /// a player — 51 MB for the design target of a ~50,000-player world — so the shipped codec is
+    /// <see cref="BinarySaveSerializer"/> and this one stays to read the saves already on players' devices.
+    /// <see cref="SaveSerializer"/> is what wires the two together; nothing in the game writes JSON any
+    /// more. Do not delete it: those files are the migration path, and the same JSON is still the readable
+    /// format for a save pasted into a bug report.
+    /// </para>
+    /// <para>
+    /// It streams through the caller's stream rather than building the save as one string (PERFORMANCE §4)
+    /// and reuses one cached <see cref="JsonSerializer"/> — building it per call re-reads the settings and
+    /// rebuilds the contract resolver's type cache every save. The cached instance is shared, which is safe
+    /// here because <see cref="JsonSaveStore"/> is synchronous and saves happen on the caller's thread; a
+    /// future async save path must not hand this one instance to two threads at once.
     /// </para>
     /// </summary>
     public sealed class NewtonsoftJsonSerializer : ISerializer
@@ -64,30 +73,37 @@ namespace Gaffer.UserData
 
         private static readonly JsonSerializer Serializer = JsonSerializer.Create(Settings);
 
-        public void Serialize(SeasonSaveData data, TextWriter writer)
+        /// <summary>UTF-8 without a BOM. The encoding is the CODEC's business, not the file store's: a BOM is
+        /// a byte every JSON reader has to be told about, and the save is machine-read only.</summary>
+        private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+        public void Serialize(SeasonSaveData data, Stream stream)
         {
-            if (writer == null)
+            if (stream == null)
             {
-                throw new ArgumentNullException(nameof(writer));
+                throw new ArgumentNullException(nameof(stream));
             }
 
-            // CloseOutput stays false: the caller owns the writer (and the FileStream under it), so the
-            // store can flush the stream to disk itself before the replace step.
+            // leaveOpen / CloseOutput: the caller owns the stream (and the FileStream under it), so the
+            // store can flush it to disk itself before the replace step.
+            var writer = new StreamWriter(stream, Utf8NoBom, 1024, leaveOpen: true);
             var jsonWriter = new JsonTextWriter(writer) { CloseOutput = false };
             Serializer.Serialize(jsonWriter, data);
             jsonWriter.Flush();
+            writer.Flush();
         }
 
-        public Result<SeasonSaveData> Deserialize(TextReader reader)
+        public Result<SeasonSaveData> Deserialize(Stream stream)
         {
-            if (reader == null)
+            if (stream == null)
             {
-                throw new ArgumentNullException(nameof(reader));
+                throw new ArgumentNullException(nameof(stream));
             }
 
             try
             {
                 SeasonSaveData data;
+                var reader = new StreamReader(stream, Utf8NoBom, detectEncodingFromByteOrderMarks: true, 1024, leaveOpen: true);
                 using (var jsonReader = new JsonTextReader(reader) { CloseInput = false })
                 {
                     data = Serializer.Deserialize<SeasonSaveData>(jsonReader);

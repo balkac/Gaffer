@@ -9,8 +9,13 @@ using NUnit.Framework;
 namespace Gaffer.Tests
 {
     /// <summary>
-    /// Proves the save DTO graph is JSON-clean end to end — serialize it, parse it back, and confirm every
-    /// field survives. It runs against Newtonsoft, the same library the game ships
+    /// Proves the LEGACY JSON codec still reads and writes the save DTO graph faithfully. It is no longer
+    /// the shipped format — <c>BinarySaveSerializer</c> is — but it is the format of every save already on a
+    /// player's device, so these tests are what keep that migration path alive
+    /// (<c>SaveBinaryFormatTests</c> covers the new one and the hand-off between them).
+    /// <para>
+    /// Serialize it, parse it back, and confirm every field survives. It runs against Newtonsoft, the same
+    /// library the game ships
     /// (<c>com.unity.nuget.newtonsoft-json</c>, pinned to the same version in the test bridge's csproj), so
     /// it verifies the payload the Unity adapter will write without opening the editor: no unsupported
     /// types, no cycles, nulls and ulong intact.
@@ -26,66 +31,23 @@ namespace Gaffer.Tests
     {
         private static readonly NewtonsoftJsonSerializer Serializer = new NewtonsoftJsonSerializer();
 
-        /// <summary>Serializes through the shipped adapter, exactly as <c>JsonSaveStore</c> does.</summary>
+        /// <summary>Serializes through the shipped adapter, exactly as <c>JsonSaveStore</c> does, and decodes
+        /// the bytes back to text — the port is byte-oriented now that the shipped format is binary, so the
+        /// JSON codec owns its own UTF-8 encoding.</summary>
         private static string Write(SeasonSaveData data)
         {
-            using (var writer = new StringWriter())
-            {
-                Serializer.Serialize(data, writer);
-                return writer.ToString();
-            }
+            return SaveCodecFixtures.Utf8(SaveCodecFixtures.Write(Serializer, data));
         }
 
         /// <summary>Reads back through the shipped adapter and unwraps the expected-failure Result.</summary>
         private static SeasonSaveData Read(string json)
         {
-            using (var reader = new StringReader(json))
-            {
-                Result<SeasonSaveData> parsed = Serializer.Deserialize(reader);
-                Assert.That(parsed.IsSuccess, Is.True, parsed.Error);
-                return parsed.Value;
-            }
+            return SaveCodecFixtures.ReadOrFail(Serializer, SaveCodecFixtures.Utf8(json));
         }
 
         private static SeasonSaveData Sample()
         {
-            return new SeasonSaveData
-            {
-                SchemaVersion = SeasonSaveData.CurrentVersion,
-                LeagueName = "Round Trip League",
-                SeasonNumber = 4,
-                MatchSeed = 0xDEADBEEFCAFEUL,
-                PlayedRounds = 3,
-                Clubs = new List<ClubSaveData>
-                {
-                    new ClubSaveData
-                    {
-                        Id = 0, Name = "Squad Club", Attack = 61.5, Midfield = 58.25, Defence = 60.0,
-                        Squad = new List<PlayerSaveData>
-                        {
-                            new PlayerSaveData
-                            {
-                                Id = 7, Name = "Cy Vale", Nationality = "Spain", RoleName = "Striker", Age = 19, HiddenPotential = 91,
-                                Attributes = new AttributesSaveData
-                                {
-                                    Finishing = 20, Technique = 21, FirstTouch = 22, Dribbling = 23, Passing = 24,
-                                    Crossing = 25, Heading = 26, LongShots = 27, Marking = 28, Tackling = 29,
-                                    Penalties = 30, FreeKicks = 31, Corners = 32, LongThrows = 33, Pace = 34,
-                                    Acceleration = 35, Stamina = 36, Strength = 37, Agility = 38, Jumping = 39,
-                                    Balance = 40, Positioning = 41, Reflexes = 42, Handling = 43, AerialReach = 44,
-                                    CommandOfArea = 45, OneOnOnes = 46, Kicking = 47, GkPositioning = 48,
-                                },
-                                Traits = new List<string> { "derby-beast", "glass-man" },
-                            },
-                        },
-                    },
-                    new ClubSaveData { Id = 1, Name = "Strength Club", Attack = 55, Midfield = 55, Defence = 55, Squad = null },
-                },
-                Results = new List<MatchResultSaveData>
-                {
-                    new MatchResultSaveData { Home = 0, Away = 1, HomeGoals = 2, AwayGoals = 1 },
-                },
-            };
+            return SaveCodecFixtures.Sample();
         }
 
         [Test]
@@ -172,25 +134,19 @@ namespace Gaffer.Tests
         [Test]
         public void Deserialize_CorruptText_IsAnExpectedFailure()
         {
-            using (var reader = new StringReader("{ this is not json"))
-            {
-                Result<SeasonSaveData> parsed = Serializer.Deserialize(reader);
+            Result<SeasonSaveData> parsed = SaveCodecFixtures.Read(Serializer, SaveCodecFixtures.Utf8("{ this is not json"));
 
-                Assert.That(parsed.IsFailure, Is.True, "a torn save is a Result failure, never an exception");
-                Assert.That(parsed.Error, Does.StartWith("Could not parse save:"));
-            }
+            Assert.That(parsed.IsFailure, Is.True, "a torn save is a Result failure, never an exception");
+            Assert.That(parsed.Error, Does.StartWith("Could not parse save:"));
         }
 
         [Test]
         public void Deserialize_EmptyText_IsAnExpectedFailure()
         {
-            using (var reader = new StringReader(string.Empty))
-            {
-                Result<SeasonSaveData> parsed = Serializer.Deserialize(reader);
+            Result<SeasonSaveData> parsed = SaveCodecFixtures.Read(Serializer, new byte[0]);
 
-                Assert.That(parsed.IsFailure, Is.True);
-                Assert.That(parsed.Error, Is.EqualTo("Save text did not parse into a save payload."));
-            }
+            Assert.That(parsed.IsFailure, Is.True);
+            Assert.That(parsed.Error, Is.EqualTo("Save text did not parse into a save payload."));
         }
     }
 }
