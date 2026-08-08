@@ -294,13 +294,18 @@ namespace Gaffer.Tests
             Assert.That(ledFired, Is.GreaterThan(0));
         }
 
-        private static int CountFires(DramaCatalog catalog, DramaSettings settings, List<Player> squad)
+        // How many of 600 fresh one-week runs raise an event under the given state. Fresh engines, so
+        // cooldowns and the season budget never enter into it — this measures the weekly envelope alone.
+        private static int CountFires(
+            DramaCatalog catalog, DramaSettings settings, List<Player> squad, int lossStreak = 4, int tablePosition = 10)
         {
             int fired = 0;
             for (ulong seed = 0; seed < 600; seed++)
             {
                 var engine = new DramaEngine(catalog, settings);
-                if (engine.TickWeek(ContextOf(squad, lossStreak: 4), new SplitMix64RandomNumberGenerator(seed)) != null)
+                if (engine.TickWeek(
+                        ContextOf(squad, lossStreak: lossStreak, tablePosition: tablePosition),
+                        new SplitMix64RandomNumberGenerator(seed)) != null)
                 {
                     fired++;
                 }
@@ -309,64 +314,397 @@ namespace Gaffer.Tests
             return fired;
         }
 
-        [Test]
-        public void TickWeek_DefaultCatalogOverManySeasons_StaysRareButAlive()
+        // A believable club: twenty players, an eleven and a bench, ages 18 to 34, a star worth a
+        // transfer request, a veteran worth a contract standoff, a captain old enough to hand the
+        // armband on, two wonderkids stuck on that bench, a press magnet and a loyal servant. Between
+        // them they make most of the shipped catalog reachable, which is what a mix measurement needs —
+        // a four-man squad can only tell you about the four events it happens to fit.
+        private static List<Player> BroadSquad()
         {
-            var squad = new List<Player>
+            return new List<Player>
             {
-                PlayerOf(0, PlayerRole.Striker, 70, age: 24),
-                PlayerOf(1, PlayerRole.CentralMidfield, 68, age: 27, potential: 70, "press-magnet"),
-                PlayerOf(2, PlayerRole.CentreBack, 62, age: 30),
-                PlayerOf(3, PlayerRole.RightWing, 48, age: 18, potential: 88),
-            };
-            var starters = new List<Player> { squad[0], squad[1], squad[2] };
+                // The eleven.
+                PlayerOf(0, PlayerRole.Goalkeeper, 62, age: 29),
+                PlayerOf(1, PlayerRole.RightBack, 58, age: 26),
+                PlayerOf(2, PlayerRole.CentreBack, 66, age: 31),
+                PlayerOf(3, PlayerRole.CentreBack, 58, age: 33, potential: 66, "dressing-room-leader"),
+                PlayerOf(4, PlayerRole.LeftBack, 56, age: 22),
+                PlayerOf(5, PlayerRole.DefensiveMidfield, 60, age: 28),
+                PlayerOf(6, PlayerRole.CentralMidfield, 68, age: 24),
+                PlayerOf(7, PlayerRole.AttackingMidfield, 63, age: 25, potential: 70, "loyal"),
+                PlayerOf(8, PlayerRole.RightWing, 60, age: 21, potential: 76, "press-magnet"),
+                PlayerOf(9, PlayerRole.LeftWing, 57, age: 30),
+                PlayerOf(10, PlayerRole.Striker, 70, age: 27),
 
-            int totalEvents = 0;
-            const int seasons = 20;
+                // The bench.
+                PlayerOf(11, PlayerRole.Goalkeeper, 52, age: 34),
+                PlayerOf(12, PlayerRole.CentreBack, 54, age: 20, potential: 68),
+                PlayerOf(13, PlayerRole.LeftBack, 50, age: 32),
+                PlayerOf(14, PlayerRole.CentralMidfield, 55, age: 19, potential: 82),
+                PlayerOf(15, PlayerRole.CentralMidfield, 61, age: 23),
+                PlayerOf(16, PlayerRole.RightMidfield, 49, age: 18, potential: 86),
+                PlayerOf(17, PlayerRole.AttackingMidfield, 53, age: 31),
+                PlayerOf(18, PlayerRole.Striker, 59, age: 25),
+                PlayerOf(19, PlayerRole.Striker, 51, age: 30),
+            };
+        }
+
+        // The same club with nothing special about it: no press magnet, no captain old enough to hand
+        // the armband on, no loyal servant. Roughly half the drama weight of BroadSquad in a calm week,
+        // because most of the catalog is simply not in play for it — which is the system working, and
+        // why a frequency regression measured on one squad alone would be measuring that squad.
+        private static List<Player> PlainSquad()
+        {
+            List<Player> squad = BroadSquad();
+            squad[3] = PlayerOf(3, PlayerRole.CentreBack, 58, age: 27);
+            squad[7] = PlayerOf(7, PlayerRole.AttackingMidfield, 63, age: 25);
+            squad[8] = PlayerOf(8, PlayerRole.RightWing, 60, age: 21, potential: 76);
+            squad[11] = PlayerOf(11, PlayerRole.Goalkeeper, 52, age: 29);
+            return squad;
+        }
+
+        // Plays one club through whole seasons of the shipped catalog and reports what came out.
+        // The week-to-week state is a plausible run rather than a fixture: about three losses in ten,
+        // the streak broken by any other result, the table drifting, two transfer windows. That matters
+        // — the old version of this measurement drove the loss streak with `week % 7`, a club that loses
+        // six in a row every seventh week, which held the engine in permanent crisis and made whatever
+        // it measured a worst case rather than a run.
+        private static void PlaySeasons(
+            List<Player> squad, int seasons, ulong seed, List<int> perSeason, Dictionary<string, int> byEvent)
+        {
+            var starters = new List<Player>();
+            for (int i = 0; i < 11; i++)
+            {
+                starters.Add(squad[i]);
+            }
+
             var engine = new DramaEngine(DramaCatalog.Default, DramaSettings.Default);
+            var form = new SplitMix64RandomNumberGenerator(seed);
+            int position = 11;
+
             for (int season = 0; season < seasons; season++)
             {
                 engine.StartSeason();
                 int inSeason = 0;
+                int lossStreak = 0;
                 for (int week = 0; week < 38; week++)
                 {
+                    lossStreak = form.NextDouble() < 0.30 ? lossStreak + 1 : 0;
+                    position += form.NextDouble() < 0.5 ? -1 : 1;
+                    position = position < 1 ? 1 : position > 20 ? 20 : position;
+
                     PendingDrama pending = engine.TickWeek(
-                        ContextOf(squad, lossStreak: week % 7, windowOpen: week < 4 || (week >= 19 && week < 23), starters: starters),
-                        new SplitMix64RandomNumberGenerator(((ulong)season << 16) + (ulong)week));
-                    if (pending != null)
+                        ContextOf(squad, lossStreak: lossStreak, windowOpen: week < 4 || (week >= 19 && week < 23), starters: starters, tablePosition: position),
+                        new SplitMix64RandomNumberGenerator(seed + ((ulong)season << 16) + (ulong)week));
+                    if (pending == null)
                     {
-                        inSeason++;
+                        continue;
                     }
+
+                    inSeason++;
+                    string id = pending.Event.Id.Value;
+                    byEvent.TryGetValue(id, out int count);
+                    byEvent[id] = count + 1;
                 }
 
-                totalEvents += inSeason;
+                perSeason.Add(inSeason);
+            }
+        }
+
+        [Test]
+        public void TickWeek_DefaultCatalogOverManySeasons_StaysRareButAlive()
+        {
+            // Two clubs, not one: an eventful squad and an unremarkable one, pooled. Drama frequency
+            // now depends on how much of the catalog a squad puts in play, so measuring only the
+            // eventful club would report the top of the range as if it were the range.
+            const int seasons = 400;
+            var perSeason = new List<int>(seasons);
+            var byEvent = new Dictionary<string, int>();
+            PlaySeasons(BroadSquad(), seasons / 2, 4242UL, perSeason, byEvent);
+            PlaySeasons(PlainSquad(), seasons / 2, 7317UL, perSeason, byEvent);
+
+            int total = 0;
+            int atTheCap = 0;
+            int quiet = 0;
+            int busy = 0;
+            foreach (int inSeason in perSeason)
+            {
+                total += inSeason;
+                if (inSeason >= DramaSettings.Default.MaxEventsPerSeason)
+                {
+                    atTheCap++;
+                }
+
+                if (inSeason <= 1)
+                {
+                    quiet++;
+                }
+
+                if (inSeason >= 3)
+                {
+                    busy++;
+                }
             }
 
-            double perSeason = totalEvents / (double)seasons;
+            double perSeasonMean = total / (double)seasons;
+            double capShare = atTheCap / (double)seasons;
 
-            // Both assertions here used to be unfalsifiable, and replacing them turned up a balance
-            // finding rather than a test bug.
+            // THE MEASUREMENT THIS TEST EXISTS FOR. Its two assertions used to be unfalsifiable: the old
+            // code asserted `inSeason <= MaxEventsPerSeason` — the very number the engine reads, so it
+            // agreed with itself at any value — and then a band whose upper bound WAS that cap, which no
+            // run of capped seasons can average above. The test could report "rare" however relentless
+            // drama got, and it did: measured 3.94 events a season with 94% of seasons pinned to the
+            // four-event cap. Scarcity was coming entirely from the ceiling.
             //
-            // The old code asserted `inSeason <= DramaSettings.Default.MaxEventsPerSeason` — the very
-            // number the engine reads, so it agreed with itself at any value — and then
-            // `perSeason InRange(0.75, 4.0)`, whose upper bound is that same cap. No run of capped
-            // seasons can average ABOVE its cap, so the upper bound was unreachable and only the lower
-            // one could ever fire. The test could report "rare" no matter how relentless drama became.
-            //
-            // MEASURED, default catalog and default settings: 4.00 events per season, in all 20 of the
-            // 20 seasons. The budget is saturated every single season, so the only thing making drama
-            // scarce is the hard cap — the weekly probability (WeeklyChancePerWeight 0.10, capped at
-            // MaxWeeklyChance 0.35, with a 4-week minimum gap) fires whenever it is allowed to. That is
-            // the "feed" the design says to avoid, held back by a ceiling rather than by rarity, and it
-            // is why the old band's dead upper bound mattered. Pinned exactly here so the number is
-            // visible and any recalibration is a deliberate, reviewed change; the lower bound stays as
-            // the "drama must not go silent" guard.
-            Assert.That(perSeason, Is.GreaterThan(0.75),
-                $"Drama went quiet: {perSeason:F2} events a season over {seasons} seasons.");
-            Assert.That(perSeason, Is.EqualTo(4.0).Within(1e-9),
-                $"Drama frequency moved to {perSeason:F2}/season (was a saturated 4.00 — every season at " +
-                "the MaxEventsPerSeason cap). If this is the intended recalibration, update the number " +
-                "and the note above it.");
+            // The envelope now starts far lower in a calm week and climbs with the run's trouble
+            // (DramaSettings.CrisisChanceMultiplier), so the cap is a backstop. MEASURED over these 400
+            // pooled seasons: 2.70 events a season, 32% of them reaching the cap (57% for the eventful
+            // squad, 8% for the plain one), 18% with at most one event and 59% with three or more.
+            // Against 2000 seasons of freshly GENERATED squads — the population the game actually deals
+            // — the same settings give 2.10 a season with 8% silent and 14% capped. The bounds below are
+            // a real band, the upper one comfortably BELOW the structural cap so it can actually fail,
+            // and the share assertions are what stop a future "the mean is fine" calibration from
+            // quietly going back to a metronome.
+            Assert.That(perSeasonMean, Is.GreaterThan(1.0),
+                $"Drama went quiet: {perSeasonMean:F2} events a season over {seasons} seasons.");
+            Assert.That(perSeasonMean, Is.LessThan(3.0),
+                $"Drama is a feed again: {perSeasonMean:F2} events a season over {seasons} seasons.");
+            Assert.That(capShare, Is.LessThan(0.40),
+                $"{capShare:P0} of seasons ran into MaxEventsPerSeason. The cap is a backstop, not the " +
+                "mechanism — if most seasons hit it, the weekly envelope is doing no work.");
+            Assert.That(quiet / (double)seasons, Is.GreaterThan(0.10),
+                "Some seasons must pass almost without incident, or drama is on a schedule.");
+            Assert.That(busy / (double)seasons, Is.GreaterThan(0.10),
+                "And some must be loud, or the spread has been flattened into a constant.");
+        }
+
+        [Test]
+        public void TickWeek_DefaultCatalogOverALongRun_NoSingleEventDominatesTheMix()
+        {
+            // The frequency-mix regression PROGRESS asks for. Before candidacy was normalised, an
+            // event's weight was multiplied by how many players its filter admitted, so the night-club
+            // scandal (MaxSubjectAge 30 — most of a squad) took 60.8% of everything the engine raised
+            // while a transfer request took 0.7%. One event was the drama system. MEASURED now: 33.1%
+            // of 1295 events for the same scandal, and all ten shipped events reached the player. It is
+            // still the most common story and should be — it is the least gated one in the catalog —
+            // but it is no longer the only one anybody sees.
+            const int seasons = 400;
+            var byEvent = new Dictionary<string, int>();
+            PlaySeasons(BroadSquad(), seasons, 90210UL, new List<int>(seasons), byEvent);
+
+            int total = 0;
+            string busiest = null;
+            int busiestCount = 0;
+            foreach (KeyValuePair<string, int> entry in byEvent)
+            {
+                total += entry.Value;
+                if (entry.Value > busiestCount)
+                {
+                    busiestCount = entry.Value;
+                    busiest = entry.Key;
+                }
+            }
+
+            Assert.That(total, Is.GreaterThan(200), "the mix needs a real sample to be worth measuring");
+
+            double share = busiestCount / (double)total;
+            Assert.That(share, Is.LessThanOrEqualTo(0.40),
+                $"'{busiest}' took {share:P1} of {total} events. No single story may own the run — a share " +
+                "much past this is the wide-filter defect coming back, or a base weight that needs cutting.");
+
+            // And the tail has to be alive too: a mix where one event is under the ceiling only because
+            // two others split the rest is not variety.
+            Assert.That(byEvent.Count, Is.GreaterThanOrEqualTo(7),
+                "Most of the shipped catalog must actually reach the player over a long run.");
+        }
+
+        [Test]
+        public void TickWeek_WideAndNarrowEventOfEqualWeight_ArePickedEquallyOften()
+        {
+            // The defect itself, in one measurement. "wide" fits every one of the twelve players and
+            // "narrow" fits exactly one; both declare the same base weight, which is the authored
+            // statement that they are equally likely. Before normalisation the wide event was twelve
+            // separate candidates and took roughly 12:1 of the picks — and, because the firing chance
+            // scales with total weight, it dragged the whole system's frequency up with it.
+            var squad = new List<Player>();
+            for (int i = 0; i < 11; i++)
+            {
+                squad.Add(PlayerOf(i, PlayerRole.CentralMidfield, 60, age: 24));
+            }
+
+            squad.Add(PlayerOf(11, PlayerRole.CentreBack, 60, age: 34));
+
+            var catalog = new DramaCatalog(new[]
+            {
+                SoloEvent("wide", new DramaTrigger { MaxSubjectAge = 40 }, requiresSubject: true),
+                SoloEvent("narrow", new DramaTrigger { MinSubjectAge = 33 }, requiresSubject: true),
+            });
+
+            int wide = 0;
+            int narrow = 0;
+            for (ulong seed = 0; seed < 1200; seed++)
+            {
+                PendingDrama pending = new DramaEngine(catalog, AlwaysFire())
+                    .TickWeek(ContextOf(squad), new SplitMix64RandomNumberGenerator(seed));
+                Assert.That(pending, Is.Not.Null);
+                if (pending.Event.Id.Value == "wide")
+                {
+                    wide++;
+                }
+                else
+                {
+                    narrow++;
+                }
+            }
+
+            Assert.That(wide / (double)(wide + narrow), Is.EqualTo(0.5).Within(0.06),
+                $"wide {wide} / narrow {narrow}: an event's reach must not buy it weight.");
+
+            // The wide event still happens to somebody — normalising candidacy moved the choice of
+            // subject to a second draw, it did not pin it to one player.
+            var subjects = new HashSet<int>();
+            for (ulong seed = 0; seed < 200; seed++)
+            {
+                PendingDrama pending = new DramaEngine(catalog, AlwaysFire())
+                    .TickWeek(ContextOf(squad), new SplitMix64RandomNumberGenerator(seed));
+                if (pending.Event.Id.Value == "wide")
+                {
+                    subjects.Add(pending.Subject.Id.Value);
+                }
+            }
+
+            Assert.That(subjects.Count, Is.GreaterThan(5), "the second draw must spread across the eligible players");
+        }
+
+        [Test]
+        public void TickWeek_ManyEligiblePlayers_DoNotRaiseHowOftenTheEventFires()
+        {
+            // The other half of the same defect: firing probability. The same event, the same trigger,
+            // the same seeds — only the number of players it fits changes. That must not move the rate.
+            var catalog = new DramaCatalog(new[] { SoloEvent("scandal", new DramaTrigger { MaxSubjectAge = 30 }, requiresSubject: true) });
+            var settings = new DramaSettings(
+                maxEventsPerSeason: 99, minWeeksBetweenEvents: 1,
+                weeklyChancePerWeight: 0.2, maxWeeklyChance: 1.0, crisisChanceMultiplier: 1.0);
+
+            var one = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60, age: 24) };
+            var many = new List<Player>();
+            for (int i = 0; i < 15; i++)
+            {
+                many.Add(PlayerOf(i, PlayerRole.Striker, 60, age: 24));
+            }
+
+            int firedWithOne = CountFires(catalog, settings, one, lossStreak: 0);
+            int firedWithMany = CountFires(catalog, settings, many, lossStreak: 0);
+
+            Assert.That(firedWithMany, Is.EqualTo(firedWithOne),
+                $"A squad of 15 eligible players fired {firedWithMany} times against one player's " +
+                $"{firedWithOne}. Candidacy is normalised per event, so the rate must be identical.");
+            Assert.That(firedWithOne, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void TickWeek_APressMagnetInTheSquad_MakesHisEventMeasurablyMoreFrequent()
+        {
+            // Normalisation must not flatten the bias mechanic (NON-NEGOTIABLE #7). The strongest
+            // eligible subject bias sets the event's weight, so signing a press magnet has to change how
+            // often the club is in the papers — not merely who is in the picture when it happens. This
+            // is the assertion that rules out the mean-of-the-pool aggregate, which would dilute the x3
+            // to x1.13 across a fifteen-man squad.
+            var catalog = new DramaCatalog(new[]
+            {
+                SoloEvent("scandal", new DramaTrigger { MaxSubjectAge = 30 }, requiresSubject: true,
+                    subjectBiases: new[] { new DramaTraitBias(new TraitId("press-magnet"), 3.0) }),
+            });
+            var settings = new DramaSettings(
+                maxEventsPerSeason: 99, minWeeksBetweenEvents: 1,
+                weeklyChancePerWeight: 0.1, maxWeeklyChance: 1.0, crisisChanceMultiplier: 1.0);
+
+            var plain = new List<Player>();
+            for (int i = 0; i < 15; i++)
+            {
+                plain.Add(PlayerOf(i, PlayerRole.Striker, 60, age: 24));
+            }
+
+            var withMagnet = new List<Player>(plain) { PlayerOf(99, PlayerRole.RightWing, 60, age: 24, potential: 70, "press-magnet") };
+
+            int plainFired = CountFires(catalog, settings, plain, lossStreak: 0);
+            int magnetFired = CountFires(catalog, settings, withMagnet, lossStreak: 0);
+
+            Assert.That(magnetFired, Is.GreaterThan(plainFired * 2),
+                $"one press magnet moved the scandal rate from {plainFired} to {magnetFired} in 600 weeks " +
+                "— his x3 must survive normalisation, not be averaged away across the squad");
+
+            // And he is the one it happens to, far more often than his one-in-sixteen share of the room.
+            int magnetSubject = 0;
+            int fired = 0;
+            for (ulong seed = 0; seed < 600; seed++)
+            {
+                PendingDrama pending = new DramaEngine(catalog, settings)
+                    .TickWeek(ContextOf(withMagnet), new SplitMix64RandomNumberGenerator(seed));
+                if (pending == null)
+                {
+                    continue;
+                }
+
+                fired++;
+                if (pending.Subject.Id.Value == 99)
+                {
+                    magnetSubject++;
+                }
+            }
+
+            Assert.That(magnetSubject / (double)fired, Is.GreaterThan(2.0 / 16.0),
+                "the second draw is weighted by subject bias too");
+        }
+
+        [Test]
+        public void TickWeek_ARunFallingApart_RaisesMoreDramaThanACalmOne()
+        {
+            // Scarcity that answers to the run, which is what makes a season's event count a story
+            // rather than a quota: the same club, the same seeds, the same single ungated event — only
+            // the form and the table differ. A catalog of one event isolates the envelope from which
+            // events happen to become eligible under a losing streak.
+            var catalog = new DramaCatalog(new[] { SoloEvent("always", new DramaTrigger()) });
+            var settings = new DramaSettings(
+                maxEventsPerSeason: 99, minWeeksBetweenEvents: 1,
+                weeklyChancePerWeight: 0.05, maxWeeklyChance: 1.0);
+            var squad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60) };
+
+            int calm = CountFires(catalog, settings, squad, lossStreak: 0, tablePosition: 8);
+            int wobbling = CountFires(catalog, settings, squad, lossStreak: 1, tablePosition: 8);
+            int collapsing = CountFires(catalog, settings, squad, lossStreak: 4, tablePosition: 19);
+
+            Assert.That(wobbling, Is.GreaterThan(calm), "one defeat already leans on the envelope");
+            Assert.That(collapsing, Is.GreaterThan(calm * 2),
+                $"a collapsing run raised {collapsing} events against a calm run's {calm} over the same weeks");
+
+            // The dial is a dial: turned off, the run's state stops mattering and drama is a metronome
+            // again — the shape this calibration deliberately moved away from.
+            var flat = new DramaSettings(
+                maxEventsPerSeason: 99, minWeeksBetweenEvents: 1,
+                weeklyChancePerWeight: 0.05, maxWeeklyChance: 1.0, crisisChanceMultiplier: 1.0);
+            Assert.That(CountFires(catalog, flat, squad, lossStreak: 4, tablePosition: 19),
+                Is.EqualTo(CountFires(catalog, flat, squad, lossStreak: 0, tablePosition: 8)));
+        }
+
+        [Test]
+        public void TickWeek_TheDropZone_WeighsAsMuchAsOneDefeat()
+        {
+            // The table half of the crisis response, asserted on its own — a losing streak of zero and
+            // nothing but the standings to say the club is in trouble.
+            var catalog = new DramaCatalog(new[] { SoloEvent("always", new DramaTrigger()) });
+            var settings = new DramaSettings(
+                maxEventsPerSeason: 99, minWeeksBetweenEvents: 1,
+                weeklyChancePerWeight: 0.05, maxWeeklyChance: 1.0);
+            var squad = new List<Player> { PlayerOf(0, PlayerRole.Striker, 60) };
+
+            int safe = CountFires(catalog, settings, squad, lossStreak: 0, tablePosition: 8);
+            int inTheDrop = CountFires(catalog, settings, squad, lossStreak: 0, tablePosition: 19);
+            int oneDefeat = CountFires(catalog, settings, squad, lossStreak: 1, tablePosition: 8);
+
+            Assert.That(inTheDrop, Is.GreaterThan(safe));
+            Assert.That(inTheDrop, Is.EqualTo(oneDefeat),
+                "sitting in the drop zone is defined as one defeat's worth of pressure");
         }
 
         [Test]

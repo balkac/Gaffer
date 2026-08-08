@@ -211,7 +211,14 @@ namespace Gaffer.Domain.Drama
                 "drama.night_club_scandal.title", "drama.night_club_scandal.body",
                 requiresSubject: true,
                 new DramaTrigger { MaxSubjectAge = 30 },
-                baseWeight: 0.8, cooldownWeeks: 10,
+                // 0.5, down from 0.8 (2026-08-07). This is the ONLY event in the set whose trigger
+                // every ordinary week satisfies — no window, no streak, no rare trait, no veteran —
+                // so it is in play roughly three times as often as anything else and its base weight
+                // has to sit below theirs to come out level. It was also the event that the old
+                // per-eligible-player candidacy inflated most (60.8% of all drama raised, measured);
+                // normalising candidacy took it to 42%, and this brings it to 33% — still the most
+                // common story in the game, which suits a squad full of twenty-somethings.
+                baseWeight: 0.5, cooldownWeeks: 10,
                 new[]
                 {
                     new DramaChoice("drama.night_club_scandal.fine", new[]
