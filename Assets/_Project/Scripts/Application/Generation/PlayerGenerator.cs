@@ -15,11 +15,6 @@ namespace Gaffer.Application.Generation
     /// </summary>
     public sealed class PlayerGenerator : IPlayerGenerator
     {
-        private static readonly string[] Nationalities =
-        {
-            "England", "Scotland", "Wales", "Ireland", "France", "Spain", "Portugal", "Netherlands",
-        };
-
         private const int RoleCount = 12;
 
         private readonly PlayerNameGenerator _names = new PlayerNameGenerator();
@@ -51,11 +46,11 @@ namespace Gaffer.Application.Generation
 
         public Player Generate(PlayerId id, GenerationContext context, IRandom rng)
         {
-            string name = _names.GenerateName(rng);
-            string nationality = Nationalities[rng.NextInt(Nationalities.Length)];
+            PlayerNamePool origin = PlayerNamePools.Draw(rng);
+            string name = _names.GenerateName(origin, rng);
             int age = rng.NextInt(context.MinAge, context.MaxAge + 1);
             var role = (PlayerRole)rng.NextInt(RoleCount);
-            return Build(id, context, name, nationality, age, role, rng);
+            return Build(id, context, name, origin.Nationality, age, role, rng);
         }
 
         /// <summary>
@@ -65,10 +60,10 @@ namespace Gaffer.Application.Generation
         /// </summary>
         public Player Generate(PlayerId id, GenerationContext context, PlayerRole role, IRandom rng)
         {
-            string name = _names.GenerateName(rng);
-            string nationality = Nationalities[rng.NextInt(Nationalities.Length)];
+            PlayerNamePool origin = PlayerNamePools.Draw(rng);
+            string name = _names.GenerateName(origin, rng);
             int age = rng.NextInt(context.MinAge, context.MaxAge + 1);
-            return Build(id, context, name, nationality, age, role, rng);
+            return Build(id, context, name, origin.Nationality, age, role, rng);
         }
 
         // Keepers are poor with the ball at their feet; outfielders barely keep goal. These weak/negligible
