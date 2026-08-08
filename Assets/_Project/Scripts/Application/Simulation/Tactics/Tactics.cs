@@ -10,7 +10,11 @@ namespace Gaffer.Application.Simulation
         VeryAttacking,
     }
 
-    /// <summary>How fast a side plays — patient build-up versus an intense, end-to-end pace.</summary>
+    /// <summary>
+    /// How fast a side plays — patient build-up versus an intense, end-to-end pace. The fine dial on the
+    /// same volume/quality trade <see cref="Approach"/> makes coarsely: intense manufactures more chances
+    /// but hurries them, patient works fewer but better ones.
+    /// </summary>
     public enum Tempo
     {
         Patient,
@@ -43,8 +47,9 @@ namespace Gaffer.Application.Simulation
     /// A side's tactical setup: mentality, tempo, pressing, and approach (TDD §6.1). Mentality and
     /// pressing shift the effective strength <see cref="EffectiveStrengthBuilder"/> derives — attacking
     /// lifts attack and thins the defence, a high press wins the midfield but exposes the line. Tempo and
-    /// approach instead shape the <see cref="ChanceProfile"/>: tempo drives how many chances a side makes,
-    /// approach the volume-versus-quality trade (the counter makes fewer but sharper chances). This split
+    /// approach instead shape the <see cref="ChanceProfile"/>: both trade chance volume against chance
+    /// quality — approach coarsely (the counter makes fewer but sharper chances), tempo finely (an intense
+    /// pace makes more but hurries them). No option on either axis is a free gain. This split
     /// keeps each axis mechanically real without double-counting. <see cref="Balanced"/> is the neutral
     /// setup that changes nothing. Each strength axis exposes a scale centred on zero; how far each step
     /// bends the sim comes from the injected <see cref="TacticsSettings"/> (data-driven, NON-NEGOTIABLE #3).

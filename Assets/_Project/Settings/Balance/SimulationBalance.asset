@@ -21,9 +21,11 @@ MonoBehaviour:
   mentalityAttackStep: 0.09
   pressingMidfieldStep: 0.09
   mentalityDefenceStep: 0.07
-  pressingDefenceStep: 0.04
-  intenseTempoVolume: 1.15
-  patientTempoVolume: 0.87
+  pressingDefenceStep: 0.08
+  intenseTempoVolume: 1.08
+  intenseTempoQuality: 0.93
+  patientTempoVolume: 0.92
+  patientTempoQuality: 1.09
   counterApproachVolume: 0.82
   counterApproachQuality: 1.2
   possessionApproachVolume: 1.15

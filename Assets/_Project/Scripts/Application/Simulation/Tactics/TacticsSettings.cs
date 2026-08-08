@@ -11,6 +11,17 @@ namespace Gaffer.Application.Simulation
     /// defaults live in the constructor signature and are baked into every calling assembly at compile
     /// time, so a changed default needs a full recompile before it is live everywhere (see
     /// <c>SettingsDefaultContractTests</c>).
+    ///
+    /// <para><b>The calibration rule for the chance-profile axes.</b> Tempo and approach each trade volume
+    /// against quality, and each option's <c>volume × quality</c> product is held within ~2% of 1.0 on
+    /// purpose: an option must change the <em>shape</em> of a side's chances, not its expected goals.
+    /// The shipped products are approach 0.82×1.20 = 0.984 (counter) and 1.15×0.88 = 1.012 (possession);
+    /// tempo 1.08×0.93 = 1.004 (intense) and 0.92×1.09 = 1.003 (patient). Move one half of a pair without
+    /// the other and you are adding goal inflation to one setting and deflation to its opposite — which is
+    /// what a tempo with no quality multiplier at all was: intense was 15% more chances for nothing.
+    /// Tempo's swing is deliberately about half of approach's, so approach stays the coarse shape decision
+    /// (±15-18% volume) and tempo the fine one (±8%); an exact mirror would make intense indistinguishable
+    /// from possession and patient from the counter, collapsing two of the four axes into one.</para>
     /// </summary>
     public sealed class TacticsSettings
     {
@@ -22,9 +33,11 @@ namespace Gaffer.Application.Simulation
             double mentalityAttackStep = 0.09,
             double pressingMidfieldStep = 0.09,
             double mentalityDefenceStep = 0.07,
-            double pressingDefenceStep = 0.04,
-            double intenseTempoVolume = 1.15,
-            double patientTempoVolume = 0.87,
+            double pressingDefenceStep = 0.08,
+            double intenseTempoVolume = 1.08,
+            double intenseTempoQuality = 0.93,
+            double patientTempoVolume = 0.92,
+            double patientTempoQuality = 1.09,
             double counterApproachVolume = 0.82,
             double counterApproachQuality = 1.20,
             double possessionApproachVolume = 1.15,
@@ -35,7 +48,9 @@ namespace Gaffer.Application.Simulation
             MentalityDefenceStep = mentalityDefenceStep;
             PressingDefenceStep = pressingDefenceStep;
             IntenseTempoVolume = intenseTempoVolume;
+            IntenseTempoQuality = intenseTempoQuality;
             PatientTempoVolume = patientTempoVolume;
+            PatientTempoQuality = patientTempoQuality;
             CounterApproachVolume = counterApproachVolume;
             CounterApproachQuality = counterApproachQuality;
             PossessionApproachVolume = possessionApproachVolume;
@@ -51,14 +66,29 @@ namespace Gaffer.Application.Simulation
         /// <summary>Defence multiplier lost per mentality step — attacking thins the line.</summary>
         public double MentalityDefenceStep { get; }
 
-        /// <summary>Defence multiplier lost per pressing step — a high press exposes the line.</summary>
+        /// <summary>
+        /// Defence multiplier lost per pressing step — a high press exposes the line. Calibrated
+        /// against the possession the same step wins, not in isolation: pressing lifts the midfield by
+        /// <see cref="PressingMidfieldStep"/>, which takes the ball off the opponent (his share of a
+        /// 2/(2+step) split) and so *subtracts* ~4% from his chance count. A defence step that only
+        /// gives that 4% back is not a cost at all — at 0.04 a high press measured +4.6% chances
+        /// created against −0.9% conceded, i.e. strictly better than standing off on every metric.
+        /// At 0.08 the exposure (+4.0% conceded) roughly matches the possession gain, which is what
+        /// makes the press a decision (<c>NoFreeLunchTests</c>).
+        /// </summary>
         public double PressingDefenceStep { get; }
 
-        /// <summary>Chance-volume multiplier for an intense tempo.</summary>
+        /// <summary>Chance-volume multiplier for an intense tempo — more chances…</summary>
         public double IntenseTempoVolume { get; }
 
-        /// <summary>Chance-volume multiplier for a patient tempo.</summary>
+        /// <summary>…but hurried: chance-quality multiplier for an intense tempo.</summary>
+        public double IntenseTempoQuality { get; }
+
+        /// <summary>Chance-volume multiplier for a patient tempo — fewer chances…</summary>
         public double PatientTempoVolume { get; }
+
+        /// <summary>…but worked: chance-quality multiplier for a patient tempo.</summary>
+        public double PatientTempoQuality { get; }
 
         /// <summary>Chance-volume multiplier for the counter — fewer chances…</summary>
         public double CounterApproachVolume { get; }

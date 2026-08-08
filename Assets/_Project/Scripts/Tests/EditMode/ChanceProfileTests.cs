@@ -43,15 +43,34 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void FromTactics_Tempo_DrivesVolumeOnly()
+        public void FromTactics_Tempo_TradesVolumeForQuality()
         {
+            // Tempo used to drive volume alone, which made Intense 15% more chances for nothing and
+            // Patient a pure loss. It now makes the same trade approach does — more chances, hurried ones
+            // — only finer, so the two axes stay distinguishable. NoFreeLunchTests is the general guard.
             var intense = ChanceProfile.FromTactics(new Tactics(Mentality.Balanced, Tempo.Intense, Pressing.Standard));
             var patient = ChanceProfile.FromTactics(new Tactics(Mentality.Balanced, Tempo.Patient, Pressing.Standard));
 
             Assert.That(intense.Volume, Is.GreaterThan(1.0));
+            Assert.That(intense.Quality, Is.LessThan(1.0), "an intense tempo hurries the chances it makes");
             Assert.That(patient.Volume, Is.LessThan(1.0));
-            Assert.That(intense.Quality, Is.EqualTo(1.0).Within(1e-9));
-            Assert.That(patient.Quality, Is.EqualTo(1.0).Within(1e-9));
+            Assert.That(patient.Quality, Is.GreaterThan(1.0), "a patient side works fewer but better ones");
+        }
+
+        [Test]
+        public void FromTactics_Tempo_IsAFinerDialThanApproach()
+        {
+            // The judgement call behind the calibration, pinned: if tempo mirrored approach, Intense would
+            // be Possession and Patient the Counter, and two of the four axes would stop being different
+            // decisions. Approach is the coarse shape choice; tempo trims it.
+            var intense = ChanceProfile.FromTactics(new Tactics(Mentality.Balanced, Tempo.Intense, Pressing.Standard));
+            var possession = ChanceProfile.FromTactics(
+                new Tactics(Mentality.Balanced, Tempo.Standard, Pressing.Standard, Approach.Possession));
+
+            Assert.That(intense.Volume - 1.0, Is.LessThan((possession.Volume - 1.0) * 0.75),
+                "tempo's volume swing must stay clearly under approach's, or the two axes duplicate each other");
+            Assert.That(1.0 - intense.Quality, Is.LessThan((1.0 - possession.Quality) * 0.75),
+                "and its quality swing with it");
         }
 
         [Test]

@@ -41,15 +41,25 @@ namespace Gaffer.Infrastructure.Configuration
         [Tooltip("Defence multiplier lost per mentality step — attacking thins the line.")]
         [SerializeField] private double mentalityDefenceStep = 0.07;
 
-        [Tooltip("Defence multiplier lost per pressing step — a high press exposes the line.")]
-        [SerializeField] private double pressingDefenceStep = 0.04;
+        [Tooltip("Defence multiplier lost per pressing step — a high press exposes the line. Calibrated " +
+                 "against the possession the same step wins: below ~0.08 the press costs nothing net.")]
+        [SerializeField] private double pressingDefenceStep = 0.08;
 
-        [Header("Tactics — chance profile")]
-        [Tooltip("Chance-volume multiplier for an intense tempo.")]
-        [SerializeField] private double intenseTempoVolume = 1.15;
+        // Volume and quality are paired per option: their product is the option's effect on expected
+        // goals, and the calibration holds every one within ~2% of 1.0 so a tactic changes the shape of a
+        // side's chances, not how many it scores. Edit one of a pair and you have moved goals, not shape.
+        [Header("Tactics — chance profile (volume x quality stays ~1.0 per option)")]
+        [Tooltip("Chance-volume multiplier for an intense tempo (more chances...).")]
+        [SerializeField] private double intenseTempoVolume = 1.08;
 
-        [Tooltip("Chance-volume multiplier for a patient tempo.")]
-        [SerializeField] private double patientTempoVolume = 0.87;
+        [Tooltip("...but hurried: chance-quality multiplier for an intense tempo. 1.08 x 0.93 = 1.004.")]
+        [SerializeField] private double intenseTempoQuality = 0.93;
+
+        [Tooltip("Chance-volume multiplier for a patient tempo (fewer chances...).")]
+        [SerializeField] private double patientTempoVolume = 0.92;
+
+        [Tooltip("...but worked: chance-quality multiplier for a patient tempo. 0.92 x 1.09 = 1.003.")]
+        [SerializeField] private double patientTempoQuality = 1.09;
 
         [Tooltip("Chance-volume multiplier for the counter (fewer chances...).")]
         [SerializeField] private double counterApproachVolume = 0.82;
@@ -111,7 +121,9 @@ namespace Gaffer.Infrastructure.Configuration
                 mentalityDefenceStep: mentalityDefenceStep,
                 pressingDefenceStep: pressingDefenceStep,
                 intenseTempoVolume: intenseTempoVolume,
+                intenseTempoQuality: intenseTempoQuality,
                 patientTempoVolume: patientTempoVolume,
+                patientTempoQuality: patientTempoQuality,
                 counterApproachVolume: counterApproachVolume,
                 counterApproachQuality: counterApproachQuality,
                 possessionApproachVolume: possessionApproachVolume,
@@ -166,7 +178,9 @@ namespace Gaffer.Infrastructure.Configuration
             pressingDefenceStep = Math.Clamp(pressingDefenceStep, 0.0, 0.4);
 
             intenseTempoVolume = Math.Clamp(intenseTempoVolume, 0.1, 3.0);
+            intenseTempoQuality = Math.Clamp(intenseTempoQuality, 0.1, 3.0);
             patientTempoVolume = Math.Clamp(patientTempoVolume, 0.1, 3.0);
+            patientTempoQuality = Math.Clamp(patientTempoQuality, 0.1, 3.0);
             counterApproachVolume = Math.Clamp(counterApproachVolume, 0.1, 3.0);
             counterApproachQuality = Math.Clamp(counterApproachQuality, 0.1, 3.0);
             possessionApproachVolume = Math.Clamp(possessionApproachVolume, 0.1, 3.0);
