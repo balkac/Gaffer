@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Progression;
@@ -44,7 +45,19 @@ namespace Gaffer.Editor.TransferMarket
         private string _status;
         private readonly Scout _scout = new Scout();
 
+        // The market strongest-first, and the squad strongest-first. Kept as fields and refilled only when
+        // the roster behind them actually changes, so a render never re-sorts and never re-rates: the
+        // ListView reads _marketOrder straight through.
+        private readonly List<Player> _marketOrder = new List<Player>();
+        private readonly List<Player> _squadOrder = new List<Player>();
+
         private VisualElement _body;
+
+        // Live handles into the body, for the repaints that must not rebuild it (see RebindMarket). Every
+        // one of these is dropped at the top of Render, because Render clears the hierarchy they live in.
+        private ListView _marketList;
+        private Label _marketMask;
+        private Label _headerLine;
 
         [MenuItem("Gaffer/Transfer Market")]
         public static void ShowWindow()
@@ -105,11 +118,14 @@ namespace Gaffer.Editor.TransferMarket
             wageBudget.RegisterValueChangedCallback(e => _wageBudget = e.newValue);
             card.Add(wageBudget);
 
+            // Dragging this fires the callback every frame. It used to call Render(), which cleared the
+            // body and rebuilt a row for every prospect in the pool — the whole market, per frame. It now
+            // rebinds instead: only the rows the ListView has actually realized are re-scouted.
             var accuracy = new Slider("Scout accuracy", 0f, 1f) { value = _accuracy };
             accuracy.RegisterValueChangedCallback(e =>
             {
                 _accuracy = e.newValue;
-                Render();
+                RebindMarket();
             });
             card.Add(accuracy);
 
@@ -117,7 +133,7 @@ namespace Gaffer.Editor.TransferMarket
             reveal.RegisterValueChangedCallback(e =>
             {
                 _reveal = e.newValue;
-                Render();
+                RebindMarket();
             });
             card.Add(reveal);
 
@@ -157,7 +173,16 @@ namespace Gaffer.Editor.TransferMarket
             _finances = new Finances(_startingCash, _wageBudget, TotalWages(_squad));
             _season = 0;
             _status = null;
+            Reorder();
             Render();
+        }
+
+        // Refills both strongest-first orders. Called only where the rosters actually change — generate,
+        // advance a season, sign, sell — never from Render, so scrolling and scouting cost nothing.
+        private void Reorder()
+        {
+            ByOverallDescending(_market, _marketOrder);
+            ByOverallDescending(_squad.Players, _squadOrder);
         }
 
         // Ages and develops every player one season — the "grow" half of discover-grow-sell. Each player
@@ -179,6 +204,7 @@ namespace Gaffer.Editor.TransferMarket
             _market = DevelopAll(_market);
             _finances = new Finances(_finances.Cash, _finances.WeeklyWageBudget, TotalWages(_squad));
             _status = "Advanced to season " + _season + " — a year of growth and decline.";
+            Reorder();
             Render();
         }
 
@@ -227,6 +253,7 @@ namespace Gaffer.Editor.TransferMarket
                 _squad = result.Value.Squad;
                 _market.Remove(player);
                 _status = "Signed " + player.Name + " for " + FormatValue(result.Value.Fee) + " (" + FormatValue(PlayerWage.Weekly(player)) + "/wk).";
+                Reorder();
             }
 
             Render();
@@ -245,13 +272,22 @@ namespace Gaffer.Editor.TransferMarket
                 _squad = result.Value.Squad;
                 _market.Add(player);
                 _status = "Sold " + player.Name + " for " + FormatValue(result.Value.Fee) + ".";
+                Reorder();
             }
 
             Render();
         }
 
+        // A full rebuild of the body. Reserved for the things that actually change the rosters or the
+        // books — generate, advance, sign, sell. Scouting accuracy and reveal go through RebindMarket.
         private void Render()
         {
+            // The body is about to be cleared, so the handles into it go first: a ListView left in a field
+            // after its hierarchy was dropped would be rebound into nothing (UNITY.md §5).
+            _marketList = null;
+            _marketMask = null;
+            _headerLine = null;
+
             _body.Clear();
             if (_squad == null)
             {
@@ -263,7 +299,8 @@ namespace Gaffer.Editor.TransferMarket
             top.style.flexDirection = FlexDirection.Row;
             top.style.justifyContent = Justify.SpaceBetween;
             top.Add(Text("CASH  " + FormatValue(_finances.Cash), 15, HarnessPalette.Accent, bold: true));
-            top.Add(Text("Season " + _season + " · " + _squad.Count + " in squad · accuracy " + Mathf.RoundToInt(_accuracy * 100f) + "%", 12, HarnessPalette.Muted));
+            _headerLine = Text(HeaderLine(), 12, HarnessPalette.Muted);
+            top.Add(_headerLine);
             header.Add(top);
 
             var advance = new Button(AdvanceSeason) { text = "Advance Season (age + develop)" };
@@ -293,6 +330,40 @@ namespace Gaffer.Editor.TransferMarket
             _body.Add(BuildMarketCard());
         }
 
+        private string HeaderLine()
+        {
+            return "Season " + _season + " · " + _squad.Count + " in squad · accuracy " +
+                Mathf.RoundToInt(_accuracy * 100f) + "%";
+        }
+
+        private string MaskNote()
+        {
+            return _reveal
+                ? "Revealing true potential (dev)."
+                : "OVR is his current ability (visible); potential is masked — trust the band, take the punt.";
+        }
+
+        // Repaints exactly what a scouting-accuracy or reveal change alters: the visible market rows and
+        // the two lines of copy that quote the setting. Nothing is created or destroyed, so this is what
+        // the accuracy slider can afford to run on every frame of a drag. No-ops before the first Render.
+        private void RebindMarket()
+        {
+            if (_headerLine != null)
+            {
+                _headerLine.text = HeaderLine();
+            }
+
+            if (_marketMask != null)
+            {
+                _marketMask.text = MaskNote();
+            }
+
+            if (_marketList != null)
+            {
+                _marketList.RefreshItems();
+            }
+        }
+
         private VisualElement BuildSquadCard()
         {
             VisualElement card = Card();
@@ -300,7 +371,7 @@ namespace Gaffer.Editor.TransferMarket
 
             card.Add(Text("Your own players — true overall (OVR) and full attributes. Advance a season to watch the young ones grow.", 10, HarnessPalette.Muted));
 
-            foreach (Player player in ByOverallDescending(_squad.Players))
+            foreach (Player player in _squadOrder)
             {
                 var row = Row();
                 var line = LineWithName(player, showRating: true);
@@ -315,50 +386,251 @@ namespace Gaffer.Editor.TransferMarket
             return card;
         }
 
+        // ----- The market list ------------------------------------------------------------------------
+
+        // The row draws a fixed four lines, so the ListView can virtualize by height: it creates only as
+        // many rows as fit the viewport and rebinds them as you scroll. Nothing here scales with the pool.
+        private const float MarketRowHeight = 78f;
+        private const float MarketListHeight = 460f;
+
         private VisualElement BuildMarketCard()
         {
             VisualElement card = Card();
-            card.Add(Text("MARKET — " + _market.Count + " PROSPECTS", 11, HarnessPalette.Muted, bold: true));
+            card.Add(Text("MARKET — " + _marketOrder.Count + " PROSPECTS", 11, HarnessPalette.Muted, bold: true));
+            _marketMask = Text(MaskNote(), 10, HarnessPalette.Muted);
+            card.Add(_marketMask);
             card.Add(Text(
-                _reveal ? "Revealing true potential (dev)." : "OVR is his current ability (visible); potential is masked — trust the band, take the punt.",
+                "The fee and the weekly wage are both on the button: a signing has to clear the cash AND the wage room.",
                 10, HarnessPalette.Muted));
 
-            foreach (Player player in ByOverallDescending(_market))
+            // Virtualized. The card used to build five to eight VisualElements per prospect for the whole
+            // market — 300,000 of them at a 50,000-player pool — and scout every one of them on the way.
+            // The ListView holds about seven live rows regardless, and only those get Observe'd (bindItem).
+            _marketList = new ListView
             {
-                ScoutReport report = _scout.Observe(player, _accuracy);
-
-                var row = Row();
-                var line = LineWithName(player, showRating: true);
-                var sign = new Button(() => Sign(player)) { text = "Sign " + FormatValue(TransferService.Fee(player)) };
-                StyleActionButton(sign, HarnessPalette.Accent);
-                line.Add(sign);
-                row.Add(line);
-
-                string potential = "Potential " + report.PotentialLow + "–" + report.PotentialHigh;
-                if (_reveal)
-                {
-                    potential += "   (true " + player.HiddenPotential + ")";
-                }
-
-                row.Add(Text(potential, 11, HarnessPalette.Accent));
-                row.Add(Text(FormatAttributes(report), 10, HarnessPalette.Muted));
-                card.Add(row);
-            }
+                fixedItemHeight = MarketRowHeight,
+                virtualizationMethod = CollectionVirtualizationMethod.FixedHeight,
+                selectionType = SelectionType.None,
+                showBorder = false,
+                showAlternatingRowBackgrounds = AlternatingRowBackground.None,
+                reorderable = false,
+                horizontalScrollingEnabled = false,
+                makeItem = MakeMarketRow,
+                bindItem = BindMarketRow,
+                unbindItem = UnbindMarketRow,
+                itemsSource = _marketOrder,
+            };
+            _marketList.style.height = MarketListHeight;
+            _marketList.style.marginTop = 6;
+            card.Add(_marketList);
 
             return card;
         }
 
+        private VisualElement MakeMarketRow()
+        {
+            return new MarketRowView(this).Root;
+        }
+
+        // The only per-prospect work left, and it runs for visible rows only: one scout report and one
+        // affordability read, both for a player who is actually on screen.
+        private void BindMarketRow(VisualElement element, int index)
+        {
+            var view = (MarketRowView)element.userData;
+            if (index < 0 || index >= _marketOrder.Count)
+            {
+                view.Unbind();
+                return;
+            }
+
+            Player player = _marketOrder[index];
+            view.Bind(
+                player,
+                _scout.Observe(player, _accuracy),
+                SigningVerdict.For(TransferService.Fee(player), PlayerWage.Weekly(player), _finances),
+                _reveal);
+        }
+
+        private static void UnbindMarketRow(VisualElement element, int index)
+        {
+            ((MarketRowView)element.userData).Unbind();
+        }
+
+        /// <summary>
+        /// One recycled market row. The ListView creates a handful of these — as many as fit the viewport —
+        /// and rebinds them as you scroll, so every row object shows many different players over its life.
+        ///
+        /// <para><b>The sign button's handler is registered once, here, and never per bind.</b> It
+        /// dispatches through <see cref="_player"/>, the single field <see cref="Bind"/> overwrites and
+        /// <see cref="Unbind"/> clears. That is deliberate: a handler added in <c>bindItem</c> would have to
+        /// be removed in <c>unbindItem</c> or it would pile up on the recycled row and eventually sign a
+        /// player who left the screen long ago — the classic failure of this pattern (PERFORMANCE.md §4,
+        /// UNITY.md §5). With one handler for the row's whole life there is nothing to unregister, and the
+        /// worst a stale click can do is nothing at all, because an unbound row has no player.</para>
+        /// </summary>
+        private sealed class MarketRowView
+        {
+            private readonly TransferMarketWindow _window;
+            private readonly Label _name;
+            private readonly Label _rating;
+            private readonly Label _worth;
+            private readonly Button _sign;
+            private readonly Label _books;
+            private readonly Label _potential;
+            private readonly Label _attributes;
+
+            // Who this row is showing right now. The row's only piece of per-bind state, and the only
+            // thing the button reads.
+            private Player _player;
+
+            internal MarketRowView(TransferMarketWindow window)
+            {
+                _window = window;
+
+                Root = new VisualElement();
+                Root.style.height = MarketRowHeight;
+                Root.style.paddingTop = 6;
+                Root.style.paddingBottom = 6;
+                Root.style.paddingLeft = 6;
+                Root.style.borderBottomWidth = 1;
+                Root.style.borderBottomColor = HarnessPalette.PitchLine;
+                Root.style.borderLeftColor = HarnessPalette.Loss;
+                Root.style.overflow = Overflow.Hidden;
+                Root.userData = this;
+
+                var line = new VisualElement();
+                line.style.flexDirection = FlexDirection.Row;
+                line.style.alignItems = Align.Center;
+
+                _name = Text(string.Empty, 12, HarnessPalette.Chalk, bold: true);
+                _name.style.flexGrow = 1;
+                _name.style.whiteSpace = WhiteSpace.NoWrap;
+                line.Add(_name);
+
+                _rating = Text(string.Empty, 12, HarnessPalette.Accent, bold: true);
+                _rating.style.whiteSpace = WhiteSpace.NoWrap;
+                line.Add(_rating);
+
+                _worth = Text(string.Empty, 11, HarnessPalette.Muted);
+                _worth.style.whiteSpace = WhiteSpace.NoWrap;
+                line.Add(_worth);
+
+                _sign = new Button(SignCurrent);
+                StyleActionButton(_sign, HarnessPalette.Accent);
+                line.Add(_sign);
+                Root.Add(line);
+
+                _books = Text(string.Empty, 10, HarnessPalette.Muted);
+                _books.style.whiteSpace = WhiteSpace.NoWrap;
+                Root.Add(_books);
+
+                _potential = Text(string.Empty, 11, HarnessPalette.Accent);
+                _potential.style.whiteSpace = WhiteSpace.NoWrap;
+                Root.Add(_potential);
+
+                _attributes = Text(string.Empty, 10, HarnessPalette.Muted);
+                _attributes.style.whiteSpace = WhiteSpace.NoWrap;
+                Root.Add(_attributes);
+            }
+
+            internal VisualElement Root { get; }
+
+            /// <summary>
+            /// Repaints the row for a different player. Every mutable thing the row draws — and the player
+            /// the button will act on — is assigned here unconditionally: no "only if it changed" branch,
+            /// no field left holding the previous occupant. A rebind that forgets one of these is how a
+            /// recycled row signs the wrong man, so the reset is total rather than incremental.
+            /// </summary>
+            internal void Bind(Player player, ScoutReport report, SigningVerdict verdict, bool reveal)
+            {
+                _player = player;
+
+                _name.text = player.Name + "  ·  " + HarnessLabels.RoleLabel(player.Role) + "  ·  " + player.Age;
+                _rating.text = "OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(player)) + "   ";
+                _worth.text = FormatValue(PlayerValuation.Value(player)) + " worth   ";
+
+                _sign.text = verdict.ActionLabel();
+                _sign.SetEnabled(true);
+                _sign.style.backgroundColor = verdict.Affordable ? HarnessPalette.Accent : HarnessPalette.PitchLine;
+                _sign.style.color = verdict.Affordable ? HarnessPalette.Pitch : HarnessPalette.Muted;
+
+                // The blocked reason is shown, not enforced: the button stays live so TransferService.Sign
+                // still gets the click and still writes the authoritative message. The row only says in
+                // advance what that message would be.
+                _books.text = verdict.Sentence();
+                _books.style.color = verdict.Tone;
+                Root.style.borderLeftWidth = verdict.Affordable ? 0 : 2;
+
+                _potential.text = reveal
+                    ? "Potential " + report.PotentialLow + "–" + report.PotentialHigh + "   (true " + player.HiddenPotential + ")"
+                    : "Potential " + report.PotentialLow + "–" + report.PotentialHigh;
+                _attributes.text = FormatAttributes(report);
+            }
+
+            /// <summary>
+            /// Lets go of the player. Called when the ListView recycles the row out of view, so a row
+            /// between occupants shows nothing and — because the button reads <see cref="_player"/> — can
+            /// sign nobody.
+            /// </summary>
+            internal void Unbind()
+            {
+                _player = null;
+                _name.text = string.Empty;
+                _rating.text = string.Empty;
+                _worth.text = string.Empty;
+                _sign.text = string.Empty;
+                _sign.SetEnabled(false);
+                _books.text = string.Empty;
+                _potential.text = string.Empty;
+                _attributes.text = string.Empty;
+                Root.style.borderLeftWidth = 0;
+            }
+
+            private void SignCurrent()
+            {
+                if (_player != null)
+                {
+                    _window.Sign(_player);
+                }
+            }
+        }
+
         // Strongest first, by current overall rating — the natural way to read a squad or a shortlist. Ties
         // break on the lower player id so the order is stable across renders.
-        private static List<Player> ByOverallDescending(IReadOnlyList<Player> players)
+        //
+        // Each player is rated exactly once, into an array, and the sort compares array entries. The
+        // comparator used to call PlayerRatings.ForRole twice per comparison, which is ~2·n·log n rating
+        // evaluations — about 1.5 million for a 50,000-player pool, for 50,000 players' worth of data.
+        private static void ByOverallDescending(IReadOnlyList<Player> players, List<Player> into)
         {
-            var sorted = new List<Player>(players);
-            sorted.Sort((a, b) =>
+            int count = players.Count;
+            into.Clear();
+            if (count == 0)
             {
-                int byRating = PlayerRatings.ForRole(b).CompareTo(PlayerRatings.ForRole(a));
-                return byRating != 0 ? byRating : a.Id.Value.CompareTo(b.Id.Value);
+                return;
+            }
+
+            var ratings = new double[count];
+            var ids = new int[count];
+            var order = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                Player player = players[i];
+                ratings[i] = PlayerRatings.ForRole(player);
+                ids[i] = player.Id.Value;
+                order[i] = i;
+            }
+
+            Array.Sort(order, (a, b) =>
+            {
+                int byRating = ratings[b].CompareTo(ratings[a]);
+                return byRating != 0 ? byRating : ids[a].CompareTo(ids[b]);
             });
-            return sorted;
+
+            for (int i = 0; i < count; i++)
+            {
+                into.Add(players[order[i]]);
+            }
         }
 
         private static VisualElement LineWithName(Player player, bool showRating)
@@ -432,19 +704,11 @@ namespace Gaffer.Editor.TransferMarket
             return string.Join("   ", parts);
         }
 
+        // One implementation, shared with the affordability copy, so a fee on a button and the shortfall
+        // under it can never be written two different ways (and a negative is signed, not "€-500000").
         private static string FormatValue(long value)
         {
-            if (value >= 1_000_000)
-            {
-                return "€" + (value / 1_000_000.0).ToString("0.0") + "M";
-            }
-
-            if (value >= 1_000)
-            {
-                return "€" + (value / 1_000) + "k";
-            }
-
-            return "€" + value;
+            return HarnessMoney.Format(value);
         }
 
         private static VisualElement Row()

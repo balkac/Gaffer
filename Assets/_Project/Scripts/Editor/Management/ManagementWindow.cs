@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Gaffer.Application.Drama;
@@ -9,6 +10,7 @@ using Gaffer.Application.Simulation;
 using Gaffer.Application.Transfers;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
+using Gaffer.Domain.Drama;
 using Gaffer.Domain.Players;
 using Gaffer.Editor.Balance;
 using Gaffer.Editor.Content;
@@ -73,12 +75,40 @@ namespace Gaffer.Editor.Management
         private readonly List<VisualElement> _slotTokens = new List<VisualElement>();
 
         private string _transferStatus;
+
+        // How much weekly wage ceiling the budget-exchange row is set to move, and what the last move (or
+        // refusal) said. The amount is a window setting, not run state: the session owns the money.
+        private long _budgetShiftWeekly = 5_000L;
+        private string _budgetStatus;
+
         private PlayerRole? _marketRoleFilter;
         private int _marketMinAge = 15;
         private int _marketMaxAge = 40;
 
+        // The run's market, strongest first, and then the slice the filters leave — the ListView's source.
+        // Both are fields refilled only when something behind them moves, so a Refresh never re-sorts and
+        // never re-rates the pool.
+        private readonly List<Player> _marketOrder = new List<Player>();
+        private readonly List<Player> _marketShown = new List<Player>();
+        private IReadOnlyList<Player> _orderedFrom;
+        private int _orderedCount = -1;
+
+        // Live handles into the transfer card, for the repaints that must not rebuild the body. Dropped at
+        // the top of Refresh, which clears the hierarchy they live in.
+        private ListView _marketList;
+        private Label _marketHeading;
+        private Label _marketMask;
+        private Label _marketEmpty;
+
         private string _saveStatus;
         private string _dramaStatus;
+
+        // What the last answered drama actually did, replayed off its DramaResolution and kept on screen
+        // until the next drama or the next season. _previewScratch is the decision card's working buffer,
+        // refilled per choice while the card is built and never held past it.
+        private readonly List<DramaLine> _aftermath = new List<DramaLine>();
+        private readonly List<DramaLine> _previewScratch = new List<DramaLine>();
+        private string _aftermathTitle;
 
         private SimulationBalanceSO _simulationBalance;
         private DevelopmentBalanceSO _developmentBalance;
@@ -187,14 +217,14 @@ namespace Gaffer.Editor.Management
             gems.RegisterValueChangedCallback(e => _gems = e.newValue);
             card.Add(gems);
 
+            // Dragging this fires every frame. It used to call Refresh(), which cleared the body and
+            // rebuilt a row — and ran a scout report — for every prospect in the market. It now rebinds
+            // the handful of rows the ListView has realized, and nothing else moves.
             var accuracy = new Slider("Scout accuracy", 0f, 1f) { value = _accuracy };
             accuracy.RegisterValueChangedCallback(e =>
             {
                 _accuracy = e.newValue;
-                if (_session != null)
-                {
-                    Refresh();
-                }
+                RebindMarket();
             });
             card.Add(accuracy);
 
@@ -202,10 +232,7 @@ namespace Gaffer.Editor.Management
             reveal.RegisterValueChangedCallback(e =>
             {
                 _reveal = e.newValue;
-                if (_session != null)
-                {
-                    Refresh();
-                }
+                RebindMarket();
             });
             card.Add(reveal);
 
@@ -310,12 +337,20 @@ namespace Gaffer.Editor.Management
         private void Adopt(RunSession session, string status)
         {
             _session = session;
+
+            // A different run's market is a different list; forget what the old one was ordered from so
+            // the watch in SyncMarketOrder cannot mistake it for unchanged.
+            _orderedFrom = null;
+            _orderedCount = -1;
+
             Replay(session.Lineup());
             _lastWeek = null;
             _summer = null;
             _lineupStatus = null;
             _transferStatus = null;
+            _budgetStatus = null;
             _dramaStatus = null;
+            ClearAftermath();
             _saveStatus = status;
             Refresh();
         }
@@ -424,6 +459,30 @@ namespace Gaffer.Editor.Management
                 TransferOutcome outcome = result.Value;
                 Replay(outcome.Lineup);
                 _transferStatus = "Sold " + outcome.Player.Name + " for " + FormatValue(outcome.Fee) + ".";
+            }
+
+            Refresh();
+        }
+
+        // Moves money between the two budgets. Negative gives up wage ceiling for cash, positive buys
+        // ceiling with cash; the session refuses what cannot happen and the refusal is shown as it came.
+        // No window gate here — the exchange moves no player, so it is live all season.
+        private void ShiftBudget(long weeklyDelta)
+        {
+            Result<BudgetShiftOutcome> result = _session.ShiftWageBudget(weeklyDelta);
+            if (result.IsFailure)
+            {
+                _budgetStatus = result.Error;
+            }
+            else
+            {
+                // Replayed off the outcome, not re-read from the session (ARCHITECTURE §8).
+                BudgetShiftOutcome outcome = result.Value;
+                _budgetStatus = (outcome.WeeklyWageBudgetDelta < 0 ? "Gave up " : "Bought ") +
+                    FormatValue(outcome.WeeklyWageBudgetDelta < 0 ? -outcome.WeeklyWageBudgetDelta : outcome.WeeklyWageBudgetDelta) +
+                    "/wk of ceiling for " + HarnessMoney.Signed(outcome.CashDelta) + " — now " +
+                    FormatValue(outcome.Finances.Cash) + " cash and a " +
+                    FormatValue(outcome.Finances.WeeklyWageBudget) + "/wk ceiling.";
             }
 
             Refresh();
@@ -554,7 +613,9 @@ namespace Gaffer.Editor.Management
             Replay(_summer.Lineup);
             _lastWeek = null;
             _transferStatus = null;
+            _budgetStatus = null;
             _dramaStatus = null;
+            ClearAftermath();
             Refresh();
         }
 
@@ -562,6 +623,10 @@ namespace Gaffer.Editor.Management
 
         private void ResolveDrama(int choiceIndex)
         {
+            // Read before the answer: the pending event is gone the moment the session resolves it, and the
+            // aftermath headline wants the words that were on the button the manager pressed.
+            PendingDrama answered = _session.PendingDrama;
+
             Result<DramaResolution> result = _session.ResolveDrama(choiceIndex);
             if (result.IsFailure)
             {
@@ -572,45 +637,30 @@ namespace Gaffer.Editor.Management
 
             DramaResolution resolution = result.Value;
             Replay(resolution.Lineup);
-            _dramaStatus = Describe(resolution);
+            _dramaStatus = null;
+            RecordAftermath(answered, resolution);
             Refresh();
         }
 
-        // The resolution replayed as one line of copy. Every consequence is on the record — the sale that
-        // went through, the trait that passed on — so nothing is inferred by comparing before and after.
-        private static string Describe(DramaResolution resolution)
+        // The resolution replayed as concrete copy — the morale entries that landed and on whom, the cash
+        // that moved and what is left, the sale that went through, the trait that passed on. Every one of
+        // those is a field on the record, so nothing is inferred by comparing before and after (§8).
+        private void RecordAftermath(PendingDrama answered, DramaResolution resolution)
         {
-            string text = Humanize(resolution.EventId.Value) + " — resolved.";
-            if (resolution.CashDelta != 0)
-            {
-                text += " Cash " + (resolution.CashDelta > 0 ? "+" : "") + FormatValue(resolution.CashDelta) + ".";
-            }
+            string answer = answered != null && resolution.ChoiceIndex >= 0
+                && resolution.ChoiceIndex < answered.Event.Choices.Count
+                ? HarnessDrama.ChoiceLabel(answered.Event.Choices[resolution.ChoiceIndex].LabelKey)
+                : null;
 
-            if (resolution.SoldPlayer != null)
-            {
-                text += " " + resolution.SoldPlayer.Name + " sold for " + FormatValue(resolution.SaleFee) + ".";
-            }
-
-            if (resolution.RebuiltPlayer != null)
-            {
-                text += " " + resolution.RebuiltPlayer.Name + " is now a " + Humanize(resolution.GrantedTrait.Value) + ".";
-            }
-
-            return text;
+            _aftermathTitle = HarnessDrama.Humanize(resolution.EventId.Value) +
+                (answer != null ? "  —  you chose: " + answer : " — resolved.");
+            HarnessDrama.Aftermath(resolution, _session, _aftermath);
         }
 
-        // Dev-tool copy: the shipped UI reads localized text through the event's keys; the workbench
-        // humanizes the slugs so the loop is playable today (see HarnessLabels on why that is allowed here).
-        private static string Humanize(string slug)
+        private void ClearAftermath()
         {
-            string spaced = slug.Replace('-', ' ').Replace('_', ' ');
-            return spaced.Length == 0 ? spaced : char.ToUpperInvariant(spaced[0]) + spaced.Substring(1);
-        }
-
-        private static string ChoiceLabel(string labelKey)
-        {
-            int lastDot = labelKey.LastIndexOf('.');
-            return Humanize(lastDot >= 0 ? labelKey.Substring(lastDot + 1) : labelKey);
+            _aftermath.Clear();
+            _aftermathTitle = null;
         }
 
         private VisualElement BuildDramaCard(PendingDrama pending)
@@ -620,7 +670,7 @@ namespace Gaffer.Editor.Management
             card.style.borderLeftColor = HarnessPalette.Accent;
 
             card.Add(MakeLabel("DRAMA · WEEK " + _session.PlayedRounds, 11, HarnessPalette.Accent, bold: true));
-            card.Add(MakeLabel(Humanize(pending.Event.Id.Value).ToUpperInvariant(), 15, HarnessPalette.Chalk, bold: true));
+            card.Add(MakeLabel(HarnessDrama.Humanize(pending.Event.Id.Value).ToUpperInvariant(), 15, HarnessPalette.Chalk, bold: true));
 
             if (pending.Subject != null)
             {
@@ -631,31 +681,98 @@ namespace Gaffer.Editor.Management
                 line.Add(MakeLabel(
                     subject.Name + "  ·  " + HarnessLabels.RoleLabel(subject.Role) + "  ·  " + subject.Age +
                     "  ·  OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(subject)), 11, HarnessPalette.Chalk));
+                line.Add(HarnessMorale.MakeBadgeFor(_session.MoralePointsOf(subject.Id)));
                 line.Add(TraitBadges(subject));
                 card.Add(line);
             }
 
-            card.Add(MakeLabel("The decision is yours — it will be felt on the pitch and in the books.", 10, HarnessPalette.Muted));
+            card.Add(MakeLabel(
+                "Every answer's consequences are listed under it — real numbers, priced against this squad and these books.",
+                10, HarnessPalette.Muted));
 
             var buttons = new VisualElement();
             buttons.style.flexDirection = FlexDirection.Row;
+            buttons.style.alignItems = Align.FlexStart;
             buttons.style.marginTop = 8;
             for (int i = 0; i < pending.Event.Choices.Count; i++)
             {
-                int index = i;
-                var choice = new Button(() => ResolveDrama(index)) { text = ChoiceLabel(pending.Event.Choices[i].LabelKey) };
-                choice.style.flexGrow = 1;
-                choice.style.height = 26;
-                if (i > 0)
-                {
-                    choice.style.marginLeft = 6;
-                }
-
-                StyleActionButton(choice, HarnessPalette.Accent);
-                buttons.Add(choice);
+                buttons.Add(BuildChoiceColumn(pending, i));
             }
 
             card.Add(buttons);
+            return card;
+        }
+
+        // One answer: the verb on the button, and under it every effect the choice carries, one line each.
+        // The columns share the width evenly (flexBasis 0 + flexGrow 1) and the lines wrap rather than clip,
+        // so three answers side by side stay readable and nothing is silently truncated.
+        private VisualElement BuildChoiceColumn(PendingDrama pending, int index)
+        {
+            DramaChoice choice = pending.Event.Choices[index];
+
+            var column = new VisualElement();
+            column.style.flexGrow = 1;
+            column.style.flexShrink = 1;
+            column.style.flexBasis = 0;
+            if (index > 0)
+            {
+                column.style.marginLeft = 6;
+            }
+
+            var button = new Button(() => ResolveDrama(index)) { text = HarnessDrama.ChoiceLabel(choice.LabelKey) };
+
+            // minHeight, not height: the label wraps at three columns wide, and a fixed height would clip
+            // the second line of a long answer rather than grow for it.
+            button.style.minHeight = 26;
+            button.style.fontSize = 11;
+            button.style.whiteSpace = WhiteSpace.Normal;
+            button.style.marginLeft = 0;
+            button.style.marginRight = 0;
+            button.style.backgroundColor = HarnessPalette.Accent;
+            button.style.color = HarnessPalette.Pitch;
+            button.style.unityFontStyleAndWeight = FontStyle.Bold;
+            SetRadius(button, 6);
+            column.Add(button);
+
+            var panel = new VisualElement();
+            panel.style.marginTop = 4;
+            panel.style.backgroundColor = HarnessPalette.Pitch;
+            SetBorder(panel, HarnessPalette.PitchLine, 1);
+            SetRadius(panel, 6);
+            SetPadding(panel, 8);
+            column.Add(panel);
+
+            HarnessDrama.Preview(pending, choice, _session, _previewScratch);
+            for (int i = 0; i < _previewScratch.Count; i++)
+            {
+                Label line = MakeLabel(_previewScratch[i].Text, 10, _previewScratch[i].Tone);
+                if (i > 0)
+                {
+                    line.style.marginTop = 3;
+                }
+
+                panel.Add(line);
+            }
+
+            return column;
+        }
+
+        // What the last answer did, in the same terms the preview promised it in.
+        private VisualElement BuildAftermathCard()
+        {
+            VisualElement card = MakeCard();
+            card.style.borderLeftWidth = 3;
+            card.style.borderLeftColor = HarnessPalette.Draw;
+
+            card.Add(MakeLabel("WHAT YOUR ANSWER DID", 11, HarnessPalette.Draw, bold: true));
+            card.Add(MakeLabel(_aftermathTitle, 13, HarnessPalette.Chalk, bold: true));
+            for (int i = 0; i < _aftermath.Count; i++)
+            {
+                Label line = MakeLabel(_aftermath[i].Text, 11, _aftermath[i].Tone);
+                line.style.marginTop = 3;
+                card.Add(line);
+            }
+
             return card;
         }
 
@@ -663,6 +780,13 @@ namespace Gaffer.Editor.Management
 
         private void Refresh()
         {
+            // The body is about to be cleared, so the handles into it go first: a ListView left in a field
+            // after its hierarchy was dropped would be rebound into nothing (UNITY.md §5).
+            _marketList = null;
+            _marketHeading = null;
+            _marketMask = null;
+            _marketEmpty = null;
+
             _body.Clear();
             if (_session == null)
             {
@@ -706,6 +830,7 @@ namespace Gaffer.Editor.Management
                 "Wages " + FormatValue(finances.WeeklyWageBill) + " / " + FormatValue(finances.WeeklyWageBudget) +
                 "/wk  ·  " + FormatValue(finances.WageHeadroom) + "/wk free", 11, wageColor));
             header.Add(moneyRow);
+            header.Add(BuildBudgetExchange());
 
             var saveRow = new VisualElement();
             saveRow.style.flexDirection = FlexDirection.Row;
@@ -780,6 +905,13 @@ namespace Gaffer.Editor.Management
                 _body.Add(dramaNote);
             }
 
+            // The last answer's consequences stay on screen until the next drama or the next season — the
+            // morale it left is on the squad rows below for as many weeks as it lasts.
+            if (pending == null && _aftermath.Count > 0)
+            {
+                _body.Add(BuildAftermathCard());
+            }
+
             if (_summer != null && (_summer.Retired.Count > 0 || _summer.Arrived.Count > 0))
             {
                 _body.Add(BuildSummerCard());
@@ -795,6 +927,135 @@ namespace Gaffer.Editor.Management
             {
                 _body.Add(BuildLastWeekCard());
             }
+        }
+
+        /// <summary>
+        /// The board's standing offer to move money between the two budgets, sitting under the line that
+        /// shows them. Both directions are priced by the core <em>before</em> either button is pressed:
+        /// the buttons carry the trade and the two lines under them say what the books would look like
+        /// afterwards, or — quoted from the session, word for word — why that direction is refused. The
+        /// owner's complaint was cash he could not spend and no way to see what would happen until he had
+        /// already acted; nothing here waits for a click to tell him.
+        ///
+        /// <para>The figures come from <c>RunSession.PreviewWageBudgetShift</c>, which runs the very
+        /// method the click runs without committing it, so the preview and the answer cannot disagree.</para>
+        /// </summary>
+        private VisualElement BuildBudgetExchange()
+        {
+            var block = new VisualElement();
+            block.style.marginTop = 8;
+            block.Add(MakeLabel(
+                "REBALANCE THE BUDGETS  ·  " + FormatValue(1) + "/wk of ceiling ⇄ " +
+                FormatValue(_session.WageBudgetExchangeWeeks) + " cash, both ways",
+                10, HarnessPalette.Muted, bold: true));
+
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.marginTop = 4;
+
+            var amount = new LongField("Move (€/wk)") { value = _budgetShiftWeekly };
+            amount.style.width = 170;
+            amount.style.marginRight = 6;
+            row.Add(amount);
+
+            var give = new Button(() => ShiftBudget(-BudgetShiftMagnitude()));
+            var buy = new Button(() => ShiftBudget(BudgetShiftMagnitude()));
+            StyleExchangeButton(give);
+            StyleExchangeButton(buy);
+            row.Add(give);
+            row.Add(buy);
+            block.Add(row);
+
+            Label giveLine = MakeLabel(string.Empty, 10, HarnessPalette.Muted);
+            giveLine.style.marginTop = 3;
+            block.Add(giveLine);
+            Label buyLine = MakeLabel(string.Empty, 10, HarnessPalette.Muted);
+            block.Add(buyLine);
+
+            // Repriced on every keystroke: nothing is created or destroyed, only text and colour written,
+            // so it is cheap enough to run while the amount is being typed (the accuracy slider's rule).
+            void Paint()
+            {
+                long weekly = BudgetShiftMagnitude();
+                if (weekly == 0)
+                {
+                    ShowExchangeIdle(give, giveLine, "Free wage room", "Type a weekly amount to give up for cash.");
+                    ShowExchangeIdle(buy, buyLine, "Buy wage room", "Type a weekly amount to buy with cash.");
+                    return;
+                }
+
+                Finances money = _session.Finances;
+                BudgetShiftVerdict giving = BudgetShiftVerdict.For(-weekly, money, _session.PreviewWageBudgetShift(-weekly));
+                BudgetShiftVerdict buying = BudgetShiftVerdict.For(weekly, money, _session.PreviewWageBudgetShift(weekly));
+
+                ShowExchangeOption(give, giveLine, giving.ActionLabel(), giving.Sentence(), giving.Allowed);
+                ShowExchangeOption(buy, buyLine, buying.ActionLabel(), buying.Sentence(), buying.Allowed);
+            }
+
+            amount.RegisterValueChangedCallback(changed =>
+            {
+                _budgetShiftWeekly = changed.newValue;
+                Paint();
+            });
+
+            Paint();
+
+            if (!string.IsNullOrEmpty(_budgetStatus))
+            {
+                Label status = MakeLabel(_budgetStatus, 10, HarnessPalette.Chalk);
+                status.style.marginTop = 3;
+                block.Add(status);
+            }
+
+            return block;
+        }
+
+        // The typed amount as a positive weekly figure: the two buttons carry the direction, so a negative
+        // entry means the same trade as the positive one rather than a silently inverted button.
+        // long.MinValue has no positive twin, so it reads as nothing to move.
+        private long BudgetShiftMagnitude()
+        {
+            if (_budgetShiftWeekly == long.MinValue)
+            {
+                return 0L;
+            }
+
+            return _budgetShiftWeekly < 0 ? -_budgetShiftWeekly : _budgetShiftWeekly;
+        }
+
+        private static void StyleExchangeButton(Button button)
+        {
+            button.style.flexGrow = 1;
+            button.style.height = 22;
+            button.style.marginLeft = 4;
+            button.style.unityFontStyleAndWeight = FontStyle.Bold;
+            SetRadius(button, 5);
+        }
+
+        // A blocked direction keeps its button live, the way a market row does: the session still gets the
+        // click and still writes the authoritative message, and the line only says in advance what that
+        // message will be.
+        private static void ShowExchangeOption(Button button, Label line, string action, string sentence, bool allowed)
+        {
+            button.text = action;
+            button.SetEnabled(true);
+            button.style.backgroundColor = allowed ? HarnessPalette.Accent : HarnessPalette.PitchLine;
+            button.style.color = allowed ? HarnessPalette.Pitch : HarnessPalette.Muted;
+            line.text = sentence;
+            line.style.color = allowed ? HarnessPalette.Muted : HarnessPalette.Loss;
+        }
+
+        // No amount typed: there is no trade to attempt, so the buttons go quiet rather than sending the
+        // session a no-op it would have to answer.
+        private static void ShowExchangeIdle(Button button, Label line, string action, string hint)
+        {
+            button.text = action;
+            button.SetEnabled(false);
+            button.style.backgroundColor = HarnessPalette.PitchLine;
+            button.style.color = HarnessPalette.Muted;
+            line.text = hint;
+            line.style.color = HarnessPalette.Muted;
         }
 
         private static string FormOf(int lossStreak)
@@ -1329,6 +1590,9 @@ namespace Gaffer.Editor.Management
                 left.style.flexGrow = 1;
                 row.Add(left);
 
+                // The drama layer, still live: a wound or a lift a decision left, for as long as it lasts.
+                row.Add(HarnessMorale.MakeBadgeFor(_session.MoralePointsOf(player.Id)));
+
                 var ovr = MakeLabel("OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(player)), 11, HarnessPalette.Accent, bold: true);
                 ovr.style.marginRight = 8;
                 row.Add(ovr);
@@ -1372,7 +1636,14 @@ namespace Gaffer.Editor.Management
         {
             var wrap = new VisualElement();
             wrap.style.flexDirection = FlexDirection.Row;
+            FillTraitBadges(wrap, player);
+            return wrap;
+        }
 
+        // Split out so a recycled row can refill an existing strip after clearing it, rather than swapping
+        // in a fresh container each bind.
+        private static void FillTraitBadges(VisualElement wrap, Player player)
+        {
             foreach (Gaffer.Domain.Traits.TraitId id in player.Traits)
             {
                 Label badge = MakeLabel(id.Value.Replace('-', ' ').ToUpperInvariant(), 9, HarnessPalette.Draw, bold: true);
@@ -1390,8 +1661,6 @@ namespace Gaffer.Editor.Management
                 SetRadius(badge, 3);
                 wrap.Add(badge);
             }
-
-            return wrap;
         }
 
         private static Color AttributeColor(byte value)
@@ -1421,11 +1690,18 @@ namespace Gaffer.Editor.Management
 
         // ----- Transfer market card ------------------------------------------------------------------------
 
+        // The row draws a fixed four lines so the ListView can virtualize by height: it creates only as
+        // many rows as fit the viewport and rebinds them as you scroll. Nothing scales with the market.
+        private const float MarketRowHeight = 78f;
+        private const float MarketListHeight = 420f;
+
         private VisualElement BuildTransferCard()
         {
             VisualElement card = MakeCard();
 
-            IReadOnlyList<Player> market = _session.Market;
+            SyncMarketOrder();
+            FilterMarket();
+
             TransferWindowPhase phase = _session.WindowPhase;
             bool open = phase != TransferWindowPhase.Closed;
             string label = phase == TransferWindowPhase.Summer ? "SUMMER WINDOW · OPEN"
@@ -1436,15 +1712,15 @@ namespace Gaffer.Editor.Management
             var head = new VisualElement();
             head.style.flexDirection = FlexDirection.Row;
             head.style.justifyContent = Justify.SpaceBetween;
-            head.Add(MakeLabel("TRANSFER MARKET — " + market.Count + " PROSPECTS", 11, HarnessPalette.Muted, bold: true));
+            _marketHeading = MakeLabel(MarketHeading(), 11, HarnessPalette.Muted, bold: true);
+            head.Add(_marketHeading);
             head.Add(MakeLabel(label, 11, labelColor, bold: true));
             card.Add(head);
 
-            card.Add(MakeLabel(
-                open
-                    ? (_reveal ? "Revealing true potential (dev)." : "OVR is current ability; potential is scout-masked — trust the band, take the punt.")
-                    : "The market is closed. It opens in the summer (pre-season) and at the winter break.",
-                10, HarnessPalette.Muted));
+            _marketMask = MakeLabel(
+                open ? MaskNote() : "The market is closed. It opens in the summer (pre-season) and at the winter break.",
+                10, HarnessPalette.Muted);
+            card.Add(_marketMask);
 
             if (!string.IsNullOrEmpty(_transferStatus))
             {
@@ -1456,6 +1732,10 @@ namespace Gaffer.Editor.Management
                 return card;
             }
 
+            card.Add(MakeLabel(
+                "The fee and the weekly wage are both on the button: a signing has to clear the cash AND the wage room.",
+                10, HarnessPalette.Muted));
+
             // Filter the shortlist by specific role (left back, right back, …) and by an age range.
             var roleChoices = new List<string> { "All positions" };
             foreach (PlayerRole role in FilterRoles)
@@ -1463,12 +1743,15 @@ namespace Gaffer.Editor.Management
                 roleChoices.Add(RoleName(role));
             }
 
+            // The filters narrow the source list, not the hierarchy: they refill _marketShown and refresh
+            // the ListView. Refresh() would have rebuilt the whole window on every keystroke in an age
+            // field.
             var roleFilter = new DropdownField("Position", roleChoices, RoleFilterIndex());
             roleFilter.RegisterValueChangedCallback(e =>
             {
                 int index = roleChoices.IndexOf(e.newValue);
                 _marketRoleFilter = index <= 0 ? (PlayerRole?)null : FilterRoles[index - 1];
-                Refresh();
+                RefilterMarket();
             });
             card.Add(roleFilter);
 
@@ -1479,7 +1762,7 @@ namespace Gaffer.Editor.Management
             minAge.RegisterValueChangedCallback(e =>
             {
                 _marketMinAge = e.newValue;
-                Refresh();
+                RefilterMarket();
             });
             ageRow.Add(minAge);
             var maxAge = new IntegerField("Max age") { value = _marketMaxAge };
@@ -1488,14 +1771,81 @@ namespace Gaffer.Editor.Management
             maxAge.RegisterValueChangedCallback(e =>
             {
                 _marketMaxAge = e.newValue;
-                Refresh();
+                RefilterMarket();
             });
             ageRow.Add(maxAge);
             card.Add(ageRow);
 
-            int shown = 0;
-            foreach (Player player in ByOverallDescending(market))
+            // Virtualized. The card used to build five to eight VisualElements per prospect for the whole
+            // shortlist and scout every one of them on the way; the ListView holds about five live rows
+            // regardless of the pool, and only those get Observe'd (bindItem).
+            _marketList = new ListView
             {
+                fixedItemHeight = MarketRowHeight,
+                virtualizationMethod = CollectionVirtualizationMethod.FixedHeight,
+                selectionType = SelectionType.None,
+                showBorder = false,
+                showAlternatingRowBackgrounds = AlternatingRowBackground.None,
+                reorderable = false,
+                horizontalScrollingEnabled = false,
+                makeItem = MakeMarketRow,
+                bindItem = BindMarketRow,
+                unbindItem = UnbindMarketRow,
+                itemsSource = _marketShown,
+            };
+            _marketList.style.height = MarketListHeight;
+            _marketList.style.marginTop = 6;
+            card.Add(_marketList);
+
+            _marketEmpty = MakeLabel("No prospects match this filter.", 10, HarnessPalette.Muted);
+            card.Add(_marketEmpty);
+            ShowMarketState();
+
+            return card;
+        }
+
+        // ----- The market list's source and repaints -------------------------------------------------------
+
+        private string MarketHeading()
+        {
+            return _marketShown.Count == _marketOrder.Count
+                ? "TRANSFER MARKET — " + _marketOrder.Count + " PROSPECTS"
+                : "TRANSFER MARKET — " + _marketShown.Count + " OF " + _marketOrder.Count + " PROSPECTS";
+        }
+
+        private string MaskNote()
+        {
+            return _reveal
+                ? "Revealing true potential (dev)."
+                : "OVR is current ability; potential is scout-masked — trust the band, take the punt.";
+        }
+
+        // Refills the strongest-first order, but only when the run's market has actually moved under it.
+        // _session.Market is the session's own list: a signing, a sale or a drama sale mutates it in place
+        // (so the count moves) and a summer rollover replaces it outright (so the instance moves). Nothing
+        // else touches it — market players do not develop mid-season — so instance-plus-count is a
+        // sufficient watch, and it keeps an n log n sort off every week advance and every drag-drop.
+        private void SyncMarketOrder()
+        {
+            IReadOnlyList<Player> market = _session.Market;
+            if (ReferenceEquals(market, _orderedFrom) && market.Count == _orderedCount)
+            {
+                return;
+            }
+
+            ByOverallDescending(market, _marketOrder);
+            _orderedFrom = market;
+            _orderedCount = market.Count;
+        }
+
+        // The filters, applied to the ordered pool. A plain scan — the only work here that is still
+        // proportional to the market, and it is two comparisons per player, not a rating and a row.
+        private void FilterMarket()
+        {
+            _marketShown.Clear();
+            for (int i = 0; i < _marketOrder.Count; i++)
+            {
+                Player player = _marketOrder[i];
                 if (_marketRoleFilter != null && player.Role != _marketRoleFilter.Value)
                 {
                     continue;
@@ -1506,51 +1856,246 @@ namespace Gaffer.Editor.Management
                     continue;
                 }
 
-                shown++;
-                ScoutReport report = _session.Observe(player, _accuracy);
+                _marketShown.Add(player);
+            }
+        }
 
-                var row = new VisualElement();
-                row.style.paddingTop = 6;
-                row.style.paddingBottom = 6;
-                row.style.borderBottomWidth = 1;
-                row.style.borderBottomColor = HarnessPalette.PitchLine;
+        private void RefilterMarket()
+        {
+            if (_marketList == null)
+            {
+                return;
+            }
+
+            FilterMarket();
+            _marketList.RefreshItems();
+            ShowMarketState();
+        }
+
+        // Repaints exactly what a scouting-accuracy or reveal change alters: the visible rows and the line
+        // of copy that quotes the setting. Nothing is created or destroyed, so the accuracy slider can
+        // afford to run this on every frame of a drag. No-ops before the first Refresh with a session.
+        private void RebindMarket()
+        {
+            if (_marketMask != null && _session != null && _session.IsWindowOpen)
+            {
+                _marketMask.text = MaskNote();
+            }
+
+            if (_marketList != null)
+            {
+                _marketList.RefreshItems();
+            }
+        }
+
+        private void ShowMarketState()
+        {
+            if (_marketHeading != null)
+            {
+                _marketHeading.text = MarketHeading();
+            }
+
+            bool empty = _marketShown.Count == 0;
+            if (_marketList != null)
+            {
+                _marketList.style.display = empty ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+
+            if (_marketEmpty != null)
+            {
+                _marketEmpty.style.display = empty ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+        }
+
+        private VisualElement MakeMarketRow()
+        {
+            return new MarketRowView(this).Root;
+        }
+
+        // The only per-prospect work left, and it runs for visible rows only: one scout report and one
+        // affordability read, both for a player who is actually on screen.
+        private void BindMarketRow(VisualElement element, int index)
+        {
+            var view = (MarketRowView)element.userData;
+            if (index < 0 || index >= _marketShown.Count)
+            {
+                view.Unbind();
+                return;
+            }
+
+            Player player = _marketShown[index];
+            view.Bind(
+                player,
+                _session.Observe(player, _accuracy),
+                SigningVerdict.For(_session.FeeOf(player), _session.WeeklyWageOf(player), _session.Finances),
+                _session.ValueOf(player),
+                _session.MoralePointsOf(player.Id),
+                _reveal);
+        }
+
+        private static void UnbindMarketRow(VisualElement element, int index)
+        {
+            ((MarketRowView)element.userData).Unbind();
+        }
+
+        /// <summary>
+        /// One recycled market row. The ListView creates a handful of these — as many as fit the viewport —
+        /// and rebinds them as you scroll, so every row object shows many different players over its life.
+        ///
+        /// <para><b>The sign button's handler is registered once, here, and never per bind.</b> It
+        /// dispatches through <see cref="_player"/>, the single field <see cref="Bind"/> overwrites and
+        /// <see cref="Unbind"/> clears. That is deliberate: a handler added in <c>bindItem</c> would have to
+        /// be removed in <c>unbindItem</c> or it would pile up on the recycled row and eventually sign a
+        /// player who left the screen long ago — the classic failure of this pattern (PERFORMANCE.md §4,
+        /// UNITY.md §5). With one handler for the row's whole life there is nothing to unregister, and the
+        /// worst a stale click can do is nothing at all, because an unbound row has no player.</para>
+        /// </summary>
+        private sealed class MarketRowView
+        {
+            private readonly ManagementWindow _window;
+            private readonly Label _name;
+            private readonly Label _morale;
+            private readonly VisualElement _badges;
+            private readonly Label _rating;
+            private readonly Label _worth;
+            private readonly Button _sign;
+            private readonly Label _books;
+            private readonly Label _potential;
+            private readonly Label _attributes;
+
+            // Who this row is showing right now. The row's only piece of per-bind state, and the only
+            // thing the button reads.
+            private Player _player;
+
+            internal MarketRowView(ManagementWindow window)
+            {
+                _window = window;
+
+                Root = new VisualElement();
+                Root.style.height = MarketRowHeight;
+                Root.style.paddingTop = 6;
+                Root.style.paddingBottom = 6;
+                Root.style.paddingLeft = 6;
+                Root.style.borderBottomWidth = 1;
+                Root.style.borderBottomColor = HarnessPalette.PitchLine;
+                Root.style.borderLeftColor = HarnessPalette.Loss;
+                Root.style.overflow = Overflow.Hidden;
+                Root.userData = this;
 
                 var line = new VisualElement();
                 line.style.flexDirection = FlexDirection.Row;
                 line.style.alignItems = Align.Center;
 
-                var name = MakeLabel(player.Name + "  ·  " + HarnessLabels.RoleLabel(player.Role) + "  ·  " + player.Age, 12, HarnessPalette.Chalk, bold: true);
-                name.style.flexGrow = 1;
-                line.Add(name);
-                line.Add(TraitBadges(player));
-                line.Add(MakeLabel("OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(player)) + "   ", 12, HarnessPalette.Accent, bold: true));
-                line.Add(MakeLabel(
-                    FormatValue(_session.ValueOf(player)) + " · " + FormatValue(_session.WeeklyWageOf(player)) + "/wk   ",
-                    11, HarnessPalette.Muted));
+                _name = MakeLabel(string.Empty, 12, HarnessPalette.Chalk, bold: true);
+                _name.style.flexGrow = 1;
+                _name.style.whiteSpace = WhiteSpace.NoWrap;
+                line.Add(_name);
 
-                Player target = player;
-                var sign = new Button(() => Sign(target)) { text = "Sign " + FormatValue(_session.FeeOf(player)) };
-                StyleActionButton(sign, HarnessPalette.Accent);
-                line.Add(sign);
-                row.Add(line);
+                // A man drama forced out lands back here still carrying his wound, so the chip belongs on
+                // the market row too. Created once with the row; Bind and Unbind both write it.
+                _morale = HarnessMorale.MakeBadge();
+                line.Add(_morale);
 
-                string potential = "Potential " + report.PotentialLow + "–" + report.PotentialHigh;
-                if (_reveal)
-                {
-                    potential += "   (true " + player.HiddenPotential + ")";
-                }
+                _badges = new VisualElement();
+                _badges.style.flexDirection = FlexDirection.Row;
+                line.Add(_badges);
 
-                row.Add(MakeLabel(potential, 11, HarnessPalette.Accent));
-                row.Add(MakeLabel(FormatScoutAttributes(report), 10, HarnessPalette.Muted));
-                card.Add(row);
+                _rating = MakeLabel(string.Empty, 12, HarnessPalette.Accent, bold: true);
+                _rating.style.whiteSpace = WhiteSpace.NoWrap;
+                line.Add(_rating);
+
+                _worth = MakeLabel(string.Empty, 11, HarnessPalette.Muted);
+                _worth.style.whiteSpace = WhiteSpace.NoWrap;
+                line.Add(_worth);
+
+                _sign = new Button(SignCurrent);
+                StyleActionButton(_sign, HarnessPalette.Accent);
+                line.Add(_sign);
+                Root.Add(line);
+
+                _books = MakeLabel(string.Empty, 10, HarnessPalette.Muted);
+                _books.style.whiteSpace = WhiteSpace.NoWrap;
+                Root.Add(_books);
+
+                _potential = MakeLabel(string.Empty, 11, HarnessPalette.Accent);
+                _potential.style.whiteSpace = WhiteSpace.NoWrap;
+                Root.Add(_potential);
+
+                _attributes = MakeLabel(string.Empty, 10, HarnessPalette.Muted);
+                _attributes.style.whiteSpace = WhiteSpace.NoWrap;
+                Root.Add(_attributes);
             }
 
-            if (shown == 0)
+            internal VisualElement Root { get; }
+
+            /// <summary>
+            /// Repaints the row for a different player. Every mutable thing the row draws — including the
+            /// variable-length trait strip, which is cleared before it is refilled, and the player the
+            /// button will act on — is assigned here unconditionally: no "only if it changed" branch, no
+            /// field left holding the previous occupant. A rebind that forgets one of these is how a
+            /// recycled row signs the wrong man, so the reset is total rather than incremental.
+            /// </summary>
+            internal void Bind(Player player, ScoutReport report, SigningVerdict verdict, long worth, double moralePoints, bool reveal)
             {
-                card.Add(MakeLabel("No prospects match this filter.", 10, HarnessPalette.Muted));
+                _player = player;
+
+                _name.text = player.Name + "  ·  " + HarnessLabels.RoleLabel(player.Role) + "  ·  " + player.Age;
+
+                // Written on every bind, zero or not, so a recycled row cannot keep the last man's morale.
+                HarnessMorale.Show(_morale, moralePoints);
+
+                _badges.Clear();
+                FillTraitBadges(_badges, player);
+
+                _rating.text = "OVR " + Mathf.RoundToInt((float)PlayerRatings.ForRole(player)) + "   ";
+                _worth.text = FormatValue(worth) + " worth   ";
+
+                _sign.text = verdict.ActionLabel();
+                _sign.SetEnabled(true);
+                _sign.style.backgroundColor = verdict.Affordable ? HarnessPalette.Accent : HarnessPalette.PitchLine;
+                _sign.style.color = verdict.Affordable ? HarnessPalette.Pitch : HarnessPalette.Muted;
+
+                // The blocked reason is shown, not enforced: the button stays live so the session still
+                // gets the click and TransferService still writes the authoritative message into
+                // _transferStatus. The row only says in advance what that message would be.
+                _books.text = verdict.Sentence();
+                _books.style.color = verdict.Tone;
+                Root.style.borderLeftWidth = verdict.Affordable ? 0 : 2;
+
+                _potential.text = reveal
+                    ? "Potential " + report.PotentialLow + "–" + report.PotentialHigh + "   (true " + player.HiddenPotential + ")"
+                    : "Potential " + report.PotentialLow + "–" + report.PotentialHigh;
+                _attributes.text = FormatScoutAttributes(report);
             }
 
-            return card;
+            /// <summary>
+            /// Lets go of the player. Called when the ListView recycles the row out of view, so a row
+            /// between occupants shows nothing and — because the button reads <see cref="_player"/> — can
+            /// sign nobody.
+            /// </summary>
+            internal void Unbind()
+            {
+                _player = null;
+                _name.text = string.Empty;
+                HarnessMorale.Show(_morale, 0.0);
+                _badges.Clear();
+                _rating.text = string.Empty;
+                _worth.text = string.Empty;
+                _sign.text = string.Empty;
+                _sign.SetEnabled(false);
+                _books.text = string.Empty;
+                _potential.text = string.Empty;
+                _attributes.text = string.Empty;
+                Root.style.borderLeftWidth = 0;
+            }
+
+            private void SignCurrent()
+            {
+                if (_player != null)
+                {
+                    _window.Sign(_player);
+                }
+            }
         }
 
         // The specific roles offered in the market filter, top to bottom of the pitch.
@@ -1600,15 +2145,41 @@ namespace Gaffer.Editor.Management
             }
         }
 
-        private static List<Player> ByOverallDescending(IReadOnlyList<Player> players)
+        // Strongest first, ties broken on the lower player id so the order is stable across renders.
+        //
+        // Each player is rated exactly once, into an array, and the sort compares array entries. The
+        // comparator used to call PlayerRatings.ForRole twice per comparison, which is ~2·n·log n rating
+        // evaluations — about 1.5 million for a 50,000-player market, for 50,000 players' worth of data.
+        private static void ByOverallDescending(IReadOnlyList<Player> players, List<Player> into)
         {
-            var sorted = new List<Player>(players);
-            sorted.Sort((a, b) =>
+            int count = players.Count;
+            into.Clear();
+            if (count == 0)
             {
-                int byRating = PlayerRatings.ForRole(b).CompareTo(PlayerRatings.ForRole(a));
-                return byRating != 0 ? byRating : a.Id.Value.CompareTo(b.Id.Value);
+                return;
+            }
+
+            var ratings = new double[count];
+            var ids = new int[count];
+            var order = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                Player player = players[i];
+                ratings[i] = PlayerRatings.ForRole(player);
+                ids[i] = player.Id.Value;
+                order[i] = i;
+            }
+
+            Array.Sort(order, (a, b) =>
+            {
+                int byRating = ratings[b].CompareTo(ratings[a]);
+                return byRating != 0 ? byRating : ids[a].CompareTo(ids[b]);
             });
-            return sorted;
+
+            for (int i = 0; i < count; i++)
+            {
+                into.Add(players[order[i]]);
+            }
         }
 
         private static string FormatScoutAttributes(ScoutReport report)
@@ -1835,24 +2406,11 @@ namespace Gaffer.Editor.Management
 
         // ----- Shared UI helpers ---------------------------------------------------------------------------
 
+        // One implementation, shared with the affordability copy, so a fee on a button and the shortfall
+        // under it can never be written two different ways.
         private static string FormatValue(long value)
         {
-            if (value < 0)
-            {
-                return "-" + FormatValue(-value);
-            }
-
-            if (value >= 1_000_000)
-            {
-                return "€" + (value / 1_000_000.0).ToString("0.0") + "M";
-            }
-
-            if (value >= 1_000)
-            {
-                return "€" + (value / 1_000) + "k";
-            }
-
-            return "€" + value;
+            return HarnessMoney.Format(value);
         }
 
         private static Label MakeLabel(string text, int size, Color color, bool bold = false)
