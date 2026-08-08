@@ -330,6 +330,23 @@ namespace Gaffer.Tests
         }
 
         [Test]
+        public void ShiftWageBudget_ZeroExchangeRate_StillChargesForWageRoom()
+        {
+            // The third divisor-shaped hazard on this asset, and the worst: at a rate of zero the budget
+            // exchange would hand out wage ceiling for free and pay nothing for ceiling given up — a money
+            // pump in both directions at once. One week is the floor, so the trade is still a trade.
+            var broken = new EconomySettings(wageBudgetExchangeWeeks: 0);
+            var oneWeek = new EconomySettings(wageBudgetExchangeWeeks: 1);
+            var finances = new Finances(1_000, 100_000, 0);
+
+            Result<Finances> bought = finances.ShiftWageBudget(1_000, broken);
+
+            Assert.That(bought.IsSuccess, Is.True, bought.Error);
+            Assert.That(bought.Value.Cash, Is.Zero, "1,000/wk of ceiling must not be free");
+            Assert.That(bought.Value.Cash, Is.EqualTo(finances.ShiftWageBudget(1_000, oneWeek).Value.Cash));
+        }
+
+        [Test]
         public void Value_CalibratedEconomy_IsUnchangedByTheRoundingGuard()
         {
             Player player = CreatePlayer(0, PlayerRole.Striker, age: 25, stat: 80);

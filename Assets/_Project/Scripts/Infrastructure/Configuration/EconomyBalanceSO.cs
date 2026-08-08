@@ -38,6 +38,13 @@ namespace Gaffer.Infrastructure.Configuration
         [Tooltip("No one plays for less than this per week.")]
         [SerializeField] private long wageFloor = 500;
 
+        [Header("Budget exchange")]
+        [Tooltip("Weeks of wage ceiling one lump of transfer cash is worth, both ways: giving up €1/wk of " +
+            "ceiling pays this many € of cash, and the same many € buys €1/wk back. 38 = a season of match " +
+            "weeks. One rate in both directions is what keeps a round trip neutral — split it and cycling " +
+            "the budgets becomes an arbitrage.")]
+        [Min(1)] [SerializeField] private int wageBudgetExchangeWeeks = 38;
+
         private void OnValidate()
         {
             ClampToValidRanges();
@@ -57,7 +64,8 @@ namespace Gaffer.Infrastructure.Configuration
                 valueFactorVeteran: valueFactorVeteran,
                 wageCeiling: wageCeiling,
                 wageRounding: wageRounding,
-                wageFloor: wageFloor);
+                wageFloor: wageFloor,
+                wageBudgetExchangeWeeks: wageBudgetExchangeWeeks);
         }
 
         /// <summary>
@@ -83,6 +91,12 @@ namespace Gaffer.Infrastructure.Configuration
             wageCeiling = Math.Clamp(wageCeiling, 0.0, 1e9);
             wageRounding = Math.Max(1, wageRounding);
             wageFloor = Math.Max(0L, wageFloor);
+
+            // A rate under one week is the third divisor-shaped hazard on this asset: it does not throw,
+            // it makes giving up wage ceiling pay nothing while cash buys ceiling for free — a money pump
+            // in both directions. Finances.ShiftWageBudget floors it at 1 as well, because an attribute
+            // constrains the Inspector, not a settings object built from a stale asset.
+            wageBudgetExchangeWeeks = Math.Max(1, wageBudgetExchangeWeeks);
         }
     }
 }

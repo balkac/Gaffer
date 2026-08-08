@@ -28,7 +28,8 @@ namespace Gaffer.Application.Transfers
             double valueFactorVeteran = 0.32,
             double wageCeiling = 20_000.0,
             int wageRounding = 500,
-            long wageFloor = 500)
+            long wageFloor = 500,
+            int wageBudgetExchangeWeeks = 38)
         {
             ValuationCeiling = valuationCeiling;
             ValuationRounding = valuationRounding;
@@ -41,6 +42,7 @@ namespace Gaffer.Application.Transfers
             WageCeiling = wageCeiling;
             WageRounding = wageRounding;
             WageFloor = wageFloor;
+            WageBudgetExchangeWeeks = wageBudgetExchangeWeeks;
         }
 
         /// <summary>Market value of a perfect (100-rated) player in his prime.</summary>
@@ -70,6 +72,21 @@ namespace Gaffer.Application.Transfers
 
         /// <summary>No one plays for less than this per week.</summary>
         public long WageFloor { get; }
+
+        /// <summary>
+        /// The board's rate between the two budgets (<see cref="Finances.ShiftWageBudget(long, EconomySettings)"/>):
+        /// how many weeks of wage ceiling one lump of transfer cash is worth. Giving up €1/wk of ceiling
+        /// pays this many € of cash, and the same many € of cash buys €1/wk back — <b>one rate, both
+        /// directions</b>, which is what makes a round trip exactly neutral and leaves no arbitrage.
+        ///
+        /// <para>38 is a season's worth of match weeks: a 20-club league is a 38-round double round robin,
+        /// so a wage freed for the season is worth the 38 payments it saves. The season length itself is
+        /// not a constant anywhere in the core — it is derived per league from the club count
+        /// (<c>LeagueSeason.RoundCount</c>), and deriving the rate from the <em>current</em> league would
+        /// make the exchange cheaper in a small league and reprice it mid-run at a promotion. It is a
+        /// board term, so it is balance data here rather than a fact about a fixture list.</para>
+        /// </summary>
+        public int WageBudgetExchangeWeeks { get; }
 
         /// <summary>
         /// The calibrated defaults — one cached, shared, immutable instance, the convention every

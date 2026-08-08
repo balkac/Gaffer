@@ -445,6 +445,100 @@ namespace Gaffer.Tests
             return cheapest;
         }
 
+        // ----- The budget exchange ------------------------------------------------------------------------
+
+        [Test]
+        public void ShiftWageBudget_GivingUpWageRoom_SurfacesTheNewFinancesInTheOutcome()
+        {
+            RunSession session = StartRun(Setup(), QuietDrama());
+            Finances before = session.Finances;
+            long weeks = session.WageBudgetExchangeWeeks;
+            Assert.That(before.WageHeadroom, Is.GreaterThan(1_000), "the run must start with room to give up");
+
+            Result<BudgetShiftOutcome> result = session.ShiftWageBudget(-1_000);
+
+            Assert.That(result.IsSuccess, Is.True, result.Error);
+            BudgetShiftOutcome outcome = result.Value;
+
+            Assert.That(outcome.WeeklyWageBudgetDelta, Is.EqualTo(-1_000));
+            Assert.That(outcome.CashDelta, Is.EqualTo(1_000 * weeks));
+            Assert.That(outcome.Finances.Cash, Is.EqualTo(before.Cash + (1_000 * weeks)));
+            Assert.That(outcome.Finances.WeeklyWageBudget, Is.EqualTo(before.WeeklyWageBudget - 1_000));
+            Assert.That(outcome.Finances.WeeklyWageBill, Is.EqualTo(before.WeeklyWageBill), "no player moved");
+
+            // The view replays the outcome instead of re-reading the session, so the two must agree.
+            Assert.That(session.Finances.Cash, Is.EqualTo(outcome.Finances.Cash));
+            Assert.That(session.Finances.WeeklyWageBudget, Is.EqualTo(outcome.Finances.WeeklyWageBudget));
+        }
+
+        [Test]
+        public void ShiftWageBudget_BuyingWageRoom_SpendsCashAndWidensTheHeadroom()
+        {
+            RunSession session = StartRun(Setup(), QuietDrama());
+            Finances before = session.Finances;
+            long weeks = session.WageBudgetExchangeWeeks;
+
+            Result<BudgetShiftOutcome> result = session.ShiftWageBudget(2_000);
+
+            Assert.That(result.IsSuccess, Is.True, result.Error);
+            Assert.That(result.Value.CashDelta, Is.EqualTo(-2_000 * weeks));
+            Assert.That(result.Value.Finances.WageHeadroom, Is.EqualTo(before.WageHeadroom + 2_000));
+        }
+
+        [Test]
+        public void ShiftWageBudget_WithTheTransferWindowShut_IsStillAllowed()
+        {
+            // Unlike SignPlayer, which the same state refuses one test above: the exchange moves no player,
+            // and being told to wait for the window is exactly the stuck the owner complained about.
+            RunSession session = StartRun(Setup(), QuietDrama());
+            session.AdvanceWeek();
+            Assert.That(session.IsWindowOpen, Is.False, "the window shuts once the season is under way");
+
+            Result<BudgetShiftOutcome> result = session.ShiftWageBudget(-1_000);
+
+            Assert.That(result.IsSuccess, Is.True, result.Error);
+        }
+
+        [Test]
+        public void ShiftWageBudget_MoreThanTheUncommittedCeiling_IsRefusedAndMovesNothing()
+        {
+            RunSession session = StartRun(Setup(), QuietDrama());
+            Finances before = session.Finances;
+
+            Result<BudgetShiftOutcome> result = session.ShiftWageBudget(-(before.WageHeadroom + 1));
+
+            Assert.That(result.IsFailure, Is.True);
+            Assert.That(result.Error, Does.Contain("wage ceiling"), "the refusal names the limit that blocked it");
+            Assert.That(session.Finances.Cash, Is.EqualTo(before.Cash), "a refused shift is not a partial one");
+            Assert.That(session.Finances.WeeklyWageBudget, Is.EqualTo(before.WeeklyWageBudget));
+        }
+
+        [Test]
+        public void PreviewWageBudgetShift_BeforeTheCommand_AnswersExactlyWhatTheCommandWill()
+        {
+            // What the windows draw under the buttons. It must be the command's own answer, or the preview
+            // is a second implementation of the rule waiting to drift from it.
+            RunSession session = StartRun(Setup(), QuietDrama());
+            Finances before = session.Finances;
+            long tooMuch = before.WageHeadroom + 1;
+
+            // The refused direction: same words, so the line under a dead button is the message the click
+            // would print.
+            Result<Finances> previewBad = session.PreviewWageBudgetShift(-tooMuch);
+            Assert.That(previewBad.IsFailure, Is.True);
+            Assert.That(session.Finances.WeeklyWageBudget, Is.EqualTo(before.WeeklyWageBudget), "a preview commits nothing");
+            Assert.That(session.ShiftWageBudget(-tooMuch).Error, Is.EqualTo(previewBad.Error));
+
+            // And the allowed one: same figures.
+            Result<Finances> previewOk = session.PreviewWageBudgetShift(-1_000);
+            Assert.That(previewOk.IsSuccess, Is.True, previewOk.Error);
+
+            Result<BudgetShiftOutcome> done = session.ShiftWageBudget(-1_000);
+            Assert.That(done.IsSuccess, Is.True, done.Error);
+            Assert.That(done.Value.Finances.Cash, Is.EqualTo(previewOk.Value.Cash));
+            Assert.That(done.Value.Finances.WeeklyWageBudget, Is.EqualTo(previewOk.Value.WeeklyWageBudget));
+        }
+
         // ----- Lineup -----------------------------------------------------------------------------------
 
         [Test]
@@ -533,6 +627,26 @@ namespace Gaffer.Tests
             Assert.That(squadBefore, Is.GreaterThan(0));
             Assert.That(session.Squad.Count, Is.EqualTo(squadBefore - rollover.Retired.Count + rollover.Arrived.Count),
                 "the summer diff accounts for every change to the roster");
+        }
+
+        [Test]
+        public void StartNextSeason_AfterGivingUpWageRoom_DoesNotHandTheCeilingBack()
+        {
+            // The exchange would otherwise be a money printer on a one-season timer: give up ceiling for
+            // cash, keep the cash, and let the summer re-seed the ceiling from the run's setup. A slice
+            // sold stays sold, so the ceiling carries over as it stands.
+            RunSession session = StartRun(Setup(), QuietDrama());
+            long ceilingAtKickoff = session.Finances.WeeklyWageBudget;
+
+            Result<BudgetShiftOutcome> sold = session.ShiftWageBudget(-10_000);
+            Assert.That(sold.IsSuccess, Is.True, sold.Error);
+
+            session.AdvanceToEndOfSeason();
+            Result<SeasonRollover> rolled = session.StartNextSeason();
+
+            Assert.That(rolled.IsSuccess, Is.True, rolled.Error);
+            Assert.That(rolled.Value.Finances.WeeklyWageBudget, Is.EqualTo(ceilingAtKickoff - 10_000));
+            Assert.That(session.Finances.WeeklyWageBudget, Is.EqualTo(ceilingAtKickoff - 10_000));
         }
 
         [Test]

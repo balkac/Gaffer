@@ -7,6 +7,10 @@ namespace Gaffer.Application.Transfers
     /// <summary>
     /// A club's money at a moment: transfer cash for fees, and a weekly wage budget the wage bill must stay
     /// under (the CM 01/02 two-budget model). Immutable — a transfer returns a new one.
+    ///
+    /// <para>The two are not sealed off from each other: <see cref="ShiftWageBudget(long, EconomySettings)"/>
+    /// trades one for the other at the board's rate, so cash that cannot be spent for want of wage room is
+    /// not dead money. What it may never do is put the ceiling under the wage bill already signed.</para>
     /// </summary>
     public readonly struct Finances
     {
@@ -35,6 +39,105 @@ namespace Gaffer.Application.Transfers
         public Finances PayWeeklyWages()
         {
             return new Finances(Cash - WeeklyWageBill, WeeklyWageBudget, WeeklyWageBill);
+        }
+
+        /// <summary>Moves money between the two budgets at the board's calibrated rate.</summary>
+        public Result<Finances> ShiftWageBudget(long weeklyDelta)
+        {
+            return ShiftWageBudget(weeklyDelta, EconomySettings.Default);
+        }
+
+        /// <summary>
+        /// Moves money between the two budgets, against specific economy balance (from a config asset).
+        /// A positive <paramref name="weeklyDelta"/> raises the weekly wage ceiling by that much and pays
+        /// for it out of transfer cash; a negative one gives up that much ceiling and takes the cash. The
+        /// wage bill itself never moves — nobody is bought or sold — and neither does anything else in the
+        /// run, so this is available at any time, in or out of a transfer window. It answers the owner's
+        /// complaint directly: cash you cannot spend because the wage ceiling is full is no longer dead
+        /// money.
+        ///
+        /// <para><b>The rate.</b> <see cref="EconomySettings.WageBudgetExchangeWeeks"/> (38, a season of
+        /// match weeks) both ways, so <c>Shift(+x)</c> followed by <c>Shift(-x)</c> is the identity and
+        /// there is no arbitrage in cycling.</para>
+        ///
+        /// <para><b>Rounding: there is none, by construction, and that is the point.</b> The amount is
+        /// always named in €/week — the unit the ceiling is in — and the cash leg is that amount
+        /// <em>multiplied</em> by the rate, never divided by it. Integer multiplication is exact, so a
+        /// shift moves exactly <c>weekly × weeks</c> and the opposite shift moves exactly the same number
+        /// back; the round trip is the identity rather than something that happens to come out even, and
+        /// splitting one shift into a hundred small ones moves the same total (the sum of the parts is the
+        /// multiplication distributed). Had this taken a cash amount instead, the ceiling would be
+        /// <c>cash / weeks</c> and integer division would truncate: converting €37 at a time would destroy
+        /// the lot while one lump kept it, and the mirrored rule would round the other way into a money
+        /// printer. So the exchange refuses to be denominated in cash at all — the editor's field is €/wk
+        /// in both directions.</para>
+        ///
+        /// <para><b>What it refuses.</b> The ceiling may never fall below the wage bill already committed:
+        /// those contracts are signed, and a ceiling under the bill would put
+        /// <see cref="WageHeadroom"/> in the red through a path that is not "you overspent". You cannot
+        /// convert cash you do not have. And an amount so large that pricing it would overflow a
+        /// <c>long</c> is refused rather than wrapped — a wrapped price reads as negative and would slip
+        /// past the cash check, minting ceiling out of nothing. Each refusal names the limit and the gap,
+        /// like <see cref="TransferService.Sign"/>'s. Zero is a no-op, not an error.</para>
+        /// </summary>
+        public Result<Finances> ShiftWageBudget(long weeklyDelta, EconomySettings economy)
+        {
+            if (weeklyDelta == 0)
+            {
+                return Result<Finances>.Success(this);
+            }
+
+            long weeks = ExchangeWeeks(economy);
+            long largest = long.MaxValue / weeks;
+            if (weeklyDelta > largest || weeklyDelta < -largest)
+            {
+                return Result<Finances>.Failure(
+                    $"That is more than the books can price: at {weeks} weeks to the euro-per-week, at most {largest}/wk can move at once.");
+            }
+
+            long weekly = weeklyDelta < 0 ? -weeklyDelta : weeklyDelta;
+            long cash = weekly * weeks;
+
+            if (weeklyDelta < 0)
+            {
+                if (weekly > WageHeadroom)
+                {
+                    return Result<Finances>.Failure(
+                        $"The wage ceiling can't go below the {WeeklyWageBill}/wk already committed: at most {WageHeadroom}/wk can be given up, which is {weekly - WageHeadroom}/wk less than you asked for.");
+                }
+
+                if (Cash > long.MaxValue - cash)
+                {
+                    return Result<Finances>.Failure(
+                        $"That is more than the books can hold: {cash} on top of {Cash} in transfer cash does not fit.");
+                }
+
+                return Result<Finances>.Success(new Finances(Cash + cash, WeeklyWageBudget - weekly, WeeklyWageBill));
+            }
+
+            if (cash > Cash)
+            {
+                return Result<Finances>.Failure(
+                    $"Not enough transfer cash: {weekly}/wk more wage ceiling costs {cash} but only {Cash} is available.");
+            }
+
+            if (WeeklyWageBudget > long.MaxValue - weekly)
+            {
+                return Result<Finances>.Failure(
+                    $"That is more than the books can hold: {weekly}/wk on top of a {WeeklyWageBudget}/wk ceiling does not fit.");
+            }
+
+            return Result<Finances>.Success(new Finances(Cash - cash, WeeklyWageBudget + weekly, WeeklyWageBill));
+        }
+
+        // The rate is config-editable (NON-NEGOTIABLE #3) and a rate under one week would be a money pump
+        // in both directions at once: giving up ceiling would pay nothing, and cash would buy ceiling for
+        // free. One week is the true floor and the calibrated 38 passes through untouched — the same guard,
+        // for the same reason, that PlayerWage puts on its rounding step. Both directions read it here, so
+        // a clamped rate is still one rate and the round trip stays neutral.
+        private static long ExchangeWeeks(EconomySettings economy)
+        {
+            return economy.WageBudgetExchangeWeeks > 0 ? economy.WageBudgetExchangeWeeks : 1;
         }
     }
 

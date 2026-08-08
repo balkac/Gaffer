@@ -241,5 +241,227 @@ namespace Gaffer.Tests
 
             Assert.That(after.Cash, Is.EqualTo(-50_000), "An unaffordable wage bill overspends into the red.");
         }
+
+        // --- The budget exchange: cash and wage ceiling, one rate both ways -------------------------------
+        //
+        // The manager with plenty of cash and no wage room had no move to make; this is the move. Most of
+        // the tests below price against the calibrated rate rather than the literal 38, so re-tuning the
+        // rate moves them with it — the one exception is the test that exists to pin the number itself.
+
+        private static long Weeks => EconomySettings.Default.WageBudgetExchangeWeeks;
+
+        [Test]
+        public void ShiftWageBudget_GivingUpCeiling_PaysCashAtTheRate()
+        {
+            var finances = new Finances(1_000_000, 200_000, 150_000);
+
+            Result<Finances> result = finances.ShiftWageBudget(-10_000);
+
+            Assert.That(result.IsSuccess, Is.True, result.Error);
+            Assert.That(result.Value.WeeklyWageBudget, Is.EqualTo(190_000));
+            Assert.That(result.Value.Cash, Is.EqualTo(1_000_000 + (10_000 * Weeks)));
+            Assert.That(result.Value.WeeklyWageBill, Is.EqualTo(150_000), "Nobody was sold, so the bill is untouched.");
+        }
+
+        [Test]
+        public void ShiftWageBudget_BuyingCeiling_CostsCashAtTheSameRate()
+        {
+            var finances = new Finances(1_000_000, 200_000, 150_000);
+
+            Result<Finances> result = finances.ShiftWageBudget(10_000);
+
+            Assert.That(result.IsSuccess, Is.True, result.Error);
+            Assert.That(result.Value.WeeklyWageBudget, Is.EqualTo(210_000));
+            Assert.That(result.Value.Cash, Is.EqualTo(1_000_000 - (10_000 * Weeks)));
+            Assert.That(result.Value.WageHeadroom, Is.EqualTo(60_000), "The new room is free room — the bill did not move.");
+        }
+
+        [Test]
+        public void ShiftWageBudget_AtTheDefaultRate_PricesASeasonOfWeeks()
+        {
+            // The owner's number, pinned in one place: 38, a season's worth of match weeks. Freeing
+            // 1,000/wk of ceiling is worth 38,000 of transfer cash, and 38,000 buys it back.
+            Assert.That(EconomySettings.Default.WageBudgetExchangeWeeks, Is.EqualTo(38));
+
+            Result<Finances> freed = new Finances(0, 100_000, 0).ShiftWageBudget(-1_000);
+            Assert.That(freed.IsSuccess, Is.True, freed.Error);
+            Assert.That(freed.Value.Cash, Is.EqualTo(38_000));
+
+            Result<Finances> bought = new Finances(38_000, 100_000, 0).ShiftWageBudget(1_000);
+            Assert.That(bought.IsSuccess, Is.True, bought.Error);
+            Assert.That(bought.Value.Cash, Is.Zero);
+        }
+
+        [Test]
+        public void ShiftWageBudget_RoundTrip_LeavesTheBooksExactlyAsTheyWere()
+        {
+            // One rate in both directions, so there is nothing to farm by cycling: out and back is the
+            // identity, the same property Fee_IsTheMarketValue_NoSpread pins for buying and selling.
+            var before = new Finances(2_000_000, 300_000, 220_000);
+
+            Result<Finances> freed = before.ShiftWageBudget(-40_000);
+            Assert.That(freed.IsSuccess, Is.True, freed.Error);
+            Assert.That(freed.Value.Cash, Is.GreaterThan(before.Cash), "A trip that moved nothing would pass trivially.");
+
+            Result<Finances> back = freed.Value.ShiftWageBudget(40_000);
+            Assert.That(back.IsSuccess, Is.True, back.Error);
+
+            Assert.That(back.Value.Cash, Is.EqualTo(before.Cash));
+            Assert.That(back.Value.WeeklyWageBudget, Is.EqualTo(before.WeeklyWageBudget));
+            Assert.That(back.Value.WeeklyWageBill, Is.EqualTo(before.WeeklyWageBill));
+        }
+
+        [Test]
+        public void ShiftWageBudget_ManySmallShifts_MoveExactlyWhatOneBigOneWould()
+        {
+            // The rounding decision, argued at the table. The exchange is denominated in €/wk and the cash
+            // leg is a multiplication, never a division, so there is no truncation anywhere to farm: a
+            // thousand shifts of 1/wk land on the same books as one shift of 1,000/wk, and taking the
+            // thousand small steps back returns the club to the penny. A cash-denominated exchange would
+            // have failed this — €37 at a time would round away to nothing.
+            var start = new Finances(10_000_000, 500_000, 100_000);
+
+            Finances piecemeal = start;
+            for (int i = 0; i < 1_000; i++)
+            {
+                Result<Finances> step = piecemeal.ShiftWageBudget(-1);
+                Assert.That(step.IsSuccess, Is.True, step.Error);
+                piecemeal = step.Value;
+            }
+
+            Result<Finances> lump = start.ShiftWageBudget(-1_000);
+            Assert.That(lump.IsSuccess, Is.True, lump.Error);
+            Assert.That(piecemeal.Cash, Is.EqualTo(lump.Value.Cash), "A thousand small sales must raise exactly what one big one raises.");
+            Assert.That(piecemeal.WeeklyWageBudget, Is.EqualTo(lump.Value.WeeklyWageBudget));
+
+            for (int i = 0; i < 1_000; i++)
+            {
+                Result<Finances> step = piecemeal.ShiftWageBudget(1);
+                Assert.That(step.IsSuccess, Is.True, step.Error);
+                piecemeal = step.Value;
+            }
+
+            Assert.That(piecemeal.Cash, Is.EqualTo(start.Cash), "Two thousand small conversions neither created nor destroyed money.");
+            Assert.That(piecemeal.WeeklyWageBudget, Is.EqualTo(start.WeeklyWageBudget));
+            Assert.That(piecemeal.WeeklyWageBill, Is.EqualTo(start.WeeklyWageBill));
+        }
+
+        [Test]
+        public void ShiftWageBudget_BelowTheCommittedWageBill_FailsAndNamesTheLimit()
+        {
+            // 200k of ceiling with 150k already signed: 50k/wk is uncommitted and may be sold, one euro
+            // more may not. Those contracts exist — a ceiling under the bill is not an overspend the board
+            // can read, it is a book that does not add up.
+            var finances = new Finances(1_000_000, 200_000, 150_000);
+
+            Result<Finances> result = finances.ShiftWageBudget(-50_001);
+
+            Assert.That(result.IsFailure, Is.True);
+            Assert.That(result.Error, Does.Contain("150000"), "the wage bill that blocks it");
+            Assert.That(result.Error, Does.Contain("50000"), "the most that could have moved");
+            Assert.That(result.Error, Does.Contain("1/wk"), "and by how much the ask was over");
+        }
+
+        [Test]
+        public void ShiftWageBudget_ExactlyDownToTheWageBill_Succeeds()
+        {
+            // The boundary the test above sits one euro past: the ceiling may land exactly on the bill,
+            // because every signed wage is still covered.
+            var finances = new Finances(0, 200_000, 150_000);
+
+            Result<Finances> result = finances.ShiftWageBudget(-50_000);
+
+            Assert.That(result.IsSuccess, Is.True, result.Error);
+            Assert.That(result.Value.WageHeadroom, Is.Zero);
+            Assert.That(result.Value.WeeklyWageBudget, Is.EqualTo(result.Value.WeeklyWageBill));
+        }
+
+        [Test]
+        public void ShiftWageBudget_WhenTheBillAlreadyExceedsTheCeiling_FreesNothing()
+        {
+            // Headroom can be negative without anyone overspending: a season rollover re-derives the bill
+            // from a developed squad against the same ceiling. Nothing is uncommitted, so nothing may be
+            // sold — the guard must not read a negative headroom as room.
+            var finances = new Finances(1_000_000, 100_000, 120_000);
+
+            Result<Finances> result = finances.ShiftWageBudget(-1);
+
+            Assert.That(result.IsFailure, Is.True);
+            Assert.That(finances.WageHeadroom, Is.EqualTo(-20_000), "the state this test is about");
+        }
+
+        [Test]
+        public void ShiftWageBudget_MoreCashThanTheClubHas_FailsAndNamesTheShortfall()
+        {
+            long price = 1_000 * Weeks;
+            var finances = new Finances(price - 1, 200_000, 0);
+
+            Result<Finances> result = finances.ShiftWageBudget(1_000);
+
+            Assert.That(result.IsFailure, Is.True);
+            Assert.That(result.Error, Does.Contain("Not enough transfer cash"));
+            Assert.That(result.Error, Does.Contain(price.ToString()), "what it would have cost");
+            Assert.That(result.Error, Does.Contain((price - 1).ToString()), "against what is in the bank");
+        }
+
+        [Test]
+        public void ShiftWageBudget_CostExactlyEqualToCash_Succeeds()
+        {
+            var finances = new Finances(1_000 * Weeks, 200_000, 0);
+
+            Result<Finances> result = finances.ShiftWageBudget(1_000);
+
+            Assert.That(result.IsSuccess, Is.True, "Spending the last penny on wage room is affordable.");
+            Assert.That(result.Value.Cash, Is.Zero);
+        }
+
+        [Test]
+        public void ShiftWageBudget_WithNegativeCash_RefusesToBuyAnyMoreCeiling()
+        {
+            // Wages can overspend the cash into the red (PayWeeklyWages does not stop at zero). Buying
+            // ceiling from an empty bank would deepen a debt the board is already looking at.
+            Result<Finances> result = new Finances(-1, 200_000, 100_000).ShiftWageBudget(1);
+
+            Assert.That(result.IsFailure, Is.True);
+        }
+
+        [Test]
+        public void ShiftWageBudget_Zero_ChangesNothing()
+        {
+            var finances = new Finances(1_000_000, 200_000, 150_000);
+
+            Result<Finances> result = finances.ShiftWageBudget(0);
+
+            Assert.That(result.IsSuccess, Is.True, "An identity is not an error.");
+            Assert.That(result.Value.Cash, Is.EqualTo(1_000_000));
+            Assert.That(result.Value.WeeklyWageBudget, Is.EqualTo(200_000));
+            Assert.That(result.Value.WeeklyWageBill, Is.EqualTo(150_000));
+        }
+
+        [Test]
+        public void ShiftWageBudget_AnAmountTooLargeToPrice_FailsInsteadOfOverflowing()
+        {
+            // Above long.MaxValue/weeks the price wraps negative, which would read as "costs less than
+            // nothing" and slip straight past the cash check — ceiling minted out of an arithmetic
+            // accident. Refused in both directions, including the one value that has no positive twin.
+            var rich = new Finances(long.MaxValue, long.MaxValue, 0);
+            long tooBig = (long.MaxValue / Weeks) + 1;
+
+            Assert.That(rich.ShiftWageBudget(tooBig).IsFailure, Is.True, "buying");
+            Assert.That(rich.ShiftWageBudget(-tooBig).IsFailure, Is.True, "selling");
+            Assert.That(rich.ShiftWageBudget(long.MinValue).IsFailure, Is.True, "long.MinValue");
+        }
+
+        [Test]
+        public void ShiftWageBudget_AtAConfiguredRate_UsesTheAssetsWeeksNotTheDefault()
+        {
+            // The rate is balance data (NON-NEGOTIABLE #3), so a config asset must really move it.
+            var economy = new EconomySettings(wageBudgetExchangeWeeks: 10);
+
+            Result<Finances> result = new Finances(0, 100_000, 0).ShiftWageBudget(-1_000, economy);
+
+            Assert.That(result.IsSuccess, Is.True, result.Error);
+            Assert.That(result.Value.Cash, Is.EqualTo(10_000));
+        }
     }
 }

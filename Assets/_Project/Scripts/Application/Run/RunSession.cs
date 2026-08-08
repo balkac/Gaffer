@@ -221,6 +221,24 @@ namespace Gaffer.Application.Run
         }
 
         /// <summary>
+        /// The board's rate between the two budgets: €1/wk of wage ceiling is worth this many € of
+        /// transfer cash, both ways (<see cref="ShiftWageBudget"/>). A view quotes it; it does not do the
+        /// arithmetic with it.
+        /// </summary>
+        public int WageBudgetExchangeWeeks => _balance.Economy.WageBudgetExchangeWeeks;
+
+        /// <summary>
+        /// What <see cref="ShiftWageBudget"/> would leave, or the very message it would refuse with —
+        /// asked without moving anything. A read-model query like <see cref="FeeOf"/>: the rule stays in
+        /// one place, so a window can say <em>before</em> the click exactly what the click will answer
+        /// instead of mirroring the two comparisons and drifting from them.
+        /// </summary>
+        public Result<Finances> PreviewWageBudgetShift(long weeklyDelta)
+        {
+            return _finances.ShiftWageBudget(weeklyDelta, _balance.Economy);
+        }
+
+        /// <summary>
         /// Live morale points on a player — the drama layer made visible on the roster (a wound is
         /// negative, a lift positive, both fading on schedule). A read model over the ledger: the ledger
         /// itself stays owned by the run, because applying to it is <see cref="ResolveDrama"/>'s job.
@@ -429,8 +447,8 @@ namespace Gaffer.Application.Run
         /// Rolls the whole league on a year and starts the next season: the managed club's live roster is
         /// folded back in first (so signings age and develop too), every squad ages, develops, retires
         /// its veterans and takes youth through, the wage bill is re-derived from the developed squad
-        /// while the cash carries over, a new market opens, the drama budget resets and the eleven is
-        /// re-picked. Fails while the season is still being played.
+        /// while the cash and the wage ceiling carry over, a new market opens, the drama budget resets and
+        /// the eleven is re-picked. Fails while the season is still being played.
         /// </summary>
         public Result<SeasonRollover> StartNextSeason()
         {
@@ -450,7 +468,12 @@ namespace Gaffer.Application.Run
             Squad after = ManagedSquad();
             IReadOnlyList<Player> afterPlayers = after != null ? after.Players : NoPlayers;
 
-            _finances = new Finances(_finances.Cash, _setup.WeeklyWageBudget, TotalWages(after));
+            // The ceiling carries over as it stands rather than being re-seeded from the setup, because a
+            // slice of it sold for cash through ShiftWageBudget stays sold. Re-seeding would hand that
+            // slice back every summer while the cash it paid for stayed in the bank — sell 5k/wk each
+            // season and the club prints the rate every rollover. With no shift performed the live ceiling
+            // *is* the setup's, so nothing else changes.
+            _finances = new Finances(_finances.Cash, _finances.WeeklyWageBudget, TotalWages(after));
             _market = GenerateMarket();
             _drama.StartSeason();
             _pending = null;
@@ -548,6 +571,35 @@ namespace Gaffer.Application.Run
                 weeklyWage: WeeklyWageOf(player),
                 finances: _finances,
                 lineup: BuildLineupOutcome()));
+        }
+
+        /// <summary>
+        /// Moves money between the two budgets at the board's rate: a positive
+        /// <paramref name="weeklyDelta"/> buys that much weekly wage ceiling with transfer cash, a
+        /// negative one gives up that much ceiling for cash. <see cref="Finances.ShiftWageBudget(long, Transfers.EconomySettings)"/>
+        /// owns the rule and the refusals; this is the command that commits the answer and hands back the
+        /// new money for the view to replay.
+        ///
+        /// <para><b>Always available</b>, unlike <see cref="SignPlayer"/> and <see cref="SellPlayer"/>:
+        /// this moves no player, so there is no window to be in. It is the answer to being stuck with
+        /// cash you cannot spend and no room to spend it in, and being told to wait for the window would
+        /// leave the manager stuck for exactly as long as the problem is worth solving.</para>
+        /// </summary>
+        public Result<BudgetShiftOutcome> ShiftWageBudget(long weeklyDelta)
+        {
+            Result<Finances> shifted = _finances.ShiftWageBudget(weeklyDelta, _balance.Economy);
+            if (shifted.IsFailure)
+            {
+                return Result<BudgetShiftOutcome>.Failure(shifted.Error);
+            }
+
+            Finances before = _finances;
+            _finances = shifted.Value;
+
+            return Result<BudgetShiftOutcome>.Success(new BudgetShiftOutcome(
+                weeklyWageBudgetDelta: _finances.WeeklyWageBudget - before.WeeklyWageBudget,
+                cashDelta: _finances.Cash - before.Cash,
+                finances: _finances));
         }
 
         /// <summary>Changes shape and re-picks the best eleven for it; applies from next week.</summary>
