@@ -23,3 +23,4 @@ MonoBehaviour:
   wageCeiling: 20000
   wageRounding: 500
   wageFloor: 500
+  wageBudgetExchangeWeeks: 38

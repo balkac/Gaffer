@@ -22,13 +22,35 @@ namespace Gaffer.Tests
         {
             var attributes = new Attributes
             {
-                Finishing = stat, Technique = stat, FirstTouch = stat, Dribbling = stat, Passing = stat,
-                Crossing = stat, Heading = stat, LongShots = stat, Marking = stat, Tackling = stat,
-                Penalties = stat, FreeKicks = stat, Corners = stat, LongThrows = stat,
-                Pace = stat, Acceleration = stat, Stamina = stat, Strength = stat, Agility = stat,
-                Jumping = stat, Balance = stat, Positioning = stat,
-                Reflexes = stat, Handling = stat, AerialReach = stat, CommandOfArea = stat,
-                OneOnOnes = stat, Kicking = stat, GkPositioning = stat,
+                Finishing = stat,
+                Technique = stat,
+                FirstTouch = stat,
+                Dribbling = stat,
+                Passing = stat,
+                Crossing = stat,
+                Heading = stat,
+                LongShots = stat,
+                Marking = stat,
+                Tackling = stat,
+                Penalties = stat,
+                FreeKicks = stat,
+                Corners = stat,
+                LongThrows = stat,
+                Pace = stat,
+                Acceleration = stat,
+                Stamina = stat,
+                Strength = stat,
+                Agility = stat,
+                Jumping = stat,
+                Balance = stat,
+                Positioning = stat,
+                Reflexes = stat,
+                Handling = stat,
+                AerialReach = stat,
+                CommandOfArea = stat,
+                OneOnOnes = stat,
+                Kicking = stat,
+                GkPositioning = stat,
             };
 
             var ids = new List<TraitId>(traits.Length);
@@ -237,13 +259,35 @@ namespace Gaffer.Tests
         {
             return new Attributes
             {
-                Finishing = stat, Technique = stat, FirstTouch = stat, Dribbling = stat, Passing = stat,
-                Crossing = stat, Heading = stat, LongShots = stat, Marking = stat, Tackling = stat,
-                Penalties = stat, FreeKicks = stat, Corners = stat, LongThrows = stat,
-                Pace = stat, Acceleration = stat, Stamina = stat, Strength = stat, Agility = stat,
-                Jumping = stat, Balance = stat, Positioning = stat,
-                Reflexes = stat, Handling = stat, AerialReach = stat, CommandOfArea = stat,
-                OneOnOnes = stat, Kicking = stat, GkPositioning = stat,
+                Finishing = stat,
+                Technique = stat,
+                FirstTouch = stat,
+                Dribbling = stat,
+                Passing = stat,
+                Crossing = stat,
+                Heading = stat,
+                LongShots = stat,
+                Marking = stat,
+                Tackling = stat,
+                Penalties = stat,
+                FreeKicks = stat,
+                Corners = stat,
+                LongThrows = stat,
+                Pace = stat,
+                Acceleration = stat,
+                Stamina = stat,
+                Strength = stat,
+                Agility = stat,
+                Jumping = stat,
+                Balance = stat,
+                Positioning = stat,
+                Reflexes = stat,
+                Handling = stat,
+                AerialReach = stat,
+                CommandOfArea = stat,
+                OneOnOnes = stat,
+                Kicking = stat,
+                GkPositioning = stat,
             };
         }
 
@@ -306,7 +350,7 @@ namespace Gaffer.Tests
             });
 
             var mapper = new Gaffer.Application.Serialization.SeasonSaveMapper();
-            Gaffer.Application.Serialization.SeasonSaveData data = mapper.Capture(league, new LeagueSeason(league), 1UL, 1);
+            Gaffer.Application.Serialization.SeasonSaveData data = mapper.Capture(league, new LeagueSeason(league, null, null, null, null), 1UL, 1);
             Gaffer.Application.Serialization.RestoredSeason restored = mapper.Restore(data);
 
             IReadOnlyList<Player> players = restored.League.Clubs[0].Squad.Players;
@@ -317,8 +361,15 @@ namespace Gaffer.Tests
             Assert.That(players[3].Traits, Is.EqualTo(new[] { new TraitId("from-a-future-catalog") }));
         }
 
+        /// <summary>
+        /// A genuine chain test, not a null-tolerance one: a v3 document has no traits field AND carries
+        /// its role as the pre-v5 ORDINAL, so migrating it must run the real v4 → v5 step (ordinal to
+        /// member name) and land on the current version — the trait-less restore is then the second
+        /// assertion, not the whole point. Named for both facts, per UNITY.md §7's rule that every schema
+        /// step is tested from a genuine payload of the older version.
+        /// </summary>
         [Test]
-        public void Migrate_V3SaveWithoutTraits_RestoresTraitless()
+        public void Migrate_V3SaveWithOrdinalRoleAndNoTraits_ConvertsRoleToNameAndRestoresTraitless()
         {
             var data = new Gaffer.Application.Serialization.SeasonSaveData
             {
@@ -332,7 +383,9 @@ namespace Gaffer.Tests
             {
                 Id = 0,
                 Name = "Old FC",
-                Attack = 60, Midfield = 60, Defence = 60,
+                Attack = 60,
+                Midfield = 60,
+                Defence = 60,
                 Squad = new List<Gaffer.Application.Serialization.PlayerSaveData>
                 {
                     new Gaffer.Application.Serialization.PlayerSaveData
@@ -347,8 +400,20 @@ namespace Gaffer.Tests
             Result<Gaffer.Application.Serialization.SeasonSaveData> migrated = new Gaffer.Application.Serialization.SaveMigrator().Migrate(data);
 
             Assert.That(migrated.IsSuccess, Is.True);
-            Assert.That(migrated.Value.SchemaVersion, Is.EqualTo(Gaffer.Application.Serialization.SaveSchema.CurrentVersion));
+            // The version constant is a fact about the document type, so it is read off SeasonSaveData
+            // (ARCHITECTURE §11) — the shared SaveSchema holder that used to answer this is gone.
+            Assert.That(
+                migrated.Value.SchemaVersion,
+                Is.EqualTo(Gaffer.Application.Serialization.SeasonSaveData.CurrentVersion));
+
+            // The v4 → v5 step actually ran: the role is now the member NAME and the retired ordinal
+            // field has been cleared, so a later role insertion can no longer re-role this player.
+            Gaffer.Application.Serialization.PlayerSaveData migratedPlayer = migrated.Value.Clubs[0].Squad[0];
+            Assert.That(migratedPlayer.RoleName, Is.EqualTo(PlayerRole.Striker.ToString()));
+            Assert.That(migratedPlayer.Role, Is.Null);
+
             Gaffer.Application.Serialization.RestoredSeason restored = new Gaffer.Application.Serialization.SeasonSaveMapper().Restore(migrated.Value);
+            Assert.That(restored.League.Clubs[0].Squad.Players[0].Role, Is.EqualTo(PlayerRole.Striker));
             Assert.That(restored.League.Clubs[0].Squad.Players[0].Traits, Is.Empty);
         }
 
@@ -357,12 +422,11 @@ namespace Gaffer.Tests
         {
             // End to end through the season loop: the same league, seed, and fixture — the only difference
             // is the stakes. A squad of derby beasts must play the derby measurably differently.
-            LeagueSeason plainSeason = new LeagueSeason(TwoClubLeague());
-            LeagueSeason derbySeason = new LeagueSeason(TwoClubLeague());
-            MatchSimulator simulator = CreateSimulator();
+            var plainSeason = new LeagueSeason(TwoClubLeague(), null, null, null, CreateSimulator());
+            var derbySeason = new LeagueSeason(TwoClubLeague(), null, null, null, CreateSimulator());
 
-            WeekResult plain = plainSeason.AdvanceWeek(simulator, Plain(), 42UL);
-            WeekResult derby = derbySeason.AdvanceWeek(simulator, Derby(), 42UL);
+            WeekResult plain = plainSeason.AdvanceWeek(Plain(), 42UL);
+            WeekResult derby = derbySeason.AdvanceWeek(Derby(), 42UL);
 
             MatchResult plainMatch = plain.Matches[0];
             MatchResult derbyMatch = derby.Matches[0];

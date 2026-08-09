@@ -6,29 +6,37 @@ namespace Gaffer.Domain.Drama
     /// Every kind changes real state (GDD §4.7 rule 1): morale reaches next week's effective strength,
     /// cash reaches the finances, a forced sale reaches the squad.
     /// </summary>
+    /// <remarks>
+    /// The numeric values are a PERSISTENCE CONTRACT. This enum is authored into drama `.asset` files
+    /// (<c>DramaEventSO.EffectDef.kind</c>) and Unity serializes an enum field as its ORDINAL with no way
+    /// to ask for the name — so reordering these members silently re-points every authored effect in every
+    /// shipped asset, with no error and no possible after-the-fact migration (UNITY.md §7). Never reorder,
+    /// renumber, or reuse a value; only append. <c>PersistedEnumValueTests</c> pins every member so a
+    /// reorder fails loudly, by name.
+    /// </remarks>
     public enum DramaEffectKind
     {
         /// <summary>Morale points on the subject for a limited number of weeks (magnitude signed).</summary>
-        SubjectMorale,
+        SubjectMorale = 0,
 
         /// <summary>Morale points on every player in the squad for a limited number of weeks.</summary>
-        TeamMorale,
+        TeamMorale = 1,
 
         /// <summary>A flat cash amount into (positive) or out of (negative) the club (magnitude in currency).</summary>
-        Cash,
+        Cash = 2,
 
         /// <summary>A fraction of the club's current cash (magnitude signed, e.g. -0.2 = a fifth cut).</summary>
-        CashFraction,
+        CashFraction = 3,
 
         /// <summary>One week of the subject's wage, fined into the club's cash.</summary>
-        SubjectWageFine,
+        SubjectWageFine = 4,
 
         /// <summary>The subject is sold at his market fee — the caller executes the transfer it owns.</summary>
-        SellSubject,
+        SellSubject = 5,
 
         /// <summary>The trait in <see cref="DramaEffect.Trait"/> passes to the subject's heir apparent —
         /// the retiring captain anoints a successor (the resolver picks him deterministically).</summary>
-        GrantTraitToSuccessor,
+        GrantTraitToSuccessor = 6,
     }
 
     /// <summary>One concrete consequence of a drama choice. Immutable data.</summary>

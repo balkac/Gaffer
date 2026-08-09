@@ -6,7 +6,9 @@
         "Gaffer.Domain",
         "Gaffer.Application",
         "Gaffer.Infrastructure",
-        "Gaffer.Presentation"
+        "Gaffer.Presentation",
+        "Gaffer.UserData",
+        "Gaffer.Tools.SeasonHarness"
     ],
     "includePlatforms": [
         "Editor"

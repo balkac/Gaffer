@@ -12,8 +12,24 @@ namespace Gaffer.Tests
     {
         private static Squad GeneratedSquad()
         {
+            return GeneratedSquad(idBase: 0, seed: 7);
+        }
+
+        private static Squad GeneratedSquad(int idBase, ulong seed)
+        {
             return new SquadGenerator(new PlayerGenerator())
-                .Generate(0, new GenerationContext(), new SplitMix64RandomNumberGenerator(7));
+                .Generate(idBase, new GenerationContext(), new SplitMix64RandomNumberGenerator(seed));
+        }
+
+        private static int[] IdsOf(IReadOnlyList<Player> players)
+        {
+            var ids = new int[players.Count];
+            for (int i = 0; i < players.Count; i++)
+            {
+                ids[i] = players[i].Id.Value;
+            }
+
+            return ids;
         }
 
         private static int CountAt(IReadOnlyList<Player> players, Position position)
@@ -78,17 +94,38 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void SelectBest_IsDeterministic()
+        public void SelectBest_OneInstanceReusedAcrossSquads_LeavesNoResidue()
         {
-            Squad squad = GeneratedSquad();
-            IReadOnlyList<Player> first = new LineupSelector().SelectBest(squad, Formation.F352);
-            IReadOnlyList<Player> second = new LineupSelector().SelectBest(squad, Formation.F352);
+            // SelectBest takes no IRandom and is a pure function of (squad, formation), so two separate
+            // selectors agreeing proves nothing. The real risk is the scratch state one instance carries
+            // between calls — the not-yet-picked pool and the returned eleven are both reused buffers
+            // (PERFORMANCE §4, reuse scratch collections). So: ONE instance, squad A → squad B → squad A,
+            // and run 3 must reproduce run 1 exactly. The ids are copied out of each result immediately
+            // because SelectBest's contract is that its list is only valid until the next call — which
+            // the intervening B pick is precisely what invalidates.
+            var selector = new LineupSelector();
+            Squad a = GeneratedSquad(idBase: 0, seed: 7);
+            Squad b = GeneratedSquad(idBase: 500, seed: 31);
 
-            Assert.That(first.Count, Is.EqualTo(second.Count));
-            for (int i = 0; i < first.Count; i++)
-            {
-                Assert.That(first[i].Id.Value, Is.EqualTo(second[i].Id.Value));
-            }
+            int[] first = IdsOf(selector.SelectBest(a, Formation.F352));
+            int[] between = IdsOf(selector.SelectBest(b, Formation.F433));
+            int[] third = IdsOf(selector.SelectBest(a, Formation.F352));
+
+            Assert.That(first.Length, Is.EqualTo(11));
+            Assert.That(between.Length, Is.EqualTo(11));
+            Assert.That(third, Is.EqualTo(first), "The A pick changed after an intervening B pick — the reused buffers leaked state.");
+        }
+
+        [Test]
+        public void SelectBest_SameSquadTwiceOnOneInstance_IsIdentical()
+        {
+            var selector = new LineupSelector();
+            Squad squad = GeneratedSquad();
+
+            int[] first = IdsOf(selector.SelectBest(squad, Formation.F352));
+            int[] second = IdsOf(selector.SelectBest(squad, Formation.F352));
+
+            Assert.That(second, Is.EqualTo(first));
         }
 
         [Test]

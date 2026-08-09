@@ -12,13 +12,35 @@ namespace Gaffer.Tests
         {
             return new Attributes
             {
-                Finishing = stat, Technique = stat, FirstTouch = stat, Dribbling = stat, Passing = stat,
-                Crossing = stat, Heading = stat, LongShots = stat, Marking = stat, Tackling = stat,
-                Penalties = stat, FreeKicks = stat, Corners = stat, LongThrows = stat,
-                Pace = stat, Acceleration = stat, Stamina = stat, Strength = stat, Agility = stat,
-                Jumping = stat, Balance = stat, Positioning = stat,
-                Reflexes = stat, Handling = stat, AerialReach = stat, CommandOfArea = stat,
-                OneOnOnes = stat, Kicking = stat, GkPositioning = stat,
+                Finishing = stat,
+                Technique = stat,
+                FirstTouch = stat,
+                Dribbling = stat,
+                Passing = stat,
+                Crossing = stat,
+                Heading = stat,
+                LongShots = stat,
+                Marking = stat,
+                Tackling = stat,
+                Penalties = stat,
+                FreeKicks = stat,
+                Corners = stat,
+                LongThrows = stat,
+                Pace = stat,
+                Acceleration = stat,
+                Stamina = stat,
+                Strength = stat,
+                Agility = stat,
+                Jumping = stat,
+                Balance = stat,
+                Positioning = stat,
+                Reflexes = stat,
+                Handling = stat,
+                AerialReach = stat,
+                CommandOfArea = stat,
+                OneOnOnes = stat,
+                Kicking = stat,
+                GkPositioning = stat,
             };
         }
 
@@ -46,12 +68,12 @@ namespace Gaffer.Tests
         [Test]
         public void Develop_ZeroGrowthSettings_YoungPlayerStaysFlat()
         {
-            var settings = DevelopmentSettings.Default;
-            settings.GrowthRateTo20 = 0.0;
-            settings.GrowthRateTo22 = 0.0;
-            settings.GrowthRateTo24 = 0.0;
-            settings.GrowthRateTo26 = 0.0;
-            settings.GrowthRateTo29 = 0.0;
+            var settings = new DevelopmentSettings(
+                growthRateTo20: 0.0,
+                growthRateTo22: 0.0,
+                growthRateTo24: 0.0,
+                growthRateTo26: 0.0,
+                growthRateTo29: 0.0);
             var dev = new PlayerDevelopment(settings);
             Player before = Player(PlayerRole.Striker, 18, 50, 88);
 
@@ -69,8 +91,7 @@ namespace Gaffer.Tests
 
             double defaultDrop = start - PlayerRatings.ForRole(new PlayerDevelopment().Develop(before, Rng(11)));
 
-            var steep = DevelopmentSettings.Default;
-            steep.DeclinePerYear = 2.0;
+            var steep = new DevelopmentSettings(declinePerYear: 2.0);
             double steepDrop = start - PlayerRatings.ForRole(new PlayerDevelopment(steep).Develop(before, Rng(11)));
 
             Assert.That(steepDrop, Is.GreaterThan(defaultDrop), "a bigger decline-per-year wears a veteran down faster");
@@ -83,9 +104,7 @@ namespace Gaffer.Tests
             // default he holds; drop the peak below his age and he declines. Same player, same seed.
             Player player = Player(PlayerRole.Striker, 29, 70, 70);
 
-            var early = DevelopmentSettings.Default;
-            early.ForwardPeakAge = 26;
-            early.MinDeclineAge = 26;
+            var early = new DevelopmentSettings(forwardPeakAge: 26, minDeclineAge: 26);
 
             double defaultAfter = PlayerRatings.ForRole(new PlayerDevelopment().Develop(player, Rng(4)));
             double earlyAfter = PlayerRatings.ForRole(new PlayerDevelopment(early).Develop(player, Rng(4)));

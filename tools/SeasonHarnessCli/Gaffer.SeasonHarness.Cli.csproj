@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The console shell for the believability harness — the "1000-sezon dotnet konsol" the layer map
+    promises. The harness ITSELF (LeagueFactory / SeasonRunner / HarnessStatistics / HarnessReport /
+    HtmlReportWriter) lives in Assets/_Project/Scripts/Tools/SeasonHarness and is compiled here by the
+    same file-include pattern tests/Gaffer.Tests.csproj uses, so there is one copy of the instrument and
+    the console, the Unity editor window, and `dotnet test` all report the same numbers.
+
+    Program.cs sits OUTSIDE Assets on purpose: a `Main` inside the Unity assembly would also land in the
+    test bridge, whose test host generates its own entry point (two entry points = CS0017). The shell is
+    the only part that is not shared.
+
+    LangVersion is pinned to Unity 6's C# 9 like every other bridge project, so nothing compiles here
+    that Unity's compiler would reject.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>Gaffer.Tools.SeasonHarness.Cli</RootNamespace>
+    <AssemblyName>season-harness</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Common/**/*.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Domain/**/*.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Application/**/*.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Tools/SeasonHarness/**/*.cs" />
+  </ItemGroup>
+
+</Project>

@@ -1,3 +1,4 @@
+using System;
 using Gaffer.Domain.Traits;
 using UnityEngine;
 
@@ -28,7 +29,7 @@ namespace Gaffer.Infrastructure.Configuration
         [SerializeField] private bool onTitleDecider;
         [SerializeField] private bool onRelegationSixPointer;
         [Tooltip("Crowd size that counts as big (0 = not crowd-keyed).")]
-        [SerializeField] private int bigCrowdThreshold;
+        [Min(0)] [SerializeField] private int bigCrowdThreshold;
         [Tooltip("Rating multiplier when any flagged stake is present (1 = no match-day side).")]
         [SerializeField] private double matchMultiplier = 1.0;
 
@@ -40,9 +41,14 @@ namespace Gaffer.Infrastructure.Configuration
         [Tooltip("Scale on seasonal growth toward potential (1 = neutral; a dodger sits below).")]
         [SerializeField] private double growthMultiplier = 1.0;
         [Tooltip("Years added to the decline onset age (negative = fades early).")]
-        [SerializeField] private int declineOnsetShift;
+        [Range(-10, 10)] [SerializeField] private int declineOnsetShift;
         [Tooltip("Scale on post-peak erosion (1 = neutral; a glass man wears faster).")]
         [SerializeField] private double declineRateMultiplier = 1.0;
+
+        private void OnValidate()
+        {
+            ClampToValidRanges();
+        }
 
         /// <summary>Fills the serialized fields from a pure definition — used by the editor tooling to
         /// materialise the built-in catalog as tunable assets (no hand-authored YAML, decision #28).</summary>
@@ -69,6 +75,7 @@ namespace Gaffer.Infrastructure.Configuration
 
         public Trait ToTrait()
         {
+            ClampToValidRanges();
             MatchStakes stakes = MatchStakes.None;
             if (onDerby)
             {
@@ -107,6 +114,24 @@ namespace Gaffer.Infrastructure.Configuration
             return new Trait(
                 new TraitId(slug), nameKey, assignmentWeight, match,
                 teammateAura, growthMultiplier, declineOnsetShift, declineRateMultiplier);
+        }
+
+        /// <summary>
+        /// Bounds the four <c>double</c> multipliers Unity's <c>[Range]</c> cannot decorate
+        /// (UNITY.md §8) — all of them centred on 1.0 and all of them previously unbounded. The aura
+        /// is the sharpest: <c>EffectiveStrengthBuilder</c> divides a player back out of the lineup
+        /// product by his own aura, so a zero there is 0/0 and poisons every strength axis in the
+        /// match (CONVENTIONS §6). Called from <see cref="ToTrait"/> too, because the attribute
+        /// constrains the Inspector, not code that maps a stale asset. The bands sit far outside the
+        /// calibrated catalog (whose widest value is 1.5), so authored traits pass through untouched.
+        /// </summary>
+        private void ClampToValidRanges()
+        {
+            assignmentWeight = Math.Clamp(assignmentWeight, 0.0, 100.0);
+            matchMultiplier = Math.Clamp(matchMultiplier, 0.1, 3.0);
+            teammateAura = Math.Clamp(teammateAura, 0.1, 3.0);
+            growthMultiplier = Math.Clamp(growthMultiplier, 0.0, 3.0);
+            declineRateMultiplier = Math.Clamp(declineRateMultiplier, 0.0, 5.0);
         }
     }
 }

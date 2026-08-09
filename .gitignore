@@ -117,3 +117,11 @@ InitTestScene*.unity*
 !/tests/Gaffer.Tests.csproj
 /tests/[Bb]in/
 /tests/[Oo]bj/
+
+# ── season harness console (Gate A instrument, also outside Assets/) ──
+# Same deal: the shell project is source, its build output and the reports it
+# writes are not.
+!/tools/SeasonHarnessCli/*.csproj
+/tools/**/[Bb]in/
+/tools/**/[Oo]bj/
+/out/

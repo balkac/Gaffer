@@ -15,11 +15,22 @@ namespace Gaffer.Application.Simulation
         private const int MinuteFirst = 1;
         private const int MinuteAfterLast = 91;
 
+        // A cap below 1 is incoherent — the cap is also reciprocated into the ratio floor, so the floor
+        // would sit above the ceiling — and a cap of 0 makes that floor infinite, which drives the
+        // expected count to infinity without throwing anything (CONVENTIONS §6). 1 is the true lower
+        // bound; the calibrated 2.0 is untouched.
+        private const double MinStrengthRatioCap = 1.0;
+
+        // The Knuth loop below runs on the order of lambda iterations, so a runaway expected count is
+        // not an exception, it is ~750 bogus chances in one match. At the calibrated settings a side
+        // expects at most ~21, so this cap is a backstop that can never act as a balance dial.
+        private const double MaxExpectedChances = 100.0;
+
         private readonly MatchSimulationSettings _settings;
 
         // Scratch buffer reused across matches (cleared per call) so the per-match path allocates
-        // nothing (PERFORMANCE §8). The returned list is valid until the next GenerateChances call —
-        // the simulator consumes it synchronously before simulating the next match.
+        // nothing (PERFORMANCE §8). Returning it is allowed by the buffer-lifetime rule stated on
+        // IChanceGenerator.GenerateChances, which owns that constraint (ARCHITECTURE §8a).
         private readonly List<Chance> _chances = new List<Chance>(32);
 
         public PoissonChanceGenerator(MatchSimulationSettings settings)
@@ -41,10 +52,10 @@ namespace Gaffer.Application.Simulation
 
         private void AppendSideChances(List<Chance> chances, TeamSide side, double attack, double opponentDefence, double possession, double advantage, ChanceProfile profile, IRandom rng)
         {
-            double strengthRatio = opponentDefence <= 0.0 ? _settings.MaxStrengthRatio : ClampRatio(attack / opponentDefence);
+            double strengthRatio = opponentDefence <= 0.0 ? StrengthRatioCap : ClampRatio(attack / opponentDefence);
             double expectedChances = _settings.BaseChancesPerTeam * (2.0 * possession) * strengthRatio * advantage * profile.Volume;
 
-            int count = SamplePoisson(expectedChances, rng);
+            int count = SamplePoisson(ClampExpectedChances(expectedChances), rng);
             for (int i = 0; i < count; i++)
             {
                 int minute = rng.NextInt(MinuteFirst, MinuteAfterLast);
@@ -74,20 +85,44 @@ namespace Gaffer.Application.Simulation
             return Math.Min(quality, _settings.MaxChanceQuality);
         }
 
+        /// <summary>
+        /// The configured mismatch cap, held at or above 1 — the divisor guard for the ratio floor
+        /// below (CONVENTIONS §6). A NaN fails the comparison and falls to the bound, by design.
+        /// </summary>
+        private double StrengthRatioCap
+        {
+            get
+            {
+                double cap = _settings.MaxStrengthRatio;
+                return cap >= MinStrengthRatioCap ? cap : MinStrengthRatioCap;
+            }
+        }
+
         private double ClampRatio(double ratio)
         {
-            double floor = 1.0 / _settings.MaxStrengthRatio;
-            if (ratio < floor)
+            double cap = StrengthRatioCap;
+            double floor = 1.0 / cap;
+
+            // Written as a failed lower-bound test rather than `ratio < floor` so a NaN ratio (from a
+            // poisoned strength axis) lands on the floor instead of passing straight through.
+            if (!(ratio > floor))
             {
                 return floor;
             }
 
-            if (ratio > _settings.MaxStrengthRatio)
+            return ratio > cap ? cap : ratio;
+        }
+
+        // The last gate before the sampling loop: whatever the settings and the strength axes produced,
+        // the expected count that reaches Knuth's algorithm is a finite, bounded number.
+        private static double ClampExpectedChances(double expected)
+        {
+            if (!(expected > 0.0))
             {
-                return _settings.MaxStrengthRatio;
+                return 0.0;
             }
 
-            return ratio;
+            return expected > MaxExpectedChances ? MaxExpectedChances : expected;
         }
 
         private static int SamplePoisson(double lambda, IRandom rng)

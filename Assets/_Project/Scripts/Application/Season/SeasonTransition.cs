@@ -132,7 +132,9 @@ namespace Gaffer.Application.Season
                 players.Add(_development.Develop(player, _playerRng));
             }
 
-            return new Squad(players);
+            // Built here and handed over with no reference kept, so the squad takes ownership instead
+            // of copying it — one list per club per season rather than two (PERFORMANCE §8).
+            return Squad.Owning(players);
         }
 
         // A well-distributed per-player, per-season seed (SplitMix64 finalizer over the combined inputs), so

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Gaffer.Domain.Clubs;
 
@@ -26,6 +27,10 @@ namespace Gaffer.Application.Season
             return SeasonVerdict.Sacked;
         }
 
+        // The league position of a club that is not in the league has no sensible answer at all, so this
+        // throws rather than returning one (CONVENTIONS §4 — "throw when there is no answer"). The old
+        // fallback returned the last position, which flowed straight into SeasonVerdict.Sacked: a
+        // mis-wired managed club ended the player's run and looked exactly like a real relegation.
         private static int FindPosition(LeagueTable finalTable, ClubId managedClub)
         {
             IReadOnlyList<LeagueTableRow> ordered = finalTable.Ordered();
@@ -37,7 +42,9 @@ namespace Gaffer.Application.Season
                 }
             }
 
-            return ordered.Count;
+            throw new ArgumentException(
+                $"Club {managedClub.Value} is not in the final table ({ordered.Count} clubs), so it has no league position to judge.",
+                nameof(managedClub));
         }
     }
 }

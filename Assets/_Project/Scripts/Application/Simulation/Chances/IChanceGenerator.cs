@@ -10,6 +10,14 @@ namespace Gaffer.Application.Simulation
     /// </summary>
     public interface IChanceGenerator
     {
+        /// <summary>
+        /// The chances this match produces, in generation order.
+        /// <para><b>Buffer lifetime — part of this port's contract, not an implementation detail
+        /// (ARCHITECTURE §5a/§8a).</b> An implementation may return a scratch buffer it reuses, so the
+        /// returned list is only guaranteed <b>valid until the next <see cref="GenerateChances"/> call on
+        /// the same instance</b>. Callers consume it synchronously and copy out anything they keep; a
+        /// caller that stores the reference will silently see the next match's chances.</para>
+        /// </summary>
         IReadOnlyList<Chance> GenerateChances(MatchCommand command, IRandom rng);
     }
 }

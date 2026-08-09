@@ -4,6 +4,7 @@ using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
+using Gaffer.Domain.Traits;
 
 namespace Gaffer.Application.Generation
 {
@@ -13,6 +14,14 @@ namespace Gaffer.Application.Generation
     /// a strength derived from that squad. This is the "world is generated" step (decision #6) — no hand-authored
     /// club list. Deterministic through the injected rng: the same seed reproduces the same league, clubs, and
     /// rosters. Player ids are offset by rank so they never collide across clubs.
+    /// <para>
+    /// THE STRENGTH BUILDER IS INJECTED, and that is load-bearing rather than tidiness. The strength written
+    /// here is persisted into the save and is the only strength a squad-less (restored, strength-only) club
+    /// ever has, while <c>LeagueSeason</c> re-derives strength through the catalog it was CONFIGURED with. A
+    /// builder wired in a field initializer would bind <see cref="TraitCatalog.Default"/>, so an authored
+    /// catalog that retunes a teammate aura would produce a league generated under one set of rules and played
+    /// under another. Wiring belongs to the composition root, not to a collaborator's field (ARCHITECTURE §6).
+    /// </para>
     /// </summary>
     public sealed class LeagueGenerator
     {
@@ -20,13 +29,36 @@ namespace Gaffer.Application.Generation
         private const int BottomCentre = 46;
         private const int BandHalfWidth = 10;
 
-        private readonly ClubNameGenerator _names = new ClubNameGenerator();
+        private readonly ClubNameGenerator _names;
         private readonly SquadGenerator _squads;
-        private readonly EffectiveStrengthBuilder _strength = new EffectiveStrengthBuilder();
+        private readonly EffectiveStrengthBuilder _strength;
 
+        /// <summary>
+        /// The built-in-catalog convenience: generates under <see cref="TraitCatalog.Default"/>. Correct only
+        /// for a caller that also PLAYS on the default catalog (headless tests, the editor harnesses). A caller
+        /// holding a configured catalog must pass it — see the overloads — or generation and season diverge.
+        /// </summary>
         public LeagueGenerator(SquadGenerator squads)
+            : this(squads, TraitCatalog.Default)
+        {
+        }
+
+        /// <summary>Generates under a specific trait catalog: the strength each club is born with is derived
+        /// through the same catalog the season will re-derive it through. Null falls back to the built-in set
+        /// (ARCHITECTURE §7) — the fallback lives here, at the wiring seam, not inside the collaborator.</summary>
+        public LeagueGenerator(SquadGenerator squads, TraitCatalog traits)
+            : this(squads, new EffectiveStrengthBuilder(traits ?? TraitCatalog.Default), null)
+        {
+        }
+
+        /// <summary>The fully-injected form the composition root uses: it hands over the very builder (and
+        /// name generator) the rest of the graph shares, so no collaborator can quietly construct a second
+        /// one on different balance.</summary>
+        public LeagueGenerator(SquadGenerator squads, EffectiveStrengthBuilder strength, ClubNameGenerator names)
         {
             _squads = squads;
+            _strength = strength ?? new EffectiveStrengthBuilder();
+            _names = names ?? new ClubNameGenerator();
         }
 
         public League Generate(int clubCount, IRandom rng)

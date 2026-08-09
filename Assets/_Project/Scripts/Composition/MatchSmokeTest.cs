@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 using Gaffer.Domain.Clubs;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
@@ -8,7 +9,13 @@ namespace Gaffer.Composition
     /// <summary>
     /// A throwaway in-editor smoke test: on Play it simulates one match on the pure Application core
     /// and logs the result to the Console — proof the deterministic sim runs inside Unity's runtime,
-    /// not just under dotnet. Not shipped; the real matchday flow arrives with Presentation (Faz 7).
+    /// not just under dotnet. The real matchday flow arrives with Presentation (Faz 7).
+    /// <para>
+    /// Compiled out of player builds. The class doc claimed "not shipped" while living in
+    /// <c>Gaffer.Composition</c>, whose asmdef has no platform constraint — so it shipped, and its
+    /// interpolated <c>Debug.Log</c> calls would have boxed a value type per hole on a device
+    /// development build (PERFORMANCE §4, §8). The <c>#if</c> makes the doc true.
+    /// </para>
     /// </summary>
     public sealed class MatchSmokeTest : MonoBehaviour
     {
@@ -37,3 +44,4 @@ namespace Gaffer.Composition
         }
     }
 }
+#endif

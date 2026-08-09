@@ -174,6 +174,7 @@ Dar ama kapalı.
 ## Karar kapıları (go / no-go)
 
 - **★ Gate A (Faz 1 sonu):** ✅ **GEÇILDI (2026-07-07)** — gol 2.69/maç, favori %51.6 kazanır, ev > deplasman, şampiyon dağılımı sağlıklı; regresyon testleriyle kilitli. *En ucuz iptal/pivot noktası olmaktan çıktı.*
+  - *2026-08-06 notu:* kapı geçerli, ama **ev-avantajı kanıtı sanıldığından zayıfmış** — tek tohuma dayanıyordu ve 5 tohumluk süpürmede biri (`20250101`) tersine dönüyor (ev %36.3 < deplasman %36.8). Bir sezon 380 maç, SE ≈ 2.5 puan; ~3 puanlık fark tek örneklemde inversiyona açık. İddia havuzlanmış 1.900 maça taşındı (%41.7 vs %34.2, >3 puan marj). Gol ve favori bantları beş tohumda da tutuyor. Ayrıntı: [`PROGRESS.md`](PROGRESS.md).
 - **★ Gate B (Faz 5 sonu):** Hikaye kendiliğinden beliriyor mu? Bu emergent dram bahsinin tutup tutmadığı an.
 - **★ Gate C (Faz 8):** MVP Definition of Done karşılandı mı? Ship kararı.
 

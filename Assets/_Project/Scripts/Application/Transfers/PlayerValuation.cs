@@ -24,8 +24,18 @@ namespace Gaffer.Application.Transfers
         {
             double ability = PlayerRatings.ForRole(player) / 100.0;
             double raw = Math.Pow(Math.Max(0.0, ability), 3.0) * economy.ValuationCeiling * AgeMultiplier(player.Age, economy);
-            long rounded = (long)Math.Round(raw / economy.ValuationRounding) * economy.ValuationRounding;
+            int step = RoundingStep(economy.ValuationRounding);
+            long rounded = (long)Math.Round(raw / step) * step;
             return Math.Max(0, rounded);
+        }
+
+        // The rounding step is a config-editable divisor, and a zero one does not throw: raw/0 is
+        // Infinity, the cast to long collapses it, and every player in the game is suddenly worth 0 —
+        // free transfers, with nothing raised at the source (CONVENTIONS §6). A step below one currency
+        // unit has no meaning, so 1 is the true floor and the calibrated 50 000 passes through untouched.
+        private static int RoundingStep(int configured)
+        {
+            return configured > 0 ? configured : 1;
         }
 
         // Value peaks in a player's mid-twenties and tails off with age; the young are a touch cheaper

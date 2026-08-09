@@ -16,3 +16,32 @@ MonoBehaviour:
   meanChanceQuality: 0.17
   homeAdvantage: 1.15
   maxStrengthRatio: 2
+  maxChanceQuality: 0.95
+  chanceQualityVariance: 0.5
+  mentalityAttackStep: 0.09
+  pressingMidfieldStep: 0.09
+  mentalityDefenceStep: 0.07
+  pressingDefenceStep: 0.08
+  intenseTempoVolume: 1.08
+  intenseTempoQuality: 0.93
+  patientTempoVolume: 0.92
+  patientTempoQuality: 1.09
+  counterApproachVolume: 0.82
+  counterApproachQuality: 1.2
+  possessionApproachVolume: 1.15
+  possessionApproachQuality: 0.88
+  minOutfielderWeight: 0.5
+  openPlayFinishing: 0.6
+  openPlayPositioning: 0.2
+  openPlayPace: 0.2
+  aerialHeading: 0.6
+  aerialJumping: 0.25
+  aerialStrength: 0.15
+  openPlayForward: 1
+  openPlayMidfielder: 0.55
+  openPlayDefender: 0.1
+  openPlayGoalkeeper: 0.003
+  aerialForward: 0.45
+  aerialMidfielder: 0.25
+  aerialDefender: 0.3
+  aerialGoalkeeper: 0.004

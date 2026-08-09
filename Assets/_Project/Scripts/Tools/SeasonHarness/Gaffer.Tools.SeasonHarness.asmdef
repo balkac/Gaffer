@@ -1,0 +1,20 @@
+{
+    "name": "Gaffer.Tools.SeasonHarness",
+    "rootNamespace": "Gaffer.Tools.SeasonHarness",
+    "references": [
+        "Gaffer.Common",
+        "Gaffer.Domain",
+        "Gaffer.Application"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

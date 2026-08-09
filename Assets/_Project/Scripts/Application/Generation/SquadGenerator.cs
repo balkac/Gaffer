@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
@@ -28,7 +29,10 @@ namespace Gaffer.Application.Generation
 
         public Squad Generate(int firstPlayerId, GenerationContext context, IRandom rng)
         {
-            var players = new Player[SquadSize];
+            // Pre-sized to the exact roster and filled in slot order, then handed to the squad, which
+            // takes ownership rather than copying it — one list per club at world generation instead of
+            // two (PERFORMANCE §8). Nothing here keeps a reference once it is handed over.
+            var players = new List<Player>(SquadSize);
             int slot = 0;
 
             slot = AppendRole(players, slot, firstPlayerId, PlayerRole.Goalkeeper, 2, context, rng);
@@ -44,15 +48,15 @@ namespace Gaffer.Application.Generation
             slot = AppendRole(players, slot, firstPlayerId, PlayerRole.LeftWing, 1, context, rng);
             AppendRole(players, slot, firstPlayerId, PlayerRole.Striker, 3, context, rng);
 
-            return new Squad(players);
+            return Squad.Owning(players);
         }
 
-        private int AppendRole(Player[] players, int slot, int firstPlayerId, PlayerRole role, int count, GenerationContext context, IRandom rng)
+        private int AppendRole(List<Player> players, int slot, int firstPlayerId, PlayerRole role, int count, GenerationContext context, IRandom rng)
         {
             for (int i = 0; i < count; i++)
             {
                 var id = new PlayerId(firstPlayerId + slot);
-                players[slot] = _playerGenerator.Generate(id, context, role, rng);
+                players.Add(_playerGenerator.Generate(id, context, role, rng));
                 slot++;
             }
 

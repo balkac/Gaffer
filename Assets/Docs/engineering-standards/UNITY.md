@@ -7,7 +7,17 @@ correctness companion to [`PERFORMANCE.md`](PERFORMANCE.md), which covers the co
 
 > **Baseline:** Unity 6 (6000.x), C# 9.0. Version-gated rules are tagged; verify against the
 > matching manual version before porting a rule to another engine release.
-> Verified: Unity 6000.3.20f1 · last reviewed 2026-07-28.
+> Verified: Unity 6000.3.20f1 · last reviewed 2026-08-06.
+> **2026-08-06 audit:** §1's `OnDestroy` rule, §3's `Destroy` timing, §4's Android keyboard
+> focus behaviour and §6's `Awaitable` pooling were re-checked against the Unity 6000.3 scripting
+> reference and hold verbatim. A same-day verification against the live pages then corrected the
+> audit itself twice: §4's save-on-focus-loss prescription **is** Unity's — it lives on the
+> `OnApplicationQuit` page, not the `OnApplicationFocus` page — and §6's `Awaitable` continuation
+> threading **is** documented, on the manual's *Awaitable completion and continuation* page, now
+> cited. §2's `maximumDeltaTime` default stays corrected: no doc page prints the number; it is
+> read from the project's Time settings. §8's asset-writer rules and all of §9 are **project
+> measurement**, not documentation — each carries the setup it was observed on; §9's stripping
+> entry cites the documented Minimal policy and leaves open only where "user-written" ends.
 
 ---
 
@@ -40,9 +50,13 @@ correctness companion to [`PERFORMANCE.md`](PERFORMANCE.md), which covers the co
 - Per frame: `FixedUpdate` ×0..n (the fixed clock catches up to real time) → `Update` →
   coroutines (`yield return null`) → `LateUpdate` → render. `FixedUpdate` can run **zero** times
   in a fast frame and **several** times after a slow one.
-- `Time.maximumDeltaTime` (default 1/3 s) bounds the catch-up burst — it caps how many
-  `FixedUpdate`s a long frame can trigger AND clamps `Time.deltaTime` itself, which is what stops
-  the spiral where heavy fixed steps lengthen the frame and earn ever more fixed steps.
+- `Time.maximumDeltaTime` bounds the catch-up burst — the scripting docs state it both limits
+  `Time.deltaTime` (the docs' wording: "in the following frame" after a very slow one) and bounds
+  the number of `FixedUpdate` calls in a frame to `maximumDeltaTime / fixedDeltaTime`, which is
+  what stops the spiral where heavy fixed steps lengthen the frame and earn ever more fixed
+  steps. Its default (1/3 s) is printed on **no** doc page — the scripting page omits it and the
+  Time Manager manual page describes the field without the number; read it from the project's
+  Time settings (`Maximum Allowed Timestep`).
 - `Time.deltaTime` is context-sensitive: read inside `FixedUpdate`, it returns `fixedDeltaTime`
   (verbatim documented behaviour).
 - Frame-based input (`GetKeyDown`-style, pointer events) is read in `Update`, never in
@@ -72,10 +86,13 @@ correctness companion to [`PERFORMANCE.md`](PERFORMANCE.md), which covers the co
 
 - `OnApplicationQuit` is **not** a mobile save point: the docs say iOS apps "suspend rather than
   quit, so OnApplicationQuit won't be called", and for mobile generally: "don't rely on this
-  method to save the state of your application." Persist in **`OnApplicationPause(true)`** and/or
-  **`OnApplicationFocus(false)`** — Unity 6's docs explicitly name focus loss as the mobile save
-  signal — through the normal Infrastructure save path, and treat "resumed after an arbitrary
-  gap" as a normal launch state.
+  method to save the state of your application." The same page prescribes the replacement:
+  "consider every loss of application focus as the exit of the application and use
+  MonoBehaviour.OnApplicationFocus to save any data." So persist in
+  **`OnApplicationPause(true)`** and/or **`OnApplicationFocus(false)`** through the normal
+  Infrastructure save path, and treat "resumed after an arbitrary gap" as a normal launch state.
+  *(Cite the right page: the prescription lives on `OnApplicationQuit`; the `OnApplicationFocus`
+  page itself only documents when the callback fires.)*
 - Two documented gotchas: `OnApplicationPause` fires once with `false` during startup (right
   after `Awake`) — save logic must ignore that call; and on Android, focus can be lost without a
   pause (on-screen keyboard). The often-quoted exact iOS pause/focus ordering is community lore,
@@ -88,14 +105,16 @@ correctness companion to [`PERFORMANCE.md`](PERFORMANCE.md), which covers the co
   anything longer-lived than the subscriber is a leak plus a dead-object callback waiting to fire
   (`CONVENTIONS.md` §6). Same rule as tweens in `PERFORMANCE.md` §7: nothing outlives its target
   without an explicit owner tearing it down.
-- Where a persistent object is **re-bound** to a fresh consumer every level/round, prefer an
-  assignable delegate over a multicast event — see `ARCHITECTURE.md` §9; it makes the stale
-  subscription structurally impossible instead of discipline-dependent.
+- Where a persistent object is **re-bound** to a fresh consumer every level/round, an assignable
+  delegate makes the stale subscription structurally impossible instead of discipline-dependent —
+  but it also removes the visible `-=` a teardown audit reads for. `ARCHITECTURE.md` §9 states
+  both sides and how to choose; whichever you pick, write the choice down where the callback is
+  declared.
 
 ## 6. Async & threading correctness
 
-The pure core is synchronous (`ARCHITECTURE.md`'s async boundary keeps `async` in Infrastructure/
-Presentation); these rules govern the engine-facing side where it does appear.
+The pure core is synchronous (`ARCHITECTURE.md`'s async boundary keeps `async` in
+Infrastructure/Presentation); these rules govern the engine-facing side where it does appear.
 
 - **An `async` continuation outlives its GameObject.** Coroutines die with their object — a safety
   AND a limitation (they also return no values, can't `try/catch` across a `yield`, and an
@@ -121,11 +140,16 @@ Presentation); these rules govern the engine-facing side where it does appear.
   `Task.Run`, or after a `ConfigureAwait(false)` earlier in the chain — resumes on the thread pool
   with **no** main-thread guarantee. Don't use `ConfigureAwait(false)` in Unity gameplay code; it
   deliberately discards the context capture for no benefit here.
-- **Unity 6's `Awaitable` is NOT a `Task`:** its continuations bypass the
-  `SynchronizationContext` and run synchronously where they were triggered — main thread only if
-  completed there, otherwise a ThreadPool thread (hop back explicitly via
-  `Awaitable.MainThreadAsync()`). And it is **pooled: await an `Awaitable` exactly once** — after
-  completion it returns to the pool, so storing and re-awaiting one observes recycled state.
+- **Unity 6's `Awaitable` is NOT a `Task`.** Both halves are documented, on two different pages.
+  **Pooling** (the scripting page): instances "are pooled and therefore not safe to `await`
+  multiple times in the same method" — treat it as single-consumption; "re-awaiting observes
+  recycled state" is our reading of what "not safe" means, not the docs' words. **Continuation
+  threading** (the manual's *Awaitable completion and continuation* page): unless documented
+  otherwise, an `Awaitable` called from the main thread resumes on the main thread; called from
+  anywhere else, it resumes on a .NET `ThreadPool` thread — and the page presents `Awaitable` as
+  skipping `Task`'s `SynchronizationContext` capture, naming that capture as overhead `Awaitable`
+  avoids. When the resume thread matters, **hop explicitly** via `Awaitable.MainThreadAsync()` /
+  `BackgroundThreadAsync()` rather than assuming one.
   (UniTask carries the same single-consumption contract — a second await throws unless
   `Preserve()` is called.) Don't carry `Task` assumptions onto either.
 - **`async void` only for event handlers.** It can't be awaited and its exceptions bypass the
@@ -152,8 +176,9 @@ The Infrastructure save path (`ARCHITECTURE.md`; save-on-pause in §4 above) mus
   its docs reserve an `UnauthorizedAccessException` branch for "this operation is not supported
   on the current platform" — absence of failure reports is not a platform guarantee, so
   smoke-test the save path on every platform/backend combination actually shipped (Android
-  Mono/IL2CPP, iOS IL2CPP — iOS has no Mono player, §12). The rename is *effectively* atomic on
-  one volume; the BCL does not formally guarantee atomicity — so treat `Replace` as an
+  Mono/IL2CPP, iOS IL2CPP — iOS has no Mono player, `PERFORMANCE.md` §12). The rename is
+  *effectively* atomic on one volume; the BCL does not formally guarantee atomicity — so treat
+  `Replace` as an
   *optimisation of the save protocol*, not its correctness: on load, a corrupt/unparsable save is
   an expected `Result.Failure` with a defined fallback (previous file or fresh run), never an
   unhandled crash at boot, and the interruption points (write → flush → replace/move → cleanup)
@@ -176,7 +201,7 @@ The Infrastructure save path (`ARCHITECTURE.md`; save-on-pause in §4 above) mus
   core and saves through Persistence.
 - **`StreamingAssets` on Android lives inside the APK/AAB archive** — unreadable via
   `File`/`System.IO` (the manual sends you to `UnityWebRequest`); iOS reads it directly. Prefer
-  direct references/Addressables (`PERFORMANCE.md` §14) so this asymmetry never bites.
+  direct references/Addressables (`PERFORMANCE.md` §12) so this asymmetry never bites.
 
 ## 8. Inspector & serialization hygiene
 
@@ -189,3 +214,71 @@ The Infrastructure save path (`ARCHITECTURE.md`; save-on-pause in §4 above) mus
   comment pleading for it.
 - **Group related serialized fields into a `[Serializable]` struct/class** rather than a flat
   list of loose fields — the Inspector shows the grouping, and rebind code passes one object.
+- **One writer at a time for a `ScriptableObject` asset.** With the object loaded, the editor
+  treats its in-memory copy as the truth and flushes it back over any edit made to the `.asset`
+  file on disk at the next serialize — no warning, and the symptom is "my change did nothing".
+  The mirror hazard is a *stale* asset: fields added to the class since the asset was last saved
+  are not in the file, so those run from the C# field initializers instead, and the first
+  inspector save bakes in whatever was live at that moment. Pick one writer — inspector, or disk
+  with a forced reimport before anything else touches it — and keep field initializers identical
+  to the shipped asset values so whichever side wins a race, behaviour is the same.
+- **Unity rewrites assets under you; read asset diffs before every commit.** Two observed
+  mechanisms, both silent, both observed in the Unity 6000.3 editor: re-importing a sprite
+  resets a **Sliced** `SpriteRenderer`'s `size`
+  back to the sprite's raw canvas (joining an atlas is a re-import, so a batching change can
+  quietly resize every prefab that draws that sprite), and an `[ExecuteAlways]` component that
+  solves against `Screen.*` in edit mode gets the **focused editor window's** dimensions rather
+  than the game view's, and writes the resulting positions into the prefab. Runtime code often
+  self-heals both on the next layout pass — the *asset* does not.
+
+## 9. Build-only and device-only failure modes
+
+**The editor is not a target platform; it is an approximation with different mechanics.** Each
+item below is a failure class that is *structurally absent* from every editor run — not rare in
+the editor, impossible there — so "it works in play mode" is not weak evidence for them, it is no
+evidence at all. Budget a device build early for anything in this list.
+
+- **Addressables in the editor resolves through the asset database, with no bundles** — under
+  the *Use Asset Database* play-mode script, the standard editor setting (*Use Existing Build* is
+  the exception that loads real bundles in play mode). Bundle completion, load ordering and the
+  whole family of `WaitForCompletion` hazards therefore cannot reproduce under it
+  (`ARCHITECTURE.md` §5a, `PERFORMANCE.md` §14).
+- **Managed code stripping does not exist in the editor.** See the case below.
+- **A Memory Profiler snapshot taken in a desktop editor reports desktop texture formats**
+  (BC/DXT), not the ASTC/ETC2 the device will load — so it measures the wrong thing for a mobile
+  memory budget. Take the snapshot on the device.
+- **`Screen.*` in edit mode describes the focused editor window**, not the game view (see §8).
+- **EditMode tests have no engine clock.** Nothing the engine drives advances: particle systems
+  never simulate, so a pooled effect never reports itself finished and its pool drains forever.
+  Measured consequence: a pooling allocation test read ~6 KB per action of "production
+  allocation" that was entirely an artefact of the harness. Anything whose lifetime the engine
+  owns must be ended explicitly by the test, or the measurement is fiction.
+
+**The stripping case, because its diagnosis is the reusable part.** An assembly whose only entry
+point was a `[RuntimeInitializeOnLoadMethod]`, and which no other assembly referenced, was removed
+by IL2CPP managed stripping in an iOS build. No error, no warning — the feature simply did not
+exist at runtime. What makes it worth writing down is that the two obvious places to look both
+lie:
+
+- `Data/RuntimeInitializeOnLoads.json` inside the shipped build **still listed the method**. That
+  file is written *before* stripping runs, so its contents read like proof the code shipped and
+  are nothing of the kind.
+- The assembly's own `Runtime/link.xml`, authored for exactly this hazard, **was never handed to
+  the linker** — `Library/Bee/Player*-inputdata.json` showed the assembly going into UnityLinker
+  as an input while the only `link.xml` files collected were another package's. A `link.xml`
+  inside a package is not automatically collected.
+
+What actually settles it: search **`global-metadata.dat`** in the built player for the type names.
+Zero hits for the stripped assembly's types against 66 for a live one is unambiguous, and it is
+the only check in this list that reads the shipped binary rather than a build artefact.
+
+**Prefer an explicit call over a `link.xml`.** A `link.xml` keeps the assembly alive but leaves
+the policy invisible, and its own protection had already failed silently once here. A call from
+the composition root *is* the reference that defeats stripping, and it puts "which builds include
+this" in the file where wiring is read.
+
+*(Evidence: one project, Unity 6000.3, iOS IL2CPP, `managedStrippingLevel` left at its default.
+The documented policy — Minimal, the IL2CPP default, under which "Unity doesn't remove any
+user-written code" — did not protect it: an unreferenced **package** assembly evidently sits
+outside what "user-written" covers, and the docs never say where that line runs. Verify on the
+build you ship rather than reasoning from the rule.)*

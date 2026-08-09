@@ -15,13 +15,35 @@ namespace Gaffer.Tests
         {
             return new Attributes
             {
-                Finishing = stat, Technique = stat, FirstTouch = stat, Dribbling = stat, Passing = stat,
-                Crossing = stat, Heading = stat, LongShots = stat, Marking = stat, Tackling = stat,
-                Penalties = stat, FreeKicks = stat, Corners = stat, LongThrows = stat,
-                Pace = stat, Acceleration = stat, Stamina = stat, Strength = stat, Agility = stat,
-                Jumping = stat, Balance = stat, Positioning = stat,
-                Reflexes = stat, Handling = stat, AerialReach = stat, CommandOfArea = stat,
-                OneOnOnes = stat, Kicking = stat, GkPositioning = stat,
+                Finishing = stat,
+                Technique = stat,
+                FirstTouch = stat,
+                Dribbling = stat,
+                Passing = stat,
+                Crossing = stat,
+                Heading = stat,
+                LongShots = stat,
+                Marking = stat,
+                Tackling = stat,
+                Penalties = stat,
+                FreeKicks = stat,
+                Corners = stat,
+                LongThrows = stat,
+                Pace = stat,
+                Acceleration = stat,
+                Stamina = stat,
+                Strength = stat,
+                Agility = stat,
+                Jumping = stat,
+                Balance = stat,
+                Positioning = stat,
+                Reflexes = stat,
+                Handling = stat,
+                AerialReach = stat,
+                CommandOfArea = stat,
+                OneOnOnes = stat,
+                Kicking = stat,
+                GkPositioning = stat,
             };
         }
 
@@ -58,9 +80,7 @@ namespace Gaffer.Tests
         // the extra youth that would otherwise change the squad's size and line averages.
         private static RenewalSettings NoIntake()
         {
-            var settings = RenewalSettings.Default;
-            settings.YouthIntakePerSeason = 0;
-            return settings;
+            return new RenewalSettings(youthIntakePerSeason: 0);
         }
 
         private static Club ClubWithSquad(int id, Squad squad)
@@ -103,8 +123,7 @@ namespace Gaffer.Tests
         public void ToNextSeason_ZeroGrowthSettings_YoungSquadDoesNotStrengthen()
         {
             League league = LeagueWith(ClubWithSquad(0, YoungSquad(50, 85)));
-            var settings = DevelopmentSettings.Default;
-            settings.GrowthRateTo20 = 0.0;
+            var settings = new DevelopmentSettings(growthRateTo20: 0.0);
 
             League next = new SeasonTransition(settings, NoIntake()).ToNextSeason(league, 1234UL, 2);
 
@@ -173,24 +192,35 @@ namespace Gaffer.Tests
             Assert.That(anyDifferent, Is.True);
         }
 
+        /// <summary>
+        /// Across real rollovers — ageing, development, retirement and all — the roster gains exactly
+        /// <c>YouthIntakePerSeason</c> a season and keeps gaining it past where the old <c>MaxSquadSize</c>
+        /// cap used to freeze it at 25. Retirees are replaced one-for-one, so they never offset the intake;
+        /// nothing in the game removes a player from a squad on a rollover today. Squads growing without
+        /// bound is the owner's accepted cost until expiring contracts land (2026-08-09, PROGRESS #30).
+        /// </summary>
         [Test]
-        public void ToNextSeason_AcademyIntake_GrowsTheSquadTowardTheCap()
+        public void ToNextSeason_AcademyIntake_GrowsTheSquadEverySeasonPastTheOldCap()
         {
             League league = LeagueWith(ClubWithSquad(0, YoungSquad(50, 85)));
             var transition = new SeasonTransition();
+            int intake = RenewalSettings.Default.YouthIntakePerSeason;
 
-            // Even with a young squad that never retires, the academy feeds a youth through every season, so the
-            // roster grows year on year until it reaches the cap — then holds.
-            int previous = league.Clubs[0].Squad.Players.Count;
-            for (int season = 2; season <= 6; season++)
+            int start = league.Clubs[0].Squad.Players.Count;
+            int previous = start;
+            for (int season = 2; season <= 21; season++)
             {
                 league = transition.ToNextSeason(league, 1234UL, season);
                 int now = league.Clubs[0].Squad.Players.Count;
-                Assert.That(now, Is.EqualTo(previous + 1), "one academy youth joins each season below the cap");
+                Assert.That(now, Is.EqualTo(previous + intake),
+                    $"season {season} did not grow by exactly the academy intake");
                 previous = now;
             }
 
-            Assert.That(league.Clubs[0].Squad.Players.Count, Is.LessThanOrEqualTo(RenewalSettings.Default.MaxSquadSize));
+            Assert.That(league.Clubs[0].Squad.Players.Count, Is.EqualTo(start + (20 * intake)),
+                "twenty rollovers of steady growth — nothing caps the squad");
+            Assert.That(league.Clubs[0].Squad.Players.Count, Is.GreaterThan(25),
+                "and the roster is past the size the removed cap used to hold it at");
         }
 
         [Test]

@@ -5,6 +5,9 @@
         "Gaffer.Domain",
         "Gaffer.Application",
         "Gaffer.Common",
+        "Gaffer.UserData",
+        "Gaffer.Tools.SeasonHarness",
+        "Gaffer.Infrastructure",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
@@ -15,8 +18,7 @@
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "nunit.framework.dll",
-        "Newtonsoft.Json.dll"
+        "nunit.framework.dll"
     ],
     "autoReferenced": false,
     "defineConstraints": [

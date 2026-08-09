@@ -1,3 +1,4 @@
+using System;
 using Gaffer.Application.Simulation;
 using UnityEngine;
 
@@ -40,15 +41,25 @@ namespace Gaffer.Infrastructure.Configuration
         [Tooltip("Defence multiplier lost per mentality step — attacking thins the line.")]
         [SerializeField] private double mentalityDefenceStep = 0.07;
 
-        [Tooltip("Defence multiplier lost per pressing step — a high press exposes the line.")]
-        [SerializeField] private double pressingDefenceStep = 0.04;
+        [Tooltip("Defence multiplier lost per pressing step — a high press exposes the line. Calibrated " +
+                 "against the possession the same step wins: below ~0.08 the press costs nothing net.")]
+        [SerializeField] private double pressingDefenceStep = 0.08;
 
-        [Header("Tactics — chance profile")]
-        [Tooltip("Chance-volume multiplier for an intense tempo.")]
-        [SerializeField] private double intenseTempoVolume = 1.15;
+        // Volume and quality are paired per option: their product is the option's effect on expected
+        // goals, and the calibration holds every one within ~2% of 1.0 so a tactic changes the shape of a
+        // side's chances, not how many it scores. Edit one of a pair and you have moved goals, not shape.
+        [Header("Tactics — chance profile (volume x quality stays ~1.0 per option)")]
+        [Tooltip("Chance-volume multiplier for an intense tempo (more chances...).")]
+        [SerializeField] private double intenseTempoVolume = 1.08;
 
-        [Tooltip("Chance-volume multiplier for a patient tempo.")]
-        [SerializeField] private double patientTempoVolume = 0.87;
+        [Tooltip("...but hurried: chance-quality multiplier for an intense tempo. 1.08 x 0.93 = 1.004.")]
+        [SerializeField] private double intenseTempoQuality = 0.93;
+
+        [Tooltip("Chance-volume multiplier for a patient tempo (fewer chances...).")]
+        [SerializeField] private double patientTempoVolume = 0.92;
+
+        [Tooltip("...but worked: chance-quality multiplier for a patient tempo. 0.92 x 1.09 = 1.003.")]
+        [SerializeField] private double patientTempoQuality = 1.09;
 
         [Tooltip("Chance-volume multiplier for the counter (fewer chances...).")]
         [SerializeField] private double counterApproachVolume = 0.82;
@@ -88,8 +99,14 @@ namespace Gaffer.Infrastructure.Configuration
         [SerializeField] private double aerialDefender = 0.30;
         [SerializeField] private double aerialGoalkeeper = 0.004;
 
+        private void OnValidate()
+        {
+            ClampToValidRanges();
+        }
+
         public MatchSimulationSettings ToSettings()
         {
+            ClampToValidRanges();
             return new MatchSimulationSettings(
                 baseChancesPerTeam, meanChanceQuality, homeAdvantage, maxStrengthRatio,
                 maxChanceQuality, chanceQualityVariance);
@@ -97,41 +114,95 @@ namespace Gaffer.Infrastructure.Configuration
 
         public TacticsSettings ToTacticsSettings()
         {
-            return new TacticsSettings
-            {
-                MentalityAttackStep = mentalityAttackStep,
-                PressingMidfieldStep = pressingMidfieldStep,
-                MentalityDefenceStep = mentalityDefenceStep,
-                PressingDefenceStep = pressingDefenceStep,
-                IntenseTempoVolume = intenseTempoVolume,
-                PatientTempoVolume = patientTempoVolume,
-                CounterApproachVolume = counterApproachVolume,
-                CounterApproachQuality = counterApproachQuality,
-                PossessionApproachVolume = possessionApproachVolume,
-                PossessionApproachQuality = possessionApproachQuality,
-            };
+            ClampToValidRanges();
+            return new TacticsSettings(
+                mentalityAttackStep: mentalityAttackStep,
+                pressingMidfieldStep: pressingMidfieldStep,
+                mentalityDefenceStep: mentalityDefenceStep,
+                pressingDefenceStep: pressingDefenceStep,
+                intenseTempoVolume: intenseTempoVolume,
+                intenseTempoQuality: intenseTempoQuality,
+                patientTempoVolume: patientTempoVolume,
+                patientTempoQuality: patientTempoQuality,
+                counterApproachVolume: counterApproachVolume,
+                counterApproachQuality: counterApproachQuality,
+                possessionApproachVolume: possessionApproachVolume,
+                possessionApproachQuality: possessionApproachQuality);
         }
 
         public ScorerWeights ToScorerWeights()
         {
-            return new ScorerWeights
-            {
-                MinOutfielderWeight = minOutfielderWeight,
-                OpenPlayFinishing = openPlayFinishing,
-                OpenPlayPositioning = openPlayPositioning,
-                OpenPlayPace = openPlayPace,
-                AerialHeading = aerialHeading,
-                AerialJumping = aerialJumping,
-                AerialStrength = aerialStrength,
-                OpenPlayForward = openPlayForward,
-                OpenPlayMidfielder = openPlayMidfielder,
-                OpenPlayDefender = openPlayDefender,
-                OpenPlayGoalkeeper = openPlayGoalkeeper,
-                AerialForward = aerialForward,
-                AerialMidfielder = aerialMidfielder,
-                AerialDefender = aerialDefender,
-                AerialGoalkeeper = aerialGoalkeeper,
-            };
+            ClampToValidRanges();
+            return new ScorerWeights(
+                minOutfielderWeight: minOutfielderWeight,
+                openPlayFinishing: openPlayFinishing,
+                openPlayPositioning: openPlayPositioning,
+                openPlayPace: openPlayPace,
+                aerialHeading: aerialHeading,
+                aerialJumping: aerialJumping,
+                aerialStrength: aerialStrength,
+                openPlayForward: openPlayForward,
+                openPlayMidfielder: openPlayMidfielder,
+                openPlayDefender: openPlayDefender,
+                openPlayGoalkeeper: openPlayGoalkeeper,
+                aerialForward: aerialForward,
+                aerialMidfielder: aerialMidfielder,
+                aerialDefender: aerialDefender,
+                aerialGoalkeeper: aerialGoalkeeper);
+        }
+
+        /// <summary>
+        /// Holds every serialized number inside the band its consumer can actually make sense of
+        /// (UNITY.md §8). Unity's <c>[Range]</c> only decorates float and int, and this core is
+        /// double-based, so for these fields the clamp *is* the bound — and it is the only place that
+        /// also catches a probability typed as an unbounded double (a <c>maxChanceQuality</c> of 9.5
+        /// is a 40-goal match with no error anywhere). Called from <see cref="OnValidate"/> and from
+        /// every mapper, because the attribute constrains the Inspector, not code that builds the
+        /// settings object from a stale asset or a script. Every band is wider than the calibrated
+        /// value it holds, so a shipping asset passes through untouched.
+        /// </summary>
+        private void ClampToValidRanges()
+        {
+            baseChancesPerTeam = Math.Clamp(baseChancesPerTeam, 0.0, 50.0);
+            meanChanceQuality = Math.Clamp(meanChanceQuality, 0.0, 1.0);
+            homeAdvantage = Math.Clamp(homeAdvantage, 0.5, 2.0);
+            maxStrengthRatio = Math.Clamp(maxStrengthRatio, 1.0, 10.0);
+            maxChanceQuality = Math.Clamp(maxChanceQuality, 0.0, 1.0);
+            chanceQualityVariance = Math.Clamp(chanceQualityVariance, 0.0, 1.0);
+
+            // A mentality/pressing step is applied at up to ±2 scale steps and is subtracted from 1 on
+            // the defence axis, so anything at or above 0.5 would zero (or invert) a team's defence.
+            mentalityAttackStep = Math.Clamp(mentalityAttackStep, 0.0, 0.4);
+            pressingMidfieldStep = Math.Clamp(pressingMidfieldStep, 0.0, 0.4);
+            mentalityDefenceStep = Math.Clamp(mentalityDefenceStep, 0.0, 0.4);
+            pressingDefenceStep = Math.Clamp(pressingDefenceStep, 0.0, 0.4);
+
+            intenseTempoVolume = Math.Clamp(intenseTempoVolume, 0.1, 3.0);
+            intenseTempoQuality = Math.Clamp(intenseTempoQuality, 0.1, 3.0);
+            patientTempoVolume = Math.Clamp(patientTempoVolume, 0.1, 3.0);
+            patientTempoQuality = Math.Clamp(patientTempoQuality, 0.1, 3.0);
+            counterApproachVolume = Math.Clamp(counterApproachVolume, 0.1, 3.0);
+            counterApproachQuality = Math.Clamp(counterApproachQuality, 0.1, 3.0);
+            possessionApproachVolume = Math.Clamp(possessionApproachVolume, 0.1, 3.0);
+            possessionApproachQuality = Math.Clamp(possessionApproachQuality, 0.1, 3.0);
+
+            // Scorer weights are relative shares: negative is meaningless, and the selector normalises
+            // them, so the only real requirement is a non-negative, finite number.
+            minOutfielderWeight = Math.Clamp(minOutfielderWeight, 0.0, 10.0);
+            openPlayFinishing = Math.Clamp(openPlayFinishing, 0.0, 10.0);
+            openPlayPositioning = Math.Clamp(openPlayPositioning, 0.0, 10.0);
+            openPlayPace = Math.Clamp(openPlayPace, 0.0, 10.0);
+            aerialHeading = Math.Clamp(aerialHeading, 0.0, 10.0);
+            aerialJumping = Math.Clamp(aerialJumping, 0.0, 10.0);
+            aerialStrength = Math.Clamp(aerialStrength, 0.0, 10.0);
+            openPlayForward = Math.Clamp(openPlayForward, 0.0, 10.0);
+            openPlayMidfielder = Math.Clamp(openPlayMidfielder, 0.0, 10.0);
+            openPlayDefender = Math.Clamp(openPlayDefender, 0.0, 10.0);
+            openPlayGoalkeeper = Math.Clamp(openPlayGoalkeeper, 0.0, 10.0);
+            aerialForward = Math.Clamp(aerialForward, 0.0, 10.0);
+            aerialMidfielder = Math.Clamp(aerialMidfielder, 0.0, 10.0);
+            aerialDefender = Math.Clamp(aerialDefender, 0.0, 10.0);
+            aerialGoalkeeper = Math.Clamp(aerialGoalkeeper, 0.0, 10.0);
         }
     }
 }

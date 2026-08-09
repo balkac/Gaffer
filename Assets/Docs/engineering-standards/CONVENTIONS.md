@@ -8,7 +8,7 @@ project structure (layers, assemblies, folders, the async boundary) see
 
 > When in doubt, take Rider's / ReSharper's suggestion — `.editorconfig` is the shared baseline
 > for them. Verified: C# 9.0 / Unity 6000.3.20f1 BCL for the §6 semantics · last reviewed
-> 2026-07-28.
+> 2026-08-06.
 
 These conventions are framework-agnostic: they hold in a Unity project, an ASP.NET service, or a
 plain console library. When a rule here is adopted or tightened later, **don't drive-by rename
@@ -32,7 +32,7 @@ work. (Several rules below are absorbed from Unity's *C# style guide* e-book, 2n
 - **`var` when the type is apparent** from the right-hand side (`new T(...)`, casts, array
   literals). Keep the **explicit type** otherwise — e.g. a method result
   (`Coverage coverage = fill.GetCoverage();`) — and for built-in types, because it reads better.
-- **Readability over cleverness / micro-optimization.** Prefer a clear structure to a terse trick:
+- **Readability over cleverness / micro-optimisation.** Prefer a clear structure to a terse trick:
   - Use a real collection type for an edge/pair set (`HashSet<(int, int)>`), not a hand-packed
     `long` key.
   - Don't set an enum's underlying type (`: byte`) unless there's a real reason; the default `int`
@@ -149,6 +149,30 @@ work. (Several rules below are absorbed from Unity's *C# style guide* e-book, 2n
 - **Avoid premature abstraction (YAGNI).** Extract an interface or a helper only on a real
   single-responsibility or readability win, not "in case we need it". Keep a type next to its only
   consumer and promote it (e.g. to a shared `Common`) only when a second consumer actually appears.
+- **Write the escalation threshold down when you choose the simple design.** YAGNI's failure mode
+  is not under-designing, it is forgetting *why* you under-designed, so the next person either
+  rewrites prematurely or props up a design past its range. Record the trigger with the decision:
+  "one shared prefab dressed by data until a content type needs its own hierarchy", "a `switch`
+  until a third rule appears, then strategy objects", "one flat array until the key stops being
+  dense". A named threshold turns a judgement call into something the next reader can check
+  against reality instead of re-litigating.
+- **Ask what a thing *does*, never what it *is* — and keep the mapping in one place.** Where
+  algorithms branch on the kind of a thing (`if (content is Box)`), they acquire a copy of the
+  type list, and adding a kind means editing every algorithm. Replace identity tests with
+  behaviour questions the data answers: one immutable **definition per kind**, declaring its
+  capabilities (`IsMatchable`, `BlocksGravity`, `TakesDamageFromNeighbours`, `MaxHealth`), held in
+  a catalogue and read as `thing.Definition.X`. Adding a kind becomes one catalogue row plus its
+  art — zero algorithm edits — and the flyweight keeps per-instance state slim. Two follow-ons
+  worth stating: a capability that needs *logic* rather than a flag becomes a small strategy
+  composed into the definition (the injected-interface rule above), and the definition must also
+  declare **which state slots a kind actually uses**, so a kind that has no colour simply cannot be
+  asked for one (§4) rather than carrying a meaningless default.
+- **Identity and position are different facts; never let one type carry both.** A thing that can be
+  reordered needs a stable id that stays itself when the list is edited — so saves, analytics and
+  bug reports name the same thing next release — *and*, separately, a position if progression is
+  positional ("the eleventh level played" is not an identity). Conflating them is the classic source
+  of "everyone's progress shifted by one" after a content edit, and it is unrecoverable after the
+  fact, because nothing in the data distinguishes a shifted record from a correct one.
 - **A state machine only where control actually branches.** A straight, non-branching sequence —
   `validate → act → resolve → record` — is a pipeline; wrapping it in an explicit finite-state
   machine is ceremony, not design. Reserve a state machine for flow that genuinely has states and
@@ -165,6 +189,13 @@ work. (Several rules below are absorbed from Unity's *C# style guide* e-book, 2n
   unreachable branch, a corrupt state that means the program already has a bug — should still
   fail-fast with a guard clause and `throw` (or an assert). Converting a real bug into a `Result` hides
   it. The distinction is *expected outcome* vs. *should-never-happen*, not "exceptions are banned."
+- **Throw when there is no answer; return the neutral one when there is.** This is the third axis,
+  and it decides the cases `Result`-vs-`throw` does not. Asking a colourless thing for its colour
+  has no meaningful answer at all, so the getter throws — the caller asked something incoherent.
+  Damaging a thing that has no health *does* have a meaningful answer: nothing happens, so it is a
+  no-op, not an error. Getting this backwards produces either a codebase full of defensive
+  capability checks before every call, or exceptions on paths that were always going to be
+  harmless. The test is not "is this expected?" but "does a sensible answer exist?"
 - **Catch third-party exceptions at the boundary** (e.g. JSON parsing in a serializer, a network
   call in a provider) and convert them to `Result.Failure` — but only the failures the adapter
   *expects and can recover from* (the library's documented parse/IO/network error types). A
@@ -207,6 +238,10 @@ public readonly struct Result<T>
 
 - **Every collaborator / data structure gets isolated tests.** Because collaborators are small and
   behind interfaces (§3), each is unit-tested on its own.
+- **A new piece's tests cover the happy path and both boundaries; determinism where the code
+  claims it (same seed, same output); and buffer reuse where a scratch or pooled buffer is part
+  of the contract (the second use sees a clean state).** The last two are conditional — they
+  exist to be asked, not to pad suites for code that makes neither claim.
 - **Validate headless first.** Run the pure tests with `dotnet test` before opening the editor /
   running the app, and keep the suite green after every change. The hard requirement for this is
   that the core stays **framework-free**; keeping it *synchronous* is the house default
@@ -216,8 +251,22 @@ public readonly struct Result<T>
   the three validation layers.
 - **Test method names use `Scenario_Condition_Result`** (e.g.
   `Generate_WithSeed_IsDeterministic`) — this is the one place a method name isn't a verb phrase.
+- **A removed feature takes its test with it — and if the removal was a decision, a test that pins
+  the *absence* replaces it.** Deleting the test along with the code is obvious; the second half is
+  the one that gets missed. When something was built, evaluated and deliberately cut, the reason it
+  was cut is a property worth protecting: a test named for the unwanted behaviour fails the suite by
+  name if someone reintroduces it, which is far better than the next person rediscovering the
+  problem in review. Applies to tuning as much as to features — a curve that must not re-overshoot,
+  a flow that must not re-enter a state.
 - **Deliverable docs, code, and comments are in English** (day-to-day chat can be in any
-  language). Keep the docs in sync: update the architecture doc after any structural change.
+  language).
+- **A change updates the documents that describe it, in the same piece of work** — and that means
+  *behavioural* documents too, not only the architecture doc after a structural change. A rule
+  written down as "the game does X" becomes false the moment a piece of work ships not-X, and a
+  document that contradicts the code is worse than no document: the next reader trusts it. The
+  failure mode is specific and common — the code change and the doc change get split across two
+  sessions, two branches, or two people, and only the first one lands. Same work, same review, or
+  it did not happen.
 
 ## 6. C# semantics that bite
 
@@ -237,17 +286,19 @@ mechanics — boxing, closures, LINQ — are performance, and live in `PERFORMAN
   reachable — it is never collected, and the stale handler fires on a dead object. Subscribe and
   unsubscribe in symmetric places (ctor/`Dispose`, `OnEnable`/`OnDisable`); teardown ownership
   belongs to the composition root (`ARCHITECTURE.md` §6). Where a persistent object is re-bound to
-  a fresh consumer every level, prefer an assignable delegate over an event outright
-  (`ARCHITECTURE.md` §9).
+  a fresh consumer every level, an assignable delegate is the alternative that removes the
+  forgotten `-=` entirely — at the cost of there being no `-=` left for a reviewer to read.
+  `ARCHITECTURE.md` §9 states that trade and how to pick.
 - **`const` is baked into the *calling* assembly** at compile time; changing a library `const`
   doesn't reach already-compiled callers until they recompile. A cross-assembly constant that may
   ever change is `static readonly`.
 - **Static initialisation order is lazy and subtle.** A static ctor runs on first touch of the
   type; two types whose static fields reference each other initialise in whichever order they
-  happen to be touched. Don't build dependency chains between static initialisers — one more
-  reason §3 prefers instances wired at the composition root over statics.
-- **Culture-sensitive string operations — the Turkish-i bug.** `"info".ToUpper()` on a Turkish-
-  locale device yields `"İNFO"`: culture-default `ToUpper`/`ToLower`/`Equals`/`StartsWith` follow
+  happen to be touched. Don't build dependency chains between static initializers — one more
+  reason to prefer instances wired at the composition root (`ARCHITECTURE.md` §6) over statics.
+- **Culture-sensitive string operations — the Turkish-i bug.** `"info".ToUpper()` on a
+  Turkish-locale device yields `"İNFO"`: culture-default
+  `ToUpper`/`ToLower`/`Equals`/`StartsWith` follow
   the OS locale and silently break identifier comparisons. For *machine* strings — keys, ids,
   file names, save fields — always use `ToUpperInvariant`/`ToLowerInvariant` and
   `StringComparison.Ordinal(IgnoreCase)`. Culture-aware comparison is only for text shown to the
@@ -288,7 +339,7 @@ These are the kinds of edits the conventions produce, kept as generic before →
 | SOLID (§3) | a closure-heavy local function sharing mutable locals | a `private` method, or a small state-holding nested class | Extract when the local is shared state in disguise; keep local functions that genuinely earn their scope. |
 | SOLID (§3) | a `sealed` concrete subclassed to vary behaviour | an injected interface with N implementations | Composition over inheritance by default; sealing doesn't violate OCP — extension is a new implementation. |
 | Naming (§2) | `Union(a, b)` | `Merge(a, b)` | Methods are verb phrases, never a bare noun. |
-| Naming (§2) | `BoardArea()`, `WorldRect()` | `GetBoardArea()`, `GetWorldRect()` | Computed-value helpers take `Get`/`Compute`. |
+| Naming (§2) | `BoardArea()`, `WorldRect()` | `GetBoardArea()`, `GetWorldRect()` | Method-shaped computed values take `Get`/`Compute`; cheap ones become properties (§2). |
 | Naming (§2) | `RegionConnected(r)` | `IsRegionConnected(r)` | Predicates take `Is`/`Are`/`Has`/`Can`. |
 | Naming (§2) | `Shape(...)`, `FullCellPiece(...)` (test builders) | `CreateShape(...)`, `CreateFullCellPiece(...)` | Factories — including test builders — use `Create`/`Build`. |
 | Naming (§2) | `XorShiftRng` (wrong algorithm) | `SplitMix64RandomNumberGenerator` | Name the concrete algorithm, not a vague family. |
