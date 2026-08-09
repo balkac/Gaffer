@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using Gaffer.Common.Localization;
 using Gaffer.Domain.Drama;
 using Gaffer.Domain.Traits;
 using Gaffer.Infrastructure.Configuration;
+using Gaffer.Infrastructure.Localization;
 using UnityEditor;
 using UnityEngine;
 
@@ -84,12 +86,51 @@ namespace Gaffer.Editor.Content
             return catalog;
         }
 
+        /// <summary>
+        /// The string table asset, created from <see cref="GameStrings.Default"/> on first use — the
+        /// player-facing copy, one row per key with English and Turkish side by side.
+        ///
+        /// <para>Same rule as the catalogs above (decision #28): created through the Unity API so the
+        /// serialisation always matches the SO's fields, and an EXISTING asset is loaded and never
+        /// overwritten — a line the owner rewrote in the Inspector survives every subsequent run of
+        /// this command. New copy that must reach an edited asset is added to the asset, not by
+        /// deleting it; <see cref="GameStrings"/> is the floor, not a sync source.</para>
+        /// </summary>
+        public static StringTableSO Strings()
+        {
+            string path = Dir + "/StringTable.asset";
+            var table = AssetDatabase.LoadAssetAtPath<StringTableSO>(path);
+            if (table != null)
+            {
+                return table;
+            }
+
+            EnsureFolders();
+            var authored = new List<LocalizedStringRow>();
+            IReadOnlyList<StringTableEntry> entries = GameStrings.Default.Entries;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                StringTableEntry entry = entries[i];
+                var row = new LocalizedStringRow();
+                row.Author(entry.Key, entry.Find(Locales.Reference), entry.Find(Locales.Turkish));
+                authored.Add(row);
+            }
+
+            table = ScriptableObject.CreateInstance<StringTableSO>();
+            table.Author(authored);
+            AssetDatabase.CreateAsset(table, path);
+            AssetDatabase.SaveAssets();
+            return table;
+        }
+
         [MenuItem("Gaffer/Content/Create Default Content Assets")]
         public static void CreateAll()
         {
             Traits();
             Drama();
-            EditorUtility.DisplayDialog("Gaffer Content", "Trait and drama catalogs are in " + Dir + ".", "OK");
+            Strings();
+            EditorUtility.DisplayDialog(
+                "Gaffer Content", "Trait and drama catalogs and the string table are in " + Dir + ".", "OK");
         }
 
         private static void EnsureFolders()

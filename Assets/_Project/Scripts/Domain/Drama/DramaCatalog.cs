@@ -66,6 +66,41 @@ namespace Gaffer.Domain.Drama
             return Check(traits);
         }
 
+        /// <summary>
+        /// Every localization key this catalog hands to the UI — each event's title and body, then each
+        /// choice's label, in catalog order. Keys, never words: this is the list the string table is
+        /// checked AGAINST (<see cref="Gaffer.Common.Localization.StringTable.Validate"/>), so a new
+        /// event that ships with no copy fails on the commit that adds it rather than on the card.
+        /// Empty keys are included deliberately — a choice with no label key is a hole, and the check
+        /// on the other side is the one that says so by name.
+        /// </summary>
+        public IReadOnlyList<string> CopyKeys()
+        {
+            var keys = new List<string>(_events.Count * 4);
+            for (int i = 0; i < _events.Count; i++)
+            {
+                DramaEvent dramaEvent = _events[i];
+                keys.Add(dramaEvent.TitleKey);
+                keys.Add(dramaEvent.BodyKey);
+                IReadOnlyList<DramaChoice> choices = dramaEvent.Choices;
+                if (choices == null)
+                {
+                    continue;
+                }
+
+                // Indexed, not foreach: IReadOnlyList<T>'s enumerator boxes (PERFORMANCE §8).
+                for (int c = 0; c < choices.Count; c++)
+                {
+                    if (choices[c] != null)
+                    {
+                        keys.Add(choices[c].LabelKey);
+                    }
+                }
+            }
+
+            return keys;
+        }
+
         /// <summary>The id half of <see cref="ValidateAgainst"/> — unique, non-empty event ids and
         /// well-formed choices — for the one caller that has no trait catalog in hand (the compat
         /// <c>ToCatalog</c> shim). It is a WEAKER check by construction: it cannot see a dangling trait

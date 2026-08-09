@@ -15,6 +15,19 @@ namespace Gaffer.Editor.Harness
     /// live in one file that is trivially deleted rather than scattered across four windows as
     /// <c>ToString()</c>-ish label logic.</para>
     ///
+    /// <para><b>Why this stayed here when the string table arrived.</b> A localization layer now exists
+    /// (<c>Common/Localization</c> + <c>Infrastructure/Localization</c>) and the drama copy moved into it,
+    /// so the obvious next move looks like folding this class in too. It is the wrong move, because the two
+    /// hold different KINDS of string. What is in here is <b>dev-tool chrome</b>: attribute abbreviations,
+    /// role codes and column headings for four editor windows that never ship, are English by construction,
+    /// and are read only by the people building the game. What went into the table is <b>player-facing
+    /// content</b>: it ships, a player reads it, and it is written natively in Turkish as well as English.
+    /// Putting "TKL" and "Four in the morning" in the same table would mean shipping — and asking someone
+    /// to translate — forty rows of workbench furniture, and it would dissolve the one boundary that makes
+    /// the exemption checkable: <em>this file, and nothing else</em>. Chrome stays here under the exemption;
+    /// content goes through the table. When Presentation replaces these windows, this class is deleted
+    /// whole rather than migrated.</para>
+    ///
     /// <para><b>Runtime UI must not use this.</b> <c>Presentation</c> resolves
     /// <see cref="PlayerRoles.GetShortLabelKey"/>, <see cref="PlayerAttributes.GetLabelKey"/> and every
     /// other <c>…Key</c> the core emits against the string table, so the same role reads "ST" in English

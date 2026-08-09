@@ -2,8 +2,12 @@ using System.Collections.Generic;
 using System.Globalization;
 using Gaffer.Application.Drama;
 using Gaffer.Application.Run;
+using Gaffer.Common.Localization;
 using Gaffer.Domain.Drama;
 using Gaffer.Domain.Players;
+using Gaffer.Editor.Content;
+using Gaffer.Infrastructure.Localization;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -313,9 +317,10 @@ namespace Gaffer.Editor.Harness
         }
 
         /// <summary>
-        /// Dev-tool copy: the shipped UI reads localized text through the event's keys; the workbench
-        /// humanizes the slugs so the loop is playable today (see <see cref="HarnessLabels"/> on why that is
-        /// allowed here). Both drama windows used to carry a copy of this.
+        /// A slug turned into words — for the TRAIT ids this file prints in effect lines, which are
+        /// domain identifiers with no copy of their own yet. It is no longer used for drama titles or
+        /// choice labels: those are written copy now and come through <see cref="HarnessCopy"/>.
+        /// Dev-tool English under the exemption stated in <see cref="HarnessLabels"/>.
         /// </summary>
         internal static string Humanize(string slug)
         {
@@ -328,16 +333,126 @@ namespace Gaffer.Editor.Harness
             return char.ToUpperInvariant(spaced[0]) + spaced.Substring(1);
         }
 
-        /// <summary>The verb on the button, off the choice's localization key ("Fine him").</summary>
-        internal static string ChoiceLabel(string labelKey)
+        // ----- Written copy ---------------------------------------------------------------------------------
+        // The three strings a card is actually made of. Each is authored text resolved from the event's own
+        // key — NOT the identifier prettied up, which is what used to be here and is what made the cards read
+        // as machine output ("NIGHT CLUB SCANDAL", "Fine", no body at all).
+
+        /// <summary>The event's headline, resolved from <see cref="DramaEvent.TitleKey"/>.</summary>
+        internal static string Title(PendingDrama pending, RunSession session)
         {
-            if (string.IsNullOrEmpty(labelKey))
+            return HarnessCopy.Resolve(pending.Event.TitleKey, Arguments(pending, session));
+        }
+
+        /// <summary>What happened, resolved from <see cref="DramaEvent.BodyKey"/> — the one string on the
+        /// card that has never been rendered in any window until now.</summary>
+        internal static string Body(PendingDrama pending, RunSession session)
+        {
+            return HarnessCopy.Resolve(pending.Event.BodyKey, Arguments(pending, session));
+        }
+
+        /// <summary>The decision on the button, resolved from <see cref="DramaChoice.LabelKey"/>.</summary>
+        internal static string ChoiceLabel(DramaChoice choice, PendingDrama pending, RunSession session)
+        {
+            return choice == null ? string.Empty : HarnessCopy.Resolve(choice.LabelKey, Arguments(pending, session));
+        }
+
+        // The two entities a template may name. The subject is empty for a club-level event, which is
+        // correct rather than missing: those events' copy names the club instead.
+        private static TextArguments Arguments(PendingDrama pending, RunSession session)
+        {
+            string player = pending != null && pending.Subject != null ? pending.Subject.Name : string.Empty;
+            string club = session != null ? session.ManagedClubName : string.Empty;
+            return new TextArguments(player, club);
+        }
+    }
+
+    /// <summary>
+    /// The dev-tool's door to the string table: it loads <c>StringTable.asset</c> (creating it from
+    /// <see cref="GameStrings"/> on first use, via <see cref="ContentAssets.Strings"/>) and resolves the
+    /// keys the drama events carry.
+    ///
+    /// <para><b>This is not the <see cref="HarnessLabels"/> exemption.</b> That class holds dev-tool
+    /// CHROME — column headings and attribute abbreviations for windows that never ship. Drama titles,
+    /// bodies and choice labels are player-facing CONTENT: they ship, they are translated, and they go
+    /// through the table like everything else will. The two are kept apart deliberately; merging them
+    /// would quietly re-open the door NON-NEGOTIABLE #8 closes.</para>
+    ///
+    /// <para><b>A missing key is loud here too, in the way a window can be loud.</b> The strict door
+    /// (<c>StringTableSO.Load</c>, and the copy-coverage test in <c>dotnet test</c>) is what stops a
+    /// hole ever reaching a build. This is the dev-tool shim: it validates on load and reports a bad
+    /// table as a Unity error, then draws the one unresolvable key as a visible «marker» on the card
+    /// rather than taking the window down or — far worse — leaving a blank line nobody notices.</para>
+    /// </summary>
+    internal static class HarnessCopy
+    {
+        /// <summary>Which locale the dev windows read. Persisted per developer, so reviewing the Turkish
+        /// copy is a menu item and not a code edit — the fastest way to catch a Turkish line that reads
+        /// like a translation is to play a season in it.</summary>
+        private const string LocalePreference = "Gaffer.Harness.Locale";
+
+        // Cached for the domain reload, not for the session: a re-import of the asset resets the domain
+        // and with it this field, so an edited line shows up on the next repaint.
+        private static StringTable _table;
+
+        internal static string Locale
+        {
+            get
             {
-                return string.Empty;
+                string stored = EditorPrefs.GetString(LocalePreference, Locales.Reference);
+                return Locales.IsShipped(stored) ? stored : Locales.Reference;
+            }
+        }
+
+        [MenuItem("Gaffer/Content/Toggle Copy Locale (EN ↔ TR)")]
+        internal static void ToggleLocale()
+        {
+            string next = string.Equals(Locale, Locales.Reference, System.StringComparison.Ordinal)
+                ? Locales.Turkish
+                : Locales.Reference;
+            EditorPrefs.SetString(LocalePreference, next);
+            Debug.Log("Gaffer dev windows now read copy in '" + next + "'. Reopen a window to see it.");
+        }
+
+        /// <summary>The text for a key with its placeholders filled, or a visible marker naming the key
+        /// when this locale has no words for it — never a blank, never an exception at the manager.</summary>
+        internal static string Resolve(string key, TextArguments arguments)
+        {
+            if (string.IsNullOrEmpty(key))
+            {
+                return "«this event has no key here — report it»";
             }
 
-            int lastDot = labelKey.LastIndexOf('.');
-            return Humanize(lastDot >= 0 ? labelKey.Substring(lastDot + 1) : labelKey);
+            try
+            {
+                string text = Table().For(Locale).Find(key, arguments);
+                return text ?? Missing(key);
+            }
+            catch (System.FormatException problem)
+            {
+                // A template that asks for a placeholder the formatter has no value for. Validate() and the
+                // copy tests catch this before it can ship; the window still has to draw something.
+                return "«" + key + " — " + problem.Message + "»";
+            }
+        }
+
+        private static string Missing(string key)
+        {
+            return "«" + key + " — no '" + Locale + "' text»";
+        }
+
+        private static StringTable Table()
+        {
+            if (_table != null)
+            {
+                return _table;
+            }
+
+            // Required keys are the built-in catalog's, which is what both dev windows run on. An event
+            // authored only into DramaCatalog.asset therefore shows its holes as markers on the card
+            // rather than as a load error — the same information, at the only place a dev tool can put it.
+            _table = ContentAssets.Strings().ToTable(DramaCatalog.Default.CopyKeys());
+            return _table;
         }
     }
 

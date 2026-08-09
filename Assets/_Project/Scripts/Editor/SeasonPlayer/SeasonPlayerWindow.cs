@@ -450,11 +450,15 @@ namespace Gaffer.Editor.SeasonPlayer
         {
             string answer = answered != null && resolution.ChoiceIndex >= 0
                 && resolution.ChoiceIndex < answered.Event.Choices.Count
-                ? HarnessDrama.ChoiceLabel(answered.Event.Choices[resolution.ChoiceIndex].LabelKey)
+                ? HarnessDrama.ChoiceLabel(answered.Event.Choices[resolution.ChoiceIndex], answered, _session)
                 : null;
 
-            _aftermathTitle = HarnessDrama.Humanize(resolution.EventId.Value) +
-                (answer != null ? "  —  you chose: " + answer : " — resolved.");
+            // The event's written headline, not its id humanized — the same words that were on the card a
+            // second ago, so the aftermath reads as the end of the story and not as a log line about it.
+            string headline = answered != null
+                ? HarnessDrama.Title(answered, _session)
+                : HarnessDrama.Humanize(resolution.EventId.Value);
+            _aftermathTitle = headline + (answer != null ? "  —  you chose: " + answer : " — resolved.");
             HarnessDrama.Aftermath(resolution, _session, _aftermath);
         }
 
@@ -471,7 +475,11 @@ namespace Gaffer.Editor.SeasonPlayer
             card.style.borderLeftColor = HarnessPalette.Accent;
 
             card.Add(MakeLabel("DRAMA · WEEK " + _session.PlayedRounds, 11, HarnessPalette.Accent, bold: true));
-            card.Add(MakeLabel(HarnessDrama.Humanize(pending.Event.Id.Value).ToUpperInvariant(), 15, HarnessPalette.Chalk, bold: true));
+
+            // The written headline, in the case it was written in. It is deliberately NOT upper-cased any
+            // more: ToUpperInvariant maps Turkish 'i' to 'I' instead of 'İ', so a Turkish headline would be
+            // misspelled by the view — and a headline reads better in its own case anyway.
+            card.Add(MakeLabel(HarnessDrama.Title(pending, _session), 15, HarnessPalette.Chalk, bold: true));
 
             if (pending.Subject != null)
             {
@@ -485,6 +493,12 @@ namespace Gaffer.Editor.SeasonPlayer
                 line.Add(HarnessMorale.MakeBadgeFor(_session.MoralePointsOf(subject.Id)));
                 card.Add(line);
             }
+
+            // What happened. BodyKey has existed on DramaEvent since it was written and no window has ever
+            // drawn it; the effect preview below is the consequence, this is the event.
+            Label body = MakeLabel(HarnessDrama.Body(pending, _session), 12, HarnessPalette.Chalk);
+            body.style.marginTop = 6;
+            card.Add(body);
 
             card.Add(MakeLabel(
                 "Every answer's consequences are listed under it — real numbers, priced against this squad and these books.",
@@ -519,7 +533,7 @@ namespace Gaffer.Editor.SeasonPlayer
                 column.style.marginLeft = 6;
             }
 
-            var button = new Button(() => ResolveDrama(index)) { text = HarnessDrama.ChoiceLabel(choice.LabelKey) };
+            var button = new Button(() => ResolveDrama(index)) { text = HarnessDrama.ChoiceLabel(choice, pending, _session) };
 
             // minHeight, not height: the label wraps at three columns wide, and a fixed height would clip
             // the second line of a long answer rather than grow for it.

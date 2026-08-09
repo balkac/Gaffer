@@ -7,6 +7,7 @@
         "Gaffer.Common",
         "Gaffer.UserData",
         "Gaffer.Tools.SeasonHarness",
+        "Gaffer.Infrastructure",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

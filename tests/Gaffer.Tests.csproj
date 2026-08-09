@@ -27,6 +27,13 @@
          believability instrument, editor-only but pure C#. -->
     <Compile Include="../Assets/_Project/Scripts/UserData/**/*.cs" />
     <Compile Include="../Assets/_Project/Scripts/Tools/SeasonHarness/**/*.cs" />
+    <!-- The authored player-facing copy. It lives in Infrastructure because words are not the pure
+         core's business (NON-NEGOTIABLE #8) but the file itself is framework-free, and the guard that
+         matters — every key DramaCatalog hands out has words in every shipped locale — has to run
+         headless rather than only when someone opens Unity. Named file by file, NOT a wildcard: the
+         rest of Infrastructure touches UnityEngine and must stay out, and adding `using UnityEngine`
+         to this one is meant to break this build loudly. -->
+    <Compile Include="../Assets/_Project/Scripts/Infrastructure/Localization/GameStrings.cs" />
     <Compile Include="../Assets/_Project/Scripts/Tests/EditMode/**/*.cs" />
   </ItemGroup>
 

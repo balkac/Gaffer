@@ -1,0 +1,177 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0cc0d37084c244aabd064bde141ecf4f, type: 3}
+  m_Name: StringTable
+  m_EditorClassIdentifier: Gaffer.Infrastructure::Gaffer.Infrastructure.Localization.StringTableSO
+  rows:
+  - key: drama.transfer_request.title
+    english: His agent called first
+    turkish: "\xD6nce menajeri arad\u0131"
+  - key: drama.transfer_request.body
+    english: '{player} asked to be let go this morning, before training. The window
+      is open and someone has already been on the phone about him.'
+    turkish: "{player} bu sabah antrenmandan \xF6nce kap\u0131y\u0131 \xE7ald\u0131,
+      gitmek istiyor. Transfer d\xF6nemi a\xE7\u0131k ve kendisini soran da olmu\u015F."
+  - key: drama.transfer_request.refuse
+    english: Tell him he is not for sale
+    turkish: "Sat\u0131l\u0131k olmad\u0131\u011F\u0131n\u0131 s\xF6yle"
+  - key: drama.transfer_request.sell
+    english: Let him go if the money is right
+    turkish: "Para tamamsa yolu a\xE7\u0131k olsun"
+  - key: drama.transfer_request.persuade
+    english: Improve his deal and keep him
+    turkish: "S\xF6zle\u015Fmesini iyile\u015Ftir, kals\u0131n"
+  - key: drama.night_club_scandal.title
+    english: Four in the morning
+    turkish: "Sabah\u0131n d\xF6rd\xFC"
+  - key: drama.night_club_scandal.body
+    english: '{player} came out of a club at four on a Thursday and someone filmed
+      the walk to the car. By breakfast it had been shared eleven thousand times.'
+    turkish: "{player} per\u015Fembeyi cumaya ba\u011Flayan gece d\xF6rtte kul\xFCpten
+      \xE7\u0131karken arabaya kadar kamerayla takip edilmi\u015F. G\xF6r\xFCnt\xFC
+      kahvalt\u0131ya kalmadan on bir bin kez payla\u015F\u0131ld\u0131."
+  - key: drama.night_club_scandal.fine
+    english: Fine him a week's wages
+    turkish: "Bir haftal\u0131k maa\u015F\u0131n\u0131 kes"
+  - key: drama.night_club_scandal.closed_doors
+    english: Keep it inside the building
+    turkish: "Mesele bina i\xE7inde kals\u0131n"
+  - key: drama.night_club_scandal.back_him
+    english: Back him in front of the cameras
+    turkish: "Kameralar\u0131n \xF6n\xFCnde arkas\u0131nda dur"
+  - key: drama.dressing_room_rift.title
+    english: Nobody spoke on the coach home
+    turkish: "D\xF6n\xFC\u015F yolunda kimse konu\u015Fmad\u0131"
+  - key: drama.dressing_room_rift.body
+    english: Three defeats running, and Saturday's row in the tunnel is still doing
+      the rounds. The senior players have stopped eating at the same table.
+    turkish: "\xDCst \xFCste \xFC\xE7 yenilgi, \xFCst\xFCne cumartesi t\xFCnelde
+      \xE7\u0131kan tart\u0131\u015Fma h\xE2l\xE2 kulaktan kula\u011Fa dola\u015F\u0131yor.
+      Tecr\xFCbeliler art\u0131k ayn\u0131 masada yemiyor."
+  - key: drama.dressing_room_rift.meeting
+    english: Get them in a room and have it out
+    turkish: "Hepsini bir odaya topla, konu\u015Fun"
+  - key: drama.dressing_room_rift.let_it_burn
+    english: Say nothing and let them sort it
+    turkish: "Kar\u0131\u015Fma, kendileri \xE7\xF6zs\xFCn"
+  - key: drama.fan_protest.title
+    english: They waited by the players' car park
+    turkish: "Otopark\u0131n \xE7\u0131k\u0131\u015F\u0131n\u0131 tuttular"
+  - key: drama.fan_protest.body
+    english: Four defeats on the spin, and three hundred of them stayed behind after
+      the whistle with the {club} board's names on their banners. The stewards moved
+      them off an hour after full time.
+    turkish: "D\xF6rt ma\xE7t\u0131r galibiyet yok; ma\xE7 sonunda \xFC\xE7 y\xFCz
+      kadar taraftar otopark\u0131n \xF6n\xFCnde bekledi, pankartlarda {club} y\xF6netiminin
+      isimleri vard\u0131. G\xFCvenlik onlar\u0131 ancak bir saat sonra da\u011F\u0131tabildi."
+  - key: drama.fan_protest.face_them
+    english: Walk out and talk to them
+    turkish: "D\u0131\u015Far\u0131 \xE7\u0131k, y\xFCzlerine kar\u015F\u0131 konu\u015F"
+  - key: drama.fan_protest.ignore
+    english: Stay inside and let it pass
+    turkish: "\u0130\xE7eride kal, ge\xE7mesini bekle"
+  - key: drama.wonderkid_wants_minutes.title
+    english: Warming up, week after week
+    turkish: "Her hafta \u0131s\u0131n\u0131yor, oturuyor"
+  - key: drama.wonderkid_wants_minutes.body
+    english: '{player} has not started a match all season and spent Saturday warming
+      up on the touchline without coming on. His father stopped an assistant at the
+      training-ground gate to ask whether the boy would play somewhere else.'
+    turkish: "{player} sezon boyunca bir kez bile ilk on birde ba\u015Flamad\u0131;
+      cumartesi de kenarda \u0131s\u0131nd\u0131 durdu, oyuna hi\xE7 girmedi. Babas\u0131
+      tesisin kap\u0131s\u0131nda yard\u0131mc\u0131 antren\xF6r\xFC durdurup \xE7ocu\u011Fun
+      ba\u015Fka yerde oynay\u0131p oynamayaca\u011F\u0131n\u0131 sordu."
+  - key: drama.wonderkid_wants_minutes.promise_starts
+    english: Tell him he starts the next one
+    turkish: "S\xF6z ver, gelecek ma\xE7 ilk on birde"
+  - key: drama.wonderkid_wants_minutes.wait_your_turn
+    english: Tell him to earn it in training
+    turkish: "S\u0131ras\u0131n\u0131 beklesin, antrenmanda kazans\u0131n"
+  - key: drama.budget_cut.title
+    english: The board has been through the books
+    turkish: "Y\xF6netim defterleri a\xE7t\u0131"
+  - key: drama.budget_cut.body
+    english: The finance director spent the weekend inside the {club} accounts. The
+      club is paying out more than the gate and the shirt deal bring in, and he wants
+      it corrected before the next board meeting.
+    turkish: "Mali i\u015Fler direkt\xF6r\xFC hafta sonunu {club} hesaplar\u0131n\u0131n
+      ba\u015F\u0131nda ge\xE7irmi\u015F. Gi\u015Feden ve forma sponsorundan girenden
+      fazlas\u0131 \xE7\u0131k\u0131yor; i\u015Fin bir sonraki y\xF6netim toplant\u0131s\u0131na
+      kadar d\xFCzelmesini istiyor."
+  - key: drama.budget_cut.accept
+    english: Take the cut and get on with it
+    turkish: "Kesintiyi kabul et, i\u015Fine bak"
+  - key: drama.budget_cut.fight_it
+    english: Fight it line by line at the meeting
+    turkish: "Toplant\u0131da kalem kalem itiraz et"
+  - key: drama.captain_succession.title
+    english: He asked who takes the armband
+    turkish: "Band\u0131 kime b\u0131rakaca\u011F\u0131n\u0131 sordu"
+  - key: drama.captain_succession.body
+    english: '{player} has had the armband for years and knows he is nearer the end
+      than the middle. He came to find you after training: he would rather hand it
+      over himself than have it taken off him.'
+    turkish: "{player} y\u0131llard\u0131r kaptanl\u0131k band\u0131n\u0131 ta\u015F\u0131yor
+      ve sonun yak\u0131n oldu\u011Funu kendisi de biliyor. Antrenmandan sonra yan\u0131na
+      geldi: band\u0131 elinden al\u0131nmas\u0131ndansa kendi eliyle devretmeyi
+      tercih ediyor."
+  - key: drama.captain_succession.anoint
+    english: Let him name the next captain
+    turkish: "Yeni kaptan\u0131 kendisi se\xE7sin"
+  - key: drama.captain_succession.your_call
+    english: Tell him the armband is your call
+    turkish: "Band\u0131n kimde olaca\u011F\u0131na sen karar ver"
+  - key: drama.club_takeover.title
+    english: New names on the paperwork
+    turkish: Evrakta yeni isimler
+  - key: drama.club_takeover.body
+    english: The sale of {club} went through on Thursday afternoon. The new owners
+      want the manager standing beside them at Monday's press conference, smiling.
+    turkish: "{club} sat\u0131\u015F\u0131 per\u015Fembe \xF6\u011Fleden sonra tamamland\u0131.
+      Yeni sahipler pazartesi g\xFCnk\xFC bas\u0131n toplant\u0131s\u0131nda teknik
+      direkt\xF6r\xFC yanlar\u0131nda, g\xFCl\xFCmserken g\xF6rmek istiyor."
+  - key: drama.club_takeover.back_the_owners
+    english: Stand beside them at the press conference
+    turkish: "Bas\u0131n toplant\u0131s\u0131nda yanlar\u0131nda dur"
+  - key: drama.club_takeover.keep_your_distance
+    english: Stay out of it and coach the team
+    turkish: "Sen i\u015Fine bak, tak\u0131m\u0131 \xE7al\u0131\u015Ft\u0131r"
+  - key: drama.press_war.title
+    english: Four minutes on a live microphone
+    turkish: "Canl\u0131 yay\u0131nda d\xF6rt dakika"
+  - key: drama.press_war.body
+    english: '{player} was asked one question about the referee and answered for
+      four minutes. Two papers led with it and the club phone has not stopped since.'
+    turkish: "{player} hakemle ilgili tek soruya d\xF6rt dakika cevap verdi. \u0130ki
+      gazete man\u015Fetten verdi, kul\xFCb\xFCn telefonu o g\xFCnden beri susmuyor."
+  - key: drama.press_war.muzzle_him
+    english: Keep him away from the microphones
+    turkish: Mikrofonlardan uzak tut
+  - key: drama.press_war.let_him_talk
+    english: Let him say what he likes
+    turkish: "B\u0131rak, ne diyecekse desin"
+  - key: drama.contract_standoff.title
+    english: One more year, he says
+    turkish: "Bir y\u0131l daha istiyor"
+  - key: drama.contract_standoff.body
+    english: '{player} is into the last months of his contract and his agent has
+      asked for another twelve months at the same money. He wants an answer before
+      the window opens.'
+    turkish: "{player} s\xF6zle\u015Fmesinin son aylar\u0131nda; menajeri ayn\u0131
+      rakamla bir y\u0131ll\u0131k uzatma istiyor. Cevab\u0131 transfer d\xF6nemi
+      a\xE7\u0131lmadan almak niyetinde."
+  - key: drama.contract_standoff.give_him_the_year
+    english: Give him the extra year
+    turkish: "\u0130stedi\u011Fi bir y\u0131l\u0131 ver"
+  - key: drama.contract_standoff.refuse
+    english: Let the contract run down
+    turkish: "Uzatma yok, s\xF6zle\u015Fme bitsin"
