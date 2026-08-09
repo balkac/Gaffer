@@ -96,9 +96,15 @@ namespace Gaffer.Tools.SeasonHarness
                 goalBins.Add(new HistogramBin(label, _goalsHistogram[goals], Percentage(_goalsHistogram[goals], _totalMatches)));
             }
 
-            var championShares = new List<ChampionShare>(teams.Count);
+            // Titles are counted by TeamProfile.Rank (RecordSeason), so the club a row NAMES has to be
+            // found by rank too. Reading teams[rank] instead was a latent mislabelling: it agrees only
+            // while a factory happens to emit the list in rank order, and a factory that sorts by anything
+            // else — strength, name, id — would have printed one club's name against another's titles.
+            IReadOnlyList<TeamProfile> byRank = OrderByRank(teams);
+
+            var championShares = new List<ChampionShare>(byRank.Count);
             int distinctWinners = 0;
-            for (int rank = 0; rank < teams.Count; rank++)
+            for (int rank = 0; rank < byRank.Count; rank++)
             {
                 long titles = _titlesByRank[rank];
                 if (titles > 0)
@@ -106,7 +112,12 @@ namespace Gaffer.Tools.SeasonHarness
                     distinctWinners++;
                 }
 
-                championShares.Add(new ChampionShare(rank, teams[rank].Name, titles, Percentage(titles, seasons)));
+                championShares.Add(new ChampionShare(
+                    rank,
+                    byRank[rank].Name,
+                    titles,
+                    Percentage(titles, seasons),
+                    MeanStrength(byRank[rank])));
             }
 
             var sampleTable = new List<TableRowView>(_sampleTable.Count);
@@ -127,6 +138,7 @@ namespace Gaffer.Tools.SeasonHarness
                 BuildFavouriteCheck(favouriteWinPct),
                 BuildHomeAdvantageCheck(homeWinPct, awayWinPct),
                 BuildTitleRaceCheck(topSeedShare, distinctWinners),
+                BuildRankOrderCheck(byRank),
             };
 
             return new HarnessReport(
@@ -175,6 +187,66 @@ namespace Gaffer.Tools.SeasonHarness
                 : topSeedShare <= 88.0 ? GateStatus.Warn
                 : GateStatus.Fail;
             return new GateCheck("Title race", "top seed " + topSeedShare.ToString("F0") + "%", distinctWinners + " clubs have won it", status);
+        }
+
+        /// <summary>
+        /// Guards the MEANING of "titles by pre-season rank": every rank must actually be stronger than the
+        /// rank below it. Without this the title table can be read as a sim bias when it is really a
+        /// mislabelled league — a second seed handed a stronger squad than the first will out-title it
+        /// every season of the run, and no sample size will wash that out, because the strengths are drawn
+        /// once and reused for every season.
+        /// </summary>
+        private static GateCheck BuildRankOrderCheck(IReadOnlyList<TeamProfile> teams)
+        {
+            int inversions = 0;
+            for (int rank = 1; rank < teams.Count; rank++)
+            {
+                if (MeanStrength(teams[rank]) > MeanStrength(teams[rank - 1]))
+                {
+                    inversions++;
+                }
+            }
+
+            GateStatus status = inversions == 0 ? GateStatus.Pass : GateStatus.Fail;
+            return new GateCheck(
+                "Rank order",
+                inversions + " inversions",
+                "each rank is stronger than the one below it",
+                status);
+        }
+
+        // The one number the sim is handed, collapsed to a scalar: the three axes weigh equally in the
+        // chance model (attack over opponent defence, midfield share), so their mean is the fair summary.
+        private static double MeanStrength(TeamProfile team)
+        {
+            return (team.Strength.Attack + team.Strength.Midfield + team.Strength.Defence) / 3.0;
+        }
+
+        // The teams by their own Rank rather than by list position. Ranks outside the league, or two teams
+        // claiming one rank, would leave holes; those fall back to the team at that position rather than
+        // throwing (CONVENTIONS §6), so a malformed league still renders a report instead of taking a
+        // 1000-season run down with an exception on the last line.
+        private static IReadOnlyList<TeamProfile> OrderByRank(IReadOnlyList<TeamProfile> teams)
+        {
+            var byRank = new TeamProfile[teams.Count];
+            for (int i = 0; i < teams.Count; i++)
+            {
+                TeamProfile team = teams[i];
+                if (team.Rank >= 0 && team.Rank < byRank.Length)
+                {
+                    byRank[team.Rank] = team;
+                }
+            }
+
+            for (int rank = 0; rank < byRank.Length; rank++)
+            {
+                if (byRank[rank] == null)
+                {
+                    byRank[rank] = teams[rank];
+                }
+            }
+
+            return byRank;
         }
 
         private static bool InBand(double value, double low, double high)

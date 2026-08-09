@@ -125,6 +125,84 @@ namespace Gaffer.Tests
             AssertGatesAreNotFailing(report);
         }
 
+        /// <summary>
+        /// The regression that made "titles by pre-season rank" a lie for 1000 seasons at a stretch: the
+        /// rank used to come from the quality curve alone, but the per-axis jitter is bigger than one step
+        /// of that curve, so rank #2 could be handed the strongest squad in the league. Because the teams
+        /// are built ONCE and replayed every season, that single draw showed up as a permanent "the second
+        /// favourite wins 65% more titles than the first" — a sim bias that was really a label.
+        /// </summary>
+        [Test]
+        public void CreateTeams_RanksByTheStrengthTheSimIsHanded_NotByTheQualityCurve()
+        {
+            var config = new HarnessConfig { SeasonCount = Seasons, TeamCount = TeamCount, Seed = 20260707UL };
+
+            IReadOnlyList<TeamProfile> teams = new LeagueFactory().CreateTeams(config, new SplitMix64RandomNumberGenerator(config.Seed));
+
+            for (int rank = 1; rank < teams.Count; rank++)
+            {
+                Assert.That(Overall(teams[rank].Strength), Is.LessThanOrEqualTo(Overall(teams[rank - 1].Strength)),
+                    $"rank #{rank + 1} was handed a stronger squad than rank #{rank}.");
+                Assert.That(teams[rank].Rank, Is.EqualTo(rank), "the list is in rank order, which the report indexes by.");
+            }
+        }
+
+        /// <summary>
+        /// The harness's own gate on the above, so a future league builder that ranks by anything but
+        /// strength fails the run instead of quietly producing a mislabelled title table.
+        /// </summary>
+        [Test]
+        public void Report_WhenARankIsStrongerThanTheOneAboveIt_FailsTheRankOrderGate()
+        {
+            var config = new HarnessConfig { SeasonCount = 1, TeamCount = 2, Seed = 7UL };
+            var teams = new List<TeamProfile>
+            {
+                new TeamProfile(0, "Weaker", 50.0, new TeamStrength(50.0, 50.0, 50.0)),
+                new TeamProfile(1, "Stronger", 70.0, new TeamStrength(70.0, 70.0, 70.0)),
+            };
+            var statistics = new HarnessStatistics(teams.Count);
+            new SeasonRunner(new MatchSimulator(new PoissonChanceGenerator(MatchSimulationSettings.Default), new QualityChanceResolver()))
+                .RunSeason(teams, new SplitMix64RandomNumberGenerator(config.Seed), statistics);
+
+            HarnessReport report = statistics.BuildReport(config, teams);
+
+            GateCheck rankOrder = null;
+            foreach (GateCheck check in report.GateChecks)
+            {
+                if (check.Label == "Rank order")
+                {
+                    rankOrder = check;
+                }
+            }
+
+            Assert.That(rankOrder, Is.Not.Null, "the report carries a rank-order gate.");
+            Assert.That(rankOrder.Status, Is.EqualTo(GateStatus.Fail));
+            Assert.That(rankOrder.Value, Does.Contain("1"), "the one inverted pair is counted.");
+        }
+
+        /// <summary>
+        /// Titles are counted by <c>TeamProfile.Rank</c> but the row used to be NAMED by list position, so
+        /// a team list in any other order would have printed one club's name against another's titles.
+        /// </summary>
+        [Test]
+        public void Report_WhenTheTeamListIsNotInRankOrder_StillNamesEachRanksOwnClub()
+        {
+            var config = new HarnessConfig { SeasonCount = 1, TeamCount = 2, Seed = 7UL };
+            var teams = new List<TeamProfile>
+            {
+                new TeamProfile(1, "Second", 50.0, new TeamStrength(50.0, 50.0, 50.0)),
+                new TeamProfile(0, "First", 70.0, new TeamStrength(70.0, 70.0, 70.0)),
+            };
+            var statistics = new HarnessStatistics(teams.Count);
+            new SeasonRunner(new MatchSimulator(new PoissonChanceGenerator(MatchSimulationSettings.Default), new QualityChanceResolver()))
+                .RunSeason(teams, new SplitMix64RandomNumberGenerator(config.Seed), statistics);
+
+            HarnessReport report = statistics.BuildReport(config, teams);
+
+            Assert.That(report.ChampionShares[0].Name, Is.EqualTo("First"));
+            Assert.That(report.ChampionShares[1].Name, Is.EqualTo("Second"));
+        }
+
         private static HarnessReport RunSynthetic(ulong seed)
         {
             var config = new HarnessConfig { SeasonCount = Seasons, TeamCount = TeamCount, Seed = seed };

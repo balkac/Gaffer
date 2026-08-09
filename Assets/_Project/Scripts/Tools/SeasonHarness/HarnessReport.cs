@@ -48,12 +48,13 @@ namespace Gaffer.Tools.SeasonHarness
 
     public sealed class ChampionShare
     {
-        public ChampionShare(int rank, string name, long titles, double percentage)
+        public ChampionShare(int rank, string name, long titles, double percentage, double meanStrength)
         {
             Rank = rank;
             Name = name;
             Titles = titles;
             Percentage = percentage;
+            MeanStrength = meanStrength;
         }
 
         public int Rank { get; }
@@ -63,6 +64,15 @@ namespace Gaffer.Tools.SeasonHarness
         public long Titles { get; }
 
         public double Percentage { get; }
+
+        /// <summary>
+        /// The strength the SIM was actually handed, meaned across the three axes — printed beside the
+        /// titles because it is the one number that tells a mislabelled report from a sim that genuinely
+        /// favours the wrong club. If it is not monotone in <see cref="Rank"/>, "titles by pre-season rank"
+        /// is measuring a label rather than a favourite, and no sample size fixes that: a league's
+        /// strengths are drawn once and replayed for every season of the run.
+        /// </summary>
+        public double MeanStrength { get; }
     }
 
     public sealed class TableRowView
