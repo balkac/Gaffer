@@ -12,13 +12,24 @@ namespace Gaffer.Application.Season
     /// Turns a squad over between seasons: ageing veterans retire and a youth prospect of the same role
     /// joins for each one, so a run's rosters stay viable instead of ageing into the ground. On top of that a
     /// guaranteed academy intake joins every season — even one with no retirements — at the squad's thinnest
-    /// role, so a club's academy keeps feeding it, and the roster grows toward a cap (<see cref="RenewalSettings.MaxSquadSize"/>)
-    /// instead of holding fixed. Retirement is deterministic and believable — no one plays past a hard age
-    /// (later for keepers), and in the twilight years a fading, lower-rated player is likelier to hang up his
-    /// boots than a star who plays on. Youth are drawn from a band around the club's current level, so a strong
-    /// club's academy stays strong — tier persists. New players get fresh ids past every existing one. The
-    /// guaranteed academy gem (the ongoing discovery fantasy) seeds into that intake, so it can arrive even in a
-    /// season with no retirements.
+    /// role, so a club's academy keeps feeding it. Retirement is deterministic and believable — no one plays
+    /// past a hard age (later for keepers), and in the twilight years a fading, lower-rated player is likelier
+    /// to hang up his boots than a star who plays on. Youth are drawn from a band around the club's current
+    /// level, so a strong club's academy stays strong — tier persists. New players get fresh ids past every
+    /// existing one. The guaranteed academy gem (the ongoing discovery fantasy) seeds into that intake, so it
+    /// can arrive even in a season with no retirements.
+    /// <para>
+    /// <b>Squad size is unbounded here, deliberately.</b> Retirement replaces one-for-one, so it never opens
+    /// room; the intake is pure growth and nothing in this class stops it. A roster therefore gains
+    /// <see cref="RenewalSettings.YouthIntakePerSeason"/> players every season, for ever. Measured on the
+    /// shipped defaults: 20 at generation, then 30 after ten rollovers, 40 after twenty, 70 after fifty.
+    /// That is not a defect: the old <c>MaxSquadSize</c> gate made the
+    /// "guaranteed" intake stop dead once a squad reached 25, so from season 6 on no club in the league ever
+    /// received another academy player. The owner chose growth over that silence (2026-08-09, PROGRESS #30).
+    /// The intended drain is <b>expiring contracts</b> — players whose deal runs out leave the club of their
+    /// own accord, FM-style — which is not built yet. Until it lands, unbounded growth is the known,
+    /// accepted cost. Do not "fix" it by putting a cap back; build contracts.
+    /// </para>
     /// </summary>
     public sealed class SquadRenewal
     {
@@ -52,8 +63,10 @@ namespace Gaffer.Application.Season
 
         /// <summary>
         /// Retires the squad's veterans, brings in a same-role youth for each, and adds a guaranteed academy
-        /// intake on top (up to <see cref="RenewalSettings.MaxSquadSize"/>), advancing <paramref name="nextPlayerId"/>
-        /// past the ids it hands out. When <paramref name="seedGem"/> is set and any youth joins, the first
+        /// intake on top — always, whatever the squad already holds, so the roster grows by
+        /// <see cref="RenewalSettings.YouthIntakePerSeason"/> a season without bound (see the class summary)
+        /// — advancing <paramref name="nextPlayerId"/> past the ids it hands out.
+        /// When <paramref name="seedGem"/> is set and any youth joins, the first
         /// intake is drawn from the gem context (low visible ability, high hidden potential) — the season's
         /// guaranteed academy wonderkid, indistinguishable from an ordinary prospect on ability alone, so only
         /// scouting or playing him reveals what he is. The caller schedules the gem rarely (a per-club cadence),
@@ -81,14 +94,15 @@ namespace Gaffer.Application.Season
             }
 
             // The guaranteed academy intake, beyond replacing retirees: each new youth fills the squad's
-            // thinnest role, so even a season with no retirements brings talent through, and the roster grows
-            // toward the cap rather than holding fixed.
+            // thinnest role, so even a season with no retirements brings talent through. Unconditional — no
+            // squad-size gate. There used to be one (`projected < MaxSquadSize`) and it made the guarantee a
+            // lie: retirees are replaced one-for-one, so nothing ever freed a slot, and every club went silent
+            // for good on reaching 25. The roster now grows every season instead; expiring contracts are the
+            // intended drain and are not built yet (class summary, PROGRESS #30).
             _rng.Reseed(IntakeRoleSeed(seasonSeed, seasonNumber));
-            int projected = kept.Count + intakeRoles.Count;
-            for (int i = 0; i < _settings.YouthIntakePerSeason && projected < _settings.MaxSquadSize; i++)
+            for (int i = 0; i < _settings.YouthIntakePerSeason; i++)
             {
                 intakeRoles.Add(ThinnestRole(kept, intakeRoles, _rng));
-                projected++;
             }
 
             if (intakeRoles.Count > 0)

@@ -201,17 +201,58 @@ namespace Gaffer.Tests
             Assert.That(youth.HiddenPotential, Is.GreaterThanOrEqualTo(86), "the academy intake is the seeded gem");
         }
 
+        /// <summary>
+        /// The rule that replaced the old <c>MaxSquadSize</c> gate (owner decision, 2026-08-09): the academy
+        /// intake is unconditional, so a squad grows by <c>YouthIntakePerSeason</c> every season with nothing
+        /// to stop it. This used to be <c>Renew_AtMaxSquadSize_BringsNoExtraIntake</c>, which pinned the
+        /// opposite. Expiring contracts are the intended drain and do not exist yet — if a squad ever stops
+        /// growing here, either they landed or a cap crept back in.
+        /// </summary>
         [Test]
-        public void Renew_AtMaxSquadSize_BringsNoExtraIntake()
+        public void Renew_FarPastTheOldSquadCap_StillBringsTheAcademyIntake()
         {
-            var settings = new RenewalSettings(maxSquadSize: 3);
-            Squad squad = SquadOf(P(0, PlayerRole.CentreBack, 22), P(1, PlayerRole.Striker, 24), P(2, PlayerRole.Goalkeeper, 26));
+            // 40 players, well past the 25 the old cap held rosters at, and every one too young to retire.
+            var players = new Player[40];
+            for (int i = 0; i < players.Length; i++)
+            {
+                players[i] = P(i, PlayerRole.CentreBack, 22);
+            }
+
+            Squad squad = SquadOf(players);
             int nextId = 1000;
 
-            Squad renewed = new SquadRenewal(new PlayerGenerator(), settings).Renew(squad, 99UL, 2, ref nextId);
+            Squad renewed = new SquadRenewal(new PlayerGenerator()).Renew(squad, 99UL, 2, ref nextId);
 
-            Assert.That(renewed.Players.Count, Is.EqualTo(3), "already at the cap — no academy intake");
-            Assert.That(nextId, Is.EqualTo(1000));
+            Assert.That(renewed.Players.Count, Is.EqualTo(41), "the academy still delivers at any squad size");
+            Assert.That(nextId, Is.EqualTo(1001));
+        }
+
+        /// <summary>
+        /// Growth is monotone and its rate is exactly <c>YouthIntakePerSeason</c>, season after season, with
+        /// no ceiling anywhere in the curve — the whole point of removing the cap.
+        /// </summary>
+        [Test]
+        public void Renew_SeasonAfterSeason_GrowsByYouthIntakePerSeasonWithoutBound()
+        {
+            const int IntakePerSeason = 2;
+            var settings = new RenewalSettings(youthIntakePerSeason: IntakePerSeason);
+            var renewal = new SquadRenewal(new PlayerGenerator(), settings);
+
+            // No one is near retirement, so every arrival is academy intake and nothing leaves.
+            Squad squad = SquadOf(P(0, PlayerRole.CentreBack, 22), P(1, PlayerRole.Striker, 23), P(2, PlayerRole.Goalkeeper, 24));
+            int nextId = 1000;
+            int previous = squad.Players.Count;
+
+            for (int season = 2; season <= 30; season++)
+            {
+                squad = renewal.Renew(squad, 99UL, season, ref nextId);
+                Assert.That(squad.Players.Count, Is.EqualTo(previous + IntakePerSeason),
+                    $"season {season} grew by something other than the intake rate");
+                previous = squad.Players.Count;
+            }
+
+            Assert.That(squad.Players.Count, Is.EqualTo(3 + (29 * IntakePerSeason)),
+                "29 rollovers of unbounded growth — no cap flattened the curve");
         }
 
         [Test]

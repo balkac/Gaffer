@@ -25,7 +25,6 @@ MonoBehaviour:
   youthMinAge: 16
   youthMaxAge: 18
   youthIntakePerSeason: 1
-  maxSquadSize: 25
   youthMinAbilityOffset: -25
   youthMinAbilityFloor: 25
   youthMinAbilityCeiling: 60

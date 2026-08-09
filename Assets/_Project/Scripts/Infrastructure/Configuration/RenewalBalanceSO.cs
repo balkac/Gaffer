@@ -35,11 +35,11 @@ namespace Gaffer.Infrastructure.Configuration
         [Range(14, 25)] [SerializeField] private int youthMinAge = 16;
         [Range(14, 25)] [SerializeField] private int youthMaxAge = 18;
 
-        [Header("Academy intake — youth that join each season beyond replacing retirees")]
-        [Tooltip("How many academy youths join each season on top of replacements (0 disables it).")]
+        [Header("Academy intake — youth that join each season beyond replacing retirees, with no size cap")]
+        [Tooltip("How many academy youths join each season on top of replacements (0 disables it). Nothing caps " +
+                 "the squad, so this is also the rate it grows at for ever — expiring contracts, not yet built, " +
+                 "are the intended drain.")]
         [Range(0, 10)] [SerializeField] private int youthIntakePerSeason = 1;
-        [Tooltip("The size the academy intake grows the squad toward and never pushes it past.")]
-        [Range(1, 60)] [SerializeField] private int maxSquadSize = 25;
 
         [Header("Ordinary youth band — squad average + offset, held inside an absolute floor/ceiling")]
         [Tooltip("Lowest visible ability: squad average + this offset, then clamped to the floor/ceiling below.")]
@@ -87,7 +87,6 @@ namespace Gaffer.Infrastructure.Configuration
                 youthMinAge: youthMinAge,
                 youthMaxAge: youthMaxAge,
                 youthIntakePerSeason: youthIntakePerSeason,
-                maxSquadSize: maxSquadSize,
                 youthMinAbilityOffset: youthMinAbilityOffset,
                 youthMinAbilityFloor: youthMinAbilityFloor,
                 youthMinAbilityCeiling: youthMinAbilityCeiling,

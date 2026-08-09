@@ -192,24 +192,35 @@ namespace Gaffer.Tests
             Assert.That(anyDifferent, Is.True);
         }
 
+        /// <summary>
+        /// Across real rollovers — ageing, development, retirement and all — the roster gains exactly
+        /// <c>YouthIntakePerSeason</c> a season and keeps gaining it past where the old <c>MaxSquadSize</c>
+        /// cap used to freeze it at 25. Retirees are replaced one-for-one, so they never offset the intake;
+        /// nothing in the game removes a player from a squad on a rollover today. Squads growing without
+        /// bound is the owner's accepted cost until expiring contracts land (2026-08-09, PROGRESS #30).
+        /// </summary>
         [Test]
-        public void ToNextSeason_AcademyIntake_GrowsTheSquadTowardTheCap()
+        public void ToNextSeason_AcademyIntake_GrowsTheSquadEverySeasonPastTheOldCap()
         {
             League league = LeagueWith(ClubWithSquad(0, YoungSquad(50, 85)));
             var transition = new SeasonTransition();
+            int intake = RenewalSettings.Default.YouthIntakePerSeason;
 
-            // Even with a young squad that never retires, the academy feeds a youth through every season, so the
-            // roster grows year on year until it reaches the cap — then holds.
-            int previous = league.Clubs[0].Squad.Players.Count;
-            for (int season = 2; season <= 6; season++)
+            int start = league.Clubs[0].Squad.Players.Count;
+            int previous = start;
+            for (int season = 2; season <= 21; season++)
             {
                 league = transition.ToNextSeason(league, 1234UL, season);
                 int now = league.Clubs[0].Squad.Players.Count;
-                Assert.That(now, Is.EqualTo(previous + 1), "one academy youth joins each season below the cap");
+                Assert.That(now, Is.EqualTo(previous + intake),
+                    $"season {season} did not grow by exactly the academy intake");
                 previous = now;
             }
 
-            Assert.That(league.Clubs[0].Squad.Players.Count, Is.LessThanOrEqualTo(RenewalSettings.Default.MaxSquadSize));
+            Assert.That(league.Clubs[0].Squad.Players.Count, Is.EqualTo(start + (20 * intake)),
+                "twenty rollovers of steady growth — nothing caps the squad");
+            Assert.That(league.Clubs[0].Squad.Players.Count, Is.GreaterThan(25),
+                "and the roster is past the size the removed cap used to hold it at");
         }
 
         [Test]

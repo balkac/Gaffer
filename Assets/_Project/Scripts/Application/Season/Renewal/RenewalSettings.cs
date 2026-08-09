@@ -34,7 +34,6 @@ namespace Gaffer.Application.Season
             int youthMinAge = 16,
             int youthMaxAge = 18,
             int youthIntakePerSeason = 1,
-            int maxSquadSize = 25,
             int youthMinAbilityOffset = -25,
             byte youthMinAbilityFloor = 25,
             byte youthMinAbilityCeiling = 60,
@@ -62,7 +61,6 @@ namespace Gaffer.Application.Season
             YouthMinAge = youthMinAge;
             YouthMaxAge = youthMaxAge;
             YouthIntakePerSeason = youthIntakePerSeason;
-            MaxSquadSize = maxSquadSize;
             YouthMinAbilityOffset = youthMinAbilityOffset;
             YouthMinAbilityFloor = youthMinAbilityFloor;
             YouthMinAbilityCeiling = youthMinAbilityCeiling;
@@ -110,12 +108,15 @@ namespace Gaffer.Application.Season
 
         /// <summary>
         /// How many academy youths join each season beyond replacing retirees — so a club's academy feeds the
-        /// squad every year, not only when a veteran leaves. Held to <see cref="MaxSquadSize"/>. 0 disables it.
+        /// squad every year, not only when a veteran leaves. 0 disables it.
+        /// <para>
+        /// Nothing caps the result: this is exactly the rate a squad grows at, for ever. There was a
+        /// <c>MaxSquadSize</c> here and it silenced the intake permanently at 25 (retirement replaces
+        /// one-for-one, so no slot ever reopened); it was removed on 2026-08-09 in favour of growth, with
+        /// expiring contracts — not yet built — as the intended drain. See <see cref="SquadRenewal"/>.
+        /// </para>
         /// </summary>
         public int YouthIntakePerSeason { get; }
-
-        /// <summary>The size the academy intake grows the squad toward and never pushes it past.</summary>
-        public int MaxSquadSize { get; }
 
         // The ordinary youth band: each edge is the squad's average rating plus an offset, then held
         // inside its own absolute floor/ceiling. The offsets are what make tier persist — a strong
