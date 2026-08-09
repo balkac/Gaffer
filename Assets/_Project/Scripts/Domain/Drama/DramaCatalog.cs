@@ -102,9 +102,9 @@ namespace Gaffer.Domain.Drama
         }
 
         /// <summary>The id half of <see cref="ValidateAgainst"/> — unique, non-empty event ids and
-        /// well-formed choices — for the one caller that has no trait catalog in hand (the compat
-        /// <c>ToCatalog</c> shim). It is a WEAKER check by construction: it cannot see a dangling trait
-        /// slug, so it is not a substitute for the cross-catalog one.</summary>
+        /// well-formed choices — for a caller that has no trait catalog in hand. It is a WEAKER check by
+        /// construction: it cannot see a dangling trait slug, so it is not a substitute for the
+        /// cross-catalog one, which is what every load path uses.</summary>
         public Result Validate()
         {
             return Check(null);

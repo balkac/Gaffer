@@ -305,9 +305,39 @@ namespace Gaffer.Editor.Management
         // Every tuning object and catalog the run plays on, from the assigned config assets or the calibrated
         // defaults. One bundle handed to the factory, so the league generator and the season cannot end up on
         // different trait catalogs the way two hand-wired windows did (ARCHITECTURE §6).
-        private RunBalance Balance()
+        //
+        // Authored catalogs come through the VALIDATING loaders, and a refused load refuses the run: this
+        // returns a Result so the caller reports the problem on the status line instead of starting a season
+        // on content whose trait references do not resolve (NON-NEGOTIABLE #7). The drama catalog is checked
+        // against the trait catalog THIS run plays with — a slug is only dangling relative to a specific
+        // trait set — which is why the traits are loaded first.
+        private Result<RunBalance> Balance()
         {
-            return new RunBalance(
+            Gaffer.Domain.Traits.TraitCatalog traits = Gaffer.Domain.Traits.TraitCatalog.Default;
+            if (_traitCatalog != null)
+            {
+                Result<Gaffer.Domain.Traits.TraitCatalog> loadedTraits = _traitCatalog.Load();
+                if (loadedTraits.IsFailure)
+                {
+                    return Result<RunBalance>.Failure(loadedTraits.Error);
+                }
+
+                traits = loadedTraits.Value;
+            }
+
+            Gaffer.Domain.Drama.DramaCatalog dramaEvents = Gaffer.Domain.Drama.DramaCatalog.Default;
+            if (_dramaCatalog != null)
+            {
+                Result<Gaffer.Domain.Drama.DramaCatalog> loadedDrama = _dramaCatalog.Load(traits);
+                if (loadedDrama.IsFailure)
+                {
+                    return Result<RunBalance>.Failure(loadedDrama.Error);
+                }
+
+                dramaEvents = loadedDrama.Value;
+            }
+
+            return Result<RunBalance>.Success(new RunBalance(
                 simulation: _simulationBalance != null ? _simulationBalance.ToSettings() : MatchSimulationSettings.Default,
                 tacticsBalance: _simulationBalance != null ? _simulationBalance.ToTacticsSettings() : TacticsSettings.Default,
                 scorer: _simulationBalance != null ? _simulationBalance.ToScorerWeights() : ScorerWeights.Default,
@@ -317,13 +347,21 @@ namespace Gaffer.Editor.Management
                 morale: _dramaBalance != null ? _dramaBalance.ToMoraleSettings() : MoraleSettings.Default,
                 economy: _economyBalance != null ? _economyBalance.ToSettings() : EconomySettings.Default,
                 scouting: _scoutingBalance != null ? _scoutingBalance.ToSettings() : ScoutingSettings.Default,
-                traits: _traitCatalog != null ? _traitCatalog.ToCatalog() : Gaffer.Domain.Traits.TraitCatalog.Default,
-                dramaEvents: _dramaCatalog != null ? _dramaCatalog.ToCatalog() : Gaffer.Domain.Drama.DramaCatalog.Default);
+                traits: traits,
+                dramaEvents: dramaEvents));
         }
 
         private void StartSeason()
         {
-            Result<RunSession> started = RunSessionFactory.Start(Setup(), Balance());
+            Result<RunBalance> balance = Balance();
+            if (balance.IsFailure)
+            {
+                _saveStatus = balance.Error;
+                Refresh();
+                return;
+            }
+
+            Result<RunSession> started = RunSessionFactory.Start(Setup(), balance.Value);
             if (started.IsFailure)
             {
                 _saveStatus = started.Error;
@@ -411,7 +449,15 @@ namespace Gaffer.Editor.Management
                 return;
             }
 
-            Result<RunSession> resumed = RunSessionFactory.Resume(Setup(), Balance(), loaded.Value);
+            Result<RunBalance> balance = Balance();
+            if (balance.IsFailure)
+            {
+                _saveStatus = balance.Error;
+                Refresh();
+                return;
+            }
+
+            Result<RunSession> resumed = RunSessionFactory.Resume(Setup(), balance.Value, loaded.Value);
             if (resumed.IsFailure)
             {
                 _saveStatus = resumed.Error;

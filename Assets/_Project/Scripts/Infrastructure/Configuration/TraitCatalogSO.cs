@@ -51,25 +51,6 @@ namespace Gaffer.Infrastructure.Configuration
                 : Result<TraitCatalog>.Success(catalog);
         }
 
-        /// <summary>
-        /// Compatibility shim for call sites that predate <see cref="Load"/> and cannot yet handle a
-        /// refused load (the editor windows). It runs the SAME validation and reports a failure as a
-        /// Unity error — which the Test Runner fails a test on, so it is not silent — but still hands
-        /// back the catalog so an editor session stays usable. Prefer <see cref="Load"/>: it is the
-        /// one that lets a caller decline to run on broken content.
-        /// </summary>
-        public TraitCatalog ToCatalog()
-        {
-            Result<TraitCatalog> loaded = Load();
-            if (loaded.IsSuccess)
-            {
-                return loaded.Value;
-            }
-
-            Debug.LogError(loaded.Error, this);
-            return Map();
-        }
-
         /// <summary>Assets to the pure catalog, no validation — an empty or all-null list is the
         /// config-as-override fallback to the built-in set (ARCHITECTURE §7), because "author nothing"
         /// is a valid answer; "author it wrong" is what <see cref="Load"/> refuses.</summary>

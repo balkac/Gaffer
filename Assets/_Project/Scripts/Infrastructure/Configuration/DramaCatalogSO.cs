@@ -58,24 +58,6 @@ namespace Gaffer.Infrastructure.Configuration
                 : Result<DramaCatalog>.Success(catalog);
         }
 
-        /// <summary>
-        /// Compatibility shim for call sites that predate <see cref="Load"/> and hold no trait catalog
-        /// (the editor windows). It runs the WEAKER id-only check — it cannot see a dangling trait
-        /// slug — and reports a failure as a Unity error rather than swallowing it. Prefer
-        /// <see cref="Load"/>: the cross-catalog check is the one this file exists for.
-        /// </summary>
-        public DramaCatalog ToCatalog()
-        {
-            DramaCatalog catalog = Map();
-            Result validation = catalog.Validate();
-            if (validation.IsFailure)
-            {
-                Debug.LogError($"{name}: {validation.Error}", this);
-            }
-
-            return catalog;
-        }
-
         /// <summary>Assets to the pure catalog, no validation — an empty or all-null list is the
         /// config-as-override fallback to the built-in set (ARCHITECTURE §7).</summary>
         private DramaCatalog Map()

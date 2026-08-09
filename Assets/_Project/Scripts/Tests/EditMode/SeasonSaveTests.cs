@@ -44,15 +44,16 @@ namespace Gaffer.Tests
             return new LeagueSeason(league, null, null, null, CreateSimulator());
         }
 
-        // What RunSessionFactory.Resume does in production: the mapper rebuilds the table and the history
-        // but owns no simulator, so a caller that means to keep PLAYING re-wires the restored season on its
-        // own simulator from the same replayed history.
+        // What RunSessionFactory.Resume does in production: the mapper hands back the league, the round and
+        // the result history as data, and the caller — which is the side that owns a simulator — builds the
+        // playable season from them. This helper is the same call RunSession makes, so a test that resumes
+        // through it is exercising the production resume path, not a test-only shortcut.
         private static LeagueSeason Resume(RestoredSeason restored)
         {
             return LeagueSeason.Restore(
                 restored.League,
-                restored.Season.CurrentRound,
-                restored.Season.PlayedResults,
+                restored.PlayedRounds,
+                restored.PlayedResults,
                 null, null, null,
                 CreateSimulator());
         }
@@ -90,9 +91,15 @@ namespace Gaffer.Tests
             SeasonSaveData data = mapper.Capture(league, season, seed, 1);
             RestoredSeason restored = mapper.Restore(data);
 
-            Assert.That(restored.Season.CurrentRound, Is.EqualTo(season.CurrentRound));
+            // Asserted on the season the run would actually carry on with — rebuilt from the restored data
+            // the way RunSession rebuilds it — rather than on a carrier object the production path throws
+            // away. Same table, and now it is the table someone can keep playing.
+            LeagueSeason resumed = Resume(restored);
+
+            Assert.That(restored.PlayedRounds, Is.EqualTo(season.CurrentRound));
+            Assert.That(resumed.CurrentRound, Is.EqualTo(season.CurrentRound));
             IReadOnlyList<LeagueTableRow> original = season.Table.Ordered();
-            IReadOnlyList<LeagueTableRow> reloaded = restored.Season.Table.Ordered();
+            IReadOnlyList<LeagueTableRow> reloaded = resumed.Table.Ordered();
             Assert.That(reloaded.Count, Is.EqualTo(original.Count));
             for (int i = 0; i < original.Count; i++)
             {

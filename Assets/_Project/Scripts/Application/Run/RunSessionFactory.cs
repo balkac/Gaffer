@@ -64,8 +64,7 @@ namespace Gaffer.Application.Run
             RunSetup runSetup = setup ?? RunSetup.Default;
             RunBalance runBalance = Normalize(balance);
 
-            RestoredSeason restored = new SeasonSaveMapper().Restore(
-                saved, runBalance.Traits, runBalance.TacticsBalance, runBalance.Morale);
+            RestoredSeason restored = new SeasonSaveMapper().Restore(saved);
 
             if (restored.League.Clubs.Count < MinTeams)
             {
@@ -73,17 +72,16 @@ namespace Gaffer.Application.Run
                     $"The saved run has {restored.League.Clubs.Count} clubs, which is not a league (minimum {MinTeams}).");
             }
 
-            // The mapper builds a season for its own return type; the run needs one wired with its
-            // simulator, so it is rebuilt here from the same replayed history rather than by reaching
-            // into the mapper (which belongs to the save adapter, not to the run).
-            LeagueSeason mapped = restored.Season;
+            // The mapper hands back run state, not a season: the season is built inside RunSession, wired
+            // with the run's simulator and catalogs, from this same replayed history. The save adapter owns
+            // no simulator (ARCHITECTURE §6), so it is not the mapper's job to produce a playable season.
             return Result<RunSession>.Success(new RunSession(
                 runSetup.WithSeed(saved.MatchSeed),
                 runBalance,
                 restored.League,
                 restored.SeasonNumber,
-                mapped.CurrentRound,
-                mapped.PlayedResults));
+                restored.PlayedRounds,
+                restored.PlayedResults));
         }
 
         // The fallback chain for balance, applied once at the wiring seam rather than by every

@@ -57,7 +57,10 @@ namespace Gaffer.Application.Season
         /// argument on every <see cref="AdvanceWeek"/> call (ARCHITECTURE §6). Null catalogs and settings
         /// fall back to the calibrated defaults; a null <paramref name="simulator"/> builds a season that
         /// cannot be played (<see cref="AdvanceWeek"/> throws) and is only useful as a table/history
-        /// carrier — see <see cref="Gaffer.Application.Serialization.SeasonSaveMapper"/>.
+        /// carrier — for snapshotting a league, say, which is all
+        /// <see cref="Gaffer.Application.Serialization.SeasonSaveMapper.Capture"/> reads. Nothing that is
+        /// meant to be played is built this way: the save path deliberately hands back data rather than an
+        /// unplayable season (see <see cref="Gaffer.Application.Serialization.RestoredSeason"/>).
         /// </summary>
         public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits, TacticsSettings tacticsSettings, MoraleSettings moraleSettings, MatchSimulator simulator)
         {

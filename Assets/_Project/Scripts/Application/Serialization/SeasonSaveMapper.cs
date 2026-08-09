@@ -12,9 +12,10 @@ namespace Gaffer.Application.Serialization
     /// <summary>
     /// Maps between the live season and its serializable snapshot. Capture records the clubs (with their
     /// full squads, so development and renewal survive across seasons), the season number, the played
-    /// results, the rounds done, and the season seed; Restore rebuilds the league and replays the results
-    /// so the resumed season continues deterministically — remaining fixtures are seeded from
-    /// <see cref="SeasonSaveData.MatchSeed"/>, so they reproduce an uninterrupted run exactly. A club with
+    /// results, the rounds done, and the season seed; Restore rebuilds the league and hands back that state
+    /// as data (<see cref="RestoredSeason"/>) for the run to replay onto its own season, which continues
+    /// deterministically because the remaining fixtures are seeded from
+    /// <see cref="SeasonSaveData.MatchSeed"/> — reproducing an uninterrupted run exactly. A club with
     /// no roster (a strength-only harness fixture, or an older v2 save) round-trips as strength only.
     /// </summary>
     public sealed class SeasonSaveMapper
@@ -57,20 +58,16 @@ namespace Gaffer.Application.Serialization
             return data;
         }
 
+        /// <summary>
+        /// Rebuilds the run state a save carries: the league with its rosters, the rounds played, and the
+        /// result history. No balance arguments, because there is nothing here for them to configure — the
+        /// mapper hands back data and the caller's own <see cref="LeagueSeason"/> resolves traits, tactics
+        /// and morale through the run's catalogs when it replays this history (see
+        /// <see cref="RestoredSeason"/> on why no season is returned). Player traits ride in the document
+        /// as ids and rebind against whatever catalog is live, so a restore is catalog-independent by
+        /// construction.
+        /// </summary>
         public RestoredSeason Restore(SeasonSaveData data)
-        {
-            return Restore(data, null);
-        }
-
-        public RestoredSeason Restore(SeasonSaveData data, TraitCatalog traits)
-        {
-            return Restore(data, traits, null, null);
-        }
-
-        /// <summary>Restores against specific config-asset settings so the rebuilt season's strength step
-        /// resolves traits, tactics balance, and morale balance the same way the live one did; nulls fall
-        /// back to the built-in defaults.</summary>
-        public RestoredSeason Restore(SeasonSaveData data, TraitCatalog traits, TacticsSettings tacticsSettings, Gaffer.Application.Drama.MoraleSettings moraleSettings)
         {
             var clubs = new List<Club>(data.Clubs.Count);
             foreach (ClubSaveData club in data.Clubs)
@@ -92,12 +89,7 @@ namespace Gaffer.Application.Serialization
                 results.Add(new MatchResult(new ClubId(result.Home), new ClubId(result.Away), result.HomeGoals, result.AwayGoals, Array.Empty<MatchEvent>()));
             }
 
-            // No simulator: the save adapter rebuilds the table and the result history, it does not own the
-            // run's simulator and must not invent one. The returned season is therefore a carrier, not a
-            // playable season — a caller resuming a run rebuilds it on its own simulator from
-            // CurrentRound/PlayedResults (RunSessionFactory.Resume does exactly that).
-            var season = LeagueSeason.Restore(league, data.PlayedRounds, results, traits, tacticsSettings, moraleSettings, null);
-            return new RestoredSeason(league, season, data.SeasonNumber);
+            return new RestoredSeason(league, data.SeasonNumber, data.PlayedRounds, results);
         }
 
         private static List<PlayerSaveData> CaptureSquad(Squad squad)
