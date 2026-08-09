@@ -1,9 +1,12 @@
 using System.Collections.Generic;
+using Gaffer.Application.Drama;
 using Gaffer.Application.Season;
 using Gaffer.Application.Serialization;
 using Gaffer.Application.Simulation;
+using Gaffer.Application.Transfers;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
+using Gaffer.Domain.Drama;
 using Gaffer.Domain.Leagues;
 using Gaffer.Domain.Players;
 using NUnit.Framework;
@@ -69,9 +72,257 @@ namespace Gaffer.Tests
             // constant Capture writes agrees with itself at every version and would go on passing through
             // a bump that shipped without a migration. Spelled out, bumping the schema is a deliberate
             // act that fails here until the number and its migration are both updated.
-            Assert.That(data.SchemaVersion, Is.EqualTo(5));
-            Assert.That(SeasonSaveData.CurrentVersion, Is.EqualTo(5),
+            Assert.That(data.SchemaVersion, Is.EqualTo(6));
+            Assert.That(SeasonSaveData.CurrentVersion, Is.EqualTo(6),
                 "The schema version moved. Add the migration step, then update this test.");
+        }
+
+        // ----- v5 -> v6: the document grows a run block ---------------------------------------------------
+
+        /// <summary>A genuine v5 document: the season and nothing around it, exactly as it sits in a file
+        /// the owner already has.</summary>
+        private static SeasonSaveData CreateV5Save()
+        {
+            return new SeasonSaveData
+            {
+                SchemaVersion = 5,
+                LeagueName = "V5 League",
+                SeasonNumber = 3,
+                PlayedRounds = 11,
+                MatchSeed = 20260709UL,
+                Clubs = new List<ClubSaveData>
+                {
+                    new ClubSaveData
+                    {
+                        Id = 0, Name = "Old FC", Attack = 60, Midfield = 60, Defence = 60,
+                        Squad = new List<PlayerSaveData>
+                        {
+                            new PlayerSaveData
+                            {
+                                Id = 1, Name = "Old Player", Nationality = "England", RoleName = "Striker",
+                                Age = 24, HiddenPotential = 70, Attributes = new AttributesSaveData(),
+                            },
+                        },
+                    },
+                },
+            };
+        }
+
+        [Test]
+        public void Migrate_V5Save_GainsARunBlockCarryingTheOnlyRunFactItHas()
+        {
+            // The step fills ONE field and guesses at nothing else. A v5 document records exactly one thing
+            // about the run as a run — the seed — and that seed IS the original one, because before v6
+            // nothing ever re-rolled it. Everything else is left absent, which is how the resume path is
+            // told to fall back to the caller's setup: i.e. to behave exactly as a v5 load already did.
+            Result<SeasonSaveData> migrated = new SaveMigrator().Migrate(CreateV5Save());
+
+            Assert.That(migrated.IsSuccess, Is.True, migrated.Error);
+            Assert.That(migrated.Value.SchemaVersion, Is.EqualTo(SeasonSaveData.CurrentVersion));
+
+            RunSaveData run = migrated.Value.Run;
+            Assert.That(run, Is.Not.Null, "a v6 document always has a run block");
+            Assert.That(run.OriginalSeed, Is.EqualTo(20260709UL), "the v5 match seed is the run's original seed");
+
+            Assert.That(run.Setup, Is.Null, "a v5 save never recorded which club was managed — the caller's setup stands");
+            Assert.That(run.Finances, Is.Null, "nor the money");
+            Assert.That(run.Tactics, Is.Null, "nor the shape and tactics");
+            Assert.That(run.Eleven, Is.Null, "nor the team sheet");
+            Assert.That(run.Market, Is.Null, "nor the market");
+            Assert.That(run.Morale, Is.Null, "nor live morale");
+            Assert.That(run.Drama, Is.Null, "nor the drama engine's memory");
+
+            // And the season it always carried is untouched: no field changed meaning on the way through.
+            Assert.That(migrated.Value.MatchSeed, Is.EqualTo(20260709UL));
+            Assert.That(migrated.Value.PlayedRounds, Is.EqualTo(11));
+            Assert.That(migrated.Value.SeasonNumber, Is.EqualTo(3));
+            Assert.That(migrated.Value.Clubs[0].Squad[0].RoleName, Is.EqualTo("Striker"));
+        }
+
+        [Test]
+        public void Migrate_V5Save_RunTwice_IsIdempotent()
+        {
+            var migrator = new SaveMigrator();
+            SeasonSaveData once = migrator.Migrate(CreateV5Save()).Value;
+            once.Run.Finances = new FinancesSaveData { Cash = 42L };
+
+            Result<SeasonSaveData> twice = migrator.Migrate(once);
+
+            Assert.That(twice.IsSuccess, Is.True, twice.Error);
+            Assert.That(twice.Value.Run.Finances.Cash, Is.EqualTo(42L),
+                "a second pass must not replace a block that is already there");
+        }
+
+        [Test]
+        public void Migrate_V2SaveWithNoSquads_StillReachesV6()
+        {
+            // The chain end to end: the oldest document the build accepts falls through every step in order.
+            var data = new SeasonSaveData
+            {
+                SchemaVersion = 2,
+                LeagueName = "Ancient",
+                MatchSeed = 7UL,
+                Clubs = new List<ClubSaveData> { new ClubSaveData { Id = 0, Name = "Legacy", Squad = null } },
+            };
+
+            Result<SeasonSaveData> migrated = new SaveMigrator().Migrate(data);
+
+            Assert.That(migrated.IsSuccess, Is.True, migrated.Error);
+            Assert.That(migrated.Value.SchemaVersion, Is.EqualTo(SeasonSaveData.CurrentVersion));
+            Assert.That(migrated.Value.Run.OriginalSeed, Is.EqualTo(7UL));
+        }
+
+        [Test]
+        public void Migrate_ARunBlockWhoseMarketHasAnUnknownRole_IsAResultFailure()
+        {
+            // The market is a roster, so it passes the same gate the squads do. Without this a hand-edited
+            // prospect would slip past migration and throw inside Restore, which is the one place a bad file
+            // must never reach.
+            SeasonSaveData data = CreateV5Save();
+            data.SchemaVersion = SeasonSaveData.CurrentVersion;
+            data.Run = new RunSaveData
+            {
+                Market = new List<PlayerSaveData>
+                {
+                    new PlayerSaveData { Id = 900, Name = "Ghost", RoleName = "SweeperKeeper" },
+                },
+            };
+
+            Result<SeasonSaveData> migrated = new SaveMigrator().Migrate(data);
+
+            Assert.That(migrated.IsFailure, Is.True);
+            Assert.That(migrated.Error, Does.Contain("SweeperKeeper").And.Contains("market"));
+        }
+
+        // ----- The run block, through the mapper ----------------------------------------------------------
+
+        [Test]
+        public void SaveRestore_RunBlock_RoundTripsThroughTheMapper()
+        {
+            // The mapper's own half of the round trip: domain in, document out, domain back — including the
+            // two enum families that now cross the boundary, which travel BY NAME.
+            League league = LeagueWithOneSquad();
+            var season = PlayableSeason(league);
+            var mapper = new SeasonSaveMapper();
+            var run = new RunState(
+                originalSeed: 99UL,
+                setup: new RunSetupState(1, 2, 3, 4, 5, 6),
+                finances: new Finances(1_000L, 2_000L, 1_500L),
+                formation: Formation.F352,
+                tactics: new Tactics(Mentality.VeryDefensive, Tempo.Intense, Pressing.Press, Approach.Possession),
+                eleven: new[] { 0, 1, 2, -1 },
+                market: new List<Player> { league.Clubs[0].Squad.Players[2] },
+                morale: new List<MoraleEntry> { new MoraleEntry(new PlayerId(1), -2.5, 3) },
+                drama: new DramaEngineState(9, 7, 2, new List<DramaEventMark> { new DramaEventMark(new DramaEventId("fan-protest"), 7) }),
+                pendingEvent: new DramaEventId("budget-cut"),
+                pendingSubjectPlayerId: 1);
+
+            SeasonSaveData data = mapper.Capture(league, season, 5UL, 1, run);
+
+            Assert.That(data.Run.Tactics.Mentality, Is.EqualTo("VeryDefensive"), "the save must carry the axis BY NAME");
+            Assert.That(data.Run.Tactics.FormationSlots[0], Is.EqualTo("Goalkeeper"));
+
+            RunState back = mapper.Restore(data).Run;
+
+            Assert.That(back.OriginalSeed, Is.EqualTo(99UL));
+            Assert.That(back.Setup.ManagedClubIndex, Is.EqualTo(1));
+            Assert.That(back.Setup.GuaranteedGems, Is.EqualTo(6));
+            Assert.That(back.Finances.Value.Cash, Is.EqualTo(1_000L));
+            Assert.That(back.Finances.Value.WeeklyWageBudget, Is.EqualTo(2_000L));
+            Assert.That(back.Finances.Value.WeeklyWageBill, Is.EqualTo(1_500L));
+            Assert.That(back.Formation.Value.Name, Is.EqualTo("3-5-2"));
+            Assert.That(back.Formation.Value.Slots, Is.EqualTo(Formation.F352.Slots));
+            Assert.That(back.Tactics.Value.Mentality, Is.EqualTo(Mentality.VeryDefensive));
+            Assert.That(back.Tactics.Value.Tempo, Is.EqualTo(Tempo.Intense));
+            Assert.That(back.Tactics.Value.Pressing, Is.EqualTo(Pressing.Press));
+            Assert.That(back.Tactics.Value.Approach, Is.EqualTo(Approach.Possession));
+            Assert.That(back.Eleven, Is.EqualTo(new List<int> { 0, 1, 2, -1 }));
+            Assert.That(back.Market[0].Id.Value, Is.EqualTo(2));
+            Assert.That(back.Market[0].Role, Is.EqualTo(PlayerRole.Striker));
+            Assert.That(back.Morale[0].Player.Value, Is.EqualTo(1));
+            Assert.That(back.Morale[0].Points, Is.EqualTo(-2.5).Within(1e-9));
+            Assert.That(back.Morale[0].WeeksLeft, Is.EqualTo(3));
+            Assert.That(back.Drama.Week, Is.EqualTo(9));
+            Assert.That(back.Drama.LastFiredWeek, Is.EqualTo(7));
+            Assert.That(back.Drama.FiredThisSeason, Is.EqualTo(2));
+            Assert.That(back.Drama.Events[0].Event.Value, Is.EqualTo("fan-protest"));
+            Assert.That(back.PendingEvent.Value, Is.EqualTo("budget-cut"));
+            Assert.That(back.PendingSubjectPlayerId, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Restore_ATacticalAxisThisBuildCannotRead_TakesTheNeutralValueInsteadOfFailing()
+        {
+            // The tolerant posture, on the one kind of field where it is right: a save outlives the build,
+            // and an axis written by a build that knew a mentality this one does not should cost the manager
+            // a dropdown, not the run. Contrast a PLAYER's role, three tests below, which fails the load —
+            // there the default would be a lie the player can see (a squad quietly re-roled to goalkeeper).
+            SeasonSaveData data = CreateV5Save();
+            data.SchemaVersion = SeasonSaveData.CurrentVersion;
+            data.Run = new RunSaveData
+            {
+                Tactics = new TacticsSaveData
+                {
+                    FormationName = "4-4-2",
+                    Mentality = "Berserk",
+                    Tempo = "Patient",
+                    Pressing = null,
+                    Approach = "Counter",
+                },
+            };
+
+            Assert.That(new SaveMigrator().Migrate(data).IsSuccess, Is.True);
+            RunState back = new SeasonSaveMapper().Restore(data).Run;
+
+            Assert.That(back.Tactics.Value.Mentality, Is.EqualTo(Mentality.Balanced), "an unknown axis reads neutral");
+            Assert.That(back.Tactics.Value.Pressing, Is.EqualTo(Pressing.Standard), "and so does a missing one");
+            Assert.That(back.Tactics.Value.Tempo, Is.EqualTo(Tempo.Patient), "while the readable ones are kept");
+            Assert.That(back.Tactics.Value.Approach, Is.EqualTo(Approach.Counter));
+            Assert.That(back.Formation, Is.Null, "a shape with no slots is no shape — the run keeps its own");
+        }
+
+        [Test]
+        public void Restore_AFormationWithAnUnreadableSlot_ComesBackAbsentRatherThanShort()
+        {
+            // All or nothing, and deliberately so: an eleven-slot shape quietly restored with ten would
+            // bench somebody every week for the rest of the run, and nothing would ever say why.
+            SeasonSaveData data = CreateV5Save();
+            data.SchemaVersion = SeasonSaveData.CurrentVersion;
+            data.Run = new RunSaveData
+            {
+                Tactics = new TacticsSaveData
+                {
+                    FormationName = "4-4-2",
+                    FormationSlots = new List<string> { "Goalkeeper", "Libero", "CentreBack" },
+                    Mentality = "Balanced",
+                },
+            };
+
+            RunState back = new SeasonSaveMapper().Restore(data).Run;
+
+            Assert.That(back.Formation, Is.Null);
+            Assert.That(back.Tactics, Is.Not.Null, "the tactical axes are a separate fact and still read");
+        }
+
+        [Test]
+        public void PersistedEnum_ReadsWhatItWrote_AndRejectsEverythingElse()
+        {
+            // The same three guards PersistedPlayerRole documents, now on the enums schema v6 added.
+            Assert.That(PersistedEnum.ToName(Mentality.VeryAttacking), Is.EqualTo("VeryAttacking"));
+
+            Assert.That(PersistedEnum.TryParse("VeryAttacking", out Mentality mentality), Is.True);
+            Assert.That(mentality, Is.EqualTo(Mentality.VeryAttacking));
+
+            Assert.That(PersistedEnum.TryParse("999", out Mentality _), Is.False, "a numeric string is not a member");
+            Assert.That(PersistedEnum.TryParse("2", out Mentality _), Is.False, "not even one that IS a valid ordinal");
+            Assert.That(PersistedEnum.TryParse("Balanced, Attacking", out Mentality _), Is.False, "nor a combination");
+            Assert.That(PersistedEnum.TryParse("balanced", out Mentality _), Is.False, "the persisted name is matched exactly");
+            Assert.That(PersistedEnum.TryParse(null, out Mentality _), Is.False);
+            Assert.That(PersistedEnum.TryParse(string.Empty, out Mentality _), Is.False);
+
+            Assert.That(PersistedEnum.ParseOr("Press", Pressing.Standard), Is.EqualTo(Pressing.Press));
+            Assert.That(PersistedEnum.ParseOr("Stomp", Pressing.Standard), Is.EqualTo(Pressing.Standard));
+            Assert.That(PersistedEnum.ParseOr(null, Approach.Counter), Is.EqualTo(Approach.Counter));
         }
 
         [Test]

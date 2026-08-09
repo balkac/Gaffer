@@ -102,6 +102,11 @@ namespace Gaffer.UserData
             return value;
         }
 
+        internal long ReadInt64()
+        {
+            return unchecked((long)ReadUInt64());
+        }
+
         internal double ReadDouble()
         {
             return BitConverter.Int64BitsToDouble(unchecked((long)ReadUInt64()));
@@ -153,8 +158,12 @@ namespace Gaffer.UserData
                 return text;
             }
 
-            int index = (int)(tag - SaveBinaryPrimitives.PoolBase);
-            if (index >= _pool.Count)
+            // Compared as UNSIGNED, which is the whole guard: a corrupt varint can carry a tag near
+            // uint.MaxValue, and `(int)(tag - PoolBase)` would then wrap to a NEGATIVE index that sails past
+            // an upper-bound check and indexes the list out of range — an unhandled exception on the boot
+            // path, which is exactly what this reader exists to make impossible (UNITY.md §7).
+            uint index = tag - SaveBinaryPrimitives.PoolBase;
+            if (index >= (uint)_pool.Count)
             {
                 // Only reachable from a damaged or hand-edited file: the writer never emits an index before
                 // the string it points at. Naming the index makes the corruption diagnosable from the log.
@@ -162,7 +171,7 @@ namespace Gaffer.UserData
                     "Save refers to text #" + index + " before defining it; the file is damaged.");
             }
 
-            return _pool[index];
+            return _pool[(int)index];
         }
 
         private string ReadText(int byteCount)

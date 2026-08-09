@@ -35,13 +35,21 @@ namespace Gaffer.Application.Serialization
         /// enum ordinal, so inserting a role can no longer silently re-role every saved player
         /// (CONVENTIONS §6, UNITY.md §7). A v4 save's <see cref="PlayerSaveData.Role"/> ordinal is converted
         /// to the name by the migration step.
+        /// v6 — the document carries the whole RUN, not just the season: finances, the managed club's
+        /// tactics, shape and chosen eleven, live morale, the drama engine's memory and any unanswered
+        /// event, the market, and the run's own setup (<see cref="Run"/>). Everything in that block used to
+        /// be re-seeded from <c>RunSetup</c> — an editor window's input fields — on every load, which is
+        /// why loading a save meant re-entering the cash and the wage budget and losing the team sheet. A
+        /// v5 save has no run block; the migration step gives it one carrying the only run fact a v5
+        /// document holds (its seed) and leaves every other group absent, so a v5 save resumes exactly as
+        /// it did before — from the caller's setup.
         /// </para>
         /// </summary>
         /// <remarks>A <c>const</c> is baked into the calling assembly (CONVENTIONS §6), which normally argues
         /// for <c>static readonly</c> across an assembly boundary. It is safe here because every consumer is
         /// compiled from source in the same pass (Unity asmdefs and the dotnet test bridge alike) — there is
         /// no pre-built consumer that could hold a stale copy.</remarks>
-        public const int CurrentVersion = 5;
+        public const int CurrentVersion = 6;
 
         /// <summary>The schema this document was written with. <see cref="SaveMigrator"/> stamps it to
         /// <see cref="CurrentVersion"/> once the migration chain has run.</summary>
@@ -58,8 +66,25 @@ namespace Gaffer.Application.Serialization
 
         public List<MatchResultSaveData> Results { get; set; } = new List<MatchResultSaveData>();
 
-        /// <summary>The fixed season seed each match is derived from — enough to reproduce every fixture.</summary>
+        /// <summary>
+        /// The fixed season seed each match is derived from — enough to reproduce every REMAINING fixture.
+        /// <para>
+        /// Its meaning is unchanged by v6 and that is worth stating, because what moves it did change: a
+        /// resume now takes a fresh continuation seed from its caller and plays on that, so the next save
+        /// writes the new seed here. It is still "the seed the unplayed fixtures come from"; it is simply
+        /// no longer the same number for the whole run. The number the run was BORN on lives on
+        /// <see cref="RunSaveData.OriginalSeed"/>.
+        /// </para>
+        /// </summary>
         public ulong MatchSeed { get; set; }
+
+        /// <summary>
+        /// The run around the season (v6): money, tactics, the eleven, morale, drama and the market. Null
+        /// on a pre-v6 document and legal to be null afterwards — a capture with no run in hand (a harness
+        /// snapshot of a league) writes the block with only the seed in it. Every group inside states what
+        /// its own absence means; nothing here is required for a save to load.
+        /// </summary>
+        public RunSaveData Run { get; set; }
     }
 
     public sealed class ClubSaveData

@@ -81,6 +81,121 @@ namespace Gaffer.Tests
         }
 
         [Test]
+        public void BinaryRoundTrip_CarriesTheWholeRunBlock()
+        {
+            // Container v2's section, field by field. It is checked here rather than only through
+            // RunSession because a group that silently round-trips as null would still let a run resume —
+            // just as a run that had lost its market, which is the bug this schema exists to fix.
+            SeasonSaveData back = SaveCodecFixtures.ReadOrFail(Binary, SaveCodecFixtures.Write(Binary, SaveCodecFixtures.Sample()));
+            RunSaveData run = back.Run;
+
+            Assert.That(run, Is.Not.Null);
+            Assert.That(run.OriginalSeed, Is.EqualTo(0x0BADC0DE01UL));
+            Assert.That(back.MatchSeed, Is.EqualTo(0xDEADBEEFCAFEUL),
+                "the original seed and the seed the run is playing on are two facts, and they must not merge");
+
+            Assert.That(run.Setup.ManagedClubIndex, Is.EqualTo(1));
+            Assert.That(run.Setup.TeamCount, Is.EqualTo(2));
+            Assert.That(run.Setup.PromotionPosition, Is.EqualTo(3));
+            Assert.That(run.Setup.SurvivalPosition, Is.EqualTo(4));
+            Assert.That(run.Setup.MarketSize, Is.EqualTo(5));
+            Assert.That(run.Setup.GuaranteedGems, Is.EqualTo(6));
+
+            Assert.That(run.Finances.Cash, Is.EqualTo(1_250_000L));
+            Assert.That(run.Finances.WeeklyWageBudget, Is.EqualTo(160_000L));
+            Assert.That(run.Finances.WeeklyWageBill, Is.EqualTo(143_500L));
+
+            Assert.That(run.Tactics.FormationName, Is.EqualTo("4-3-3"));
+            Assert.That(run.Tactics.FormationSlots.Count, Is.EqualTo(11));
+            Assert.That(run.Tactics.FormationSlots[0], Is.EqualTo("Goalkeeper"));
+            Assert.That(run.Tactics.FormationSlots[10], Is.EqualTo("LeftWing"));
+            Assert.That(run.Tactics.Mentality, Is.EqualTo("Attacking"));
+            Assert.That(run.Tactics.Tempo, Is.EqualTo("Patient"));
+            Assert.That(run.Tactics.Pressing, Is.EqualTo("Contain"));
+            Assert.That(run.Tactics.Approach, Is.EqualTo("Counter"));
+
+            Assert.That(run.Eleven, Is.EqualTo(new List<int> { 7, 1, 2, 3, -1, 5, 6, 8, 9, 10, 11 }),
+                "including the empty-slot sentinel, which must not come back as player 0");
+
+            Assert.That(run.Market.Count, Is.EqualTo(1));
+            Assert.That(run.Market[0].Id, Is.EqualTo(1_100_042));
+            Assert.That(run.Market[0].Name, Is.EqualTo("Ivo Larkin"));
+            Assert.That(run.Market[0].RoleName, Is.EqualTo("CentreBack"));
+            Assert.That(run.Market[0].Attributes.Pace, Is.EqualTo(13));
+            Assert.That(run.Market[0].Traits, Is.EqualTo(new List<string> { "derby-beast" }));
+
+            Assert.That(run.Morale.Count, Is.EqualTo(1));
+            Assert.That(run.Morale[0].PlayerId, Is.EqualTo(7));
+            Assert.That(run.Morale[0].Points, Is.EqualTo(-3.5), "exact: morale points travel as IEEE-754 bits");
+            Assert.That(run.Morale[0].WeeksLeft, Is.EqualTo(6));
+
+            Assert.That(run.Drama.Week, Is.EqualTo(9));
+            Assert.That(run.Drama.LastFiredWeek, Is.EqualTo(7));
+            Assert.That(run.Drama.FiredThisSeason, Is.EqualTo(2));
+            Assert.That(run.Drama.Events.Count, Is.EqualTo(2));
+            Assert.That(run.Drama.Events[0].Id, Is.EqualTo("transfer-request"));
+            Assert.That(run.Drama.Events[0].LastFiredWeek, Is.EqualTo(7));
+            Assert.That(run.Drama.Events[1].Id, Is.EqualTo("club-takeover"));
+            Assert.That(run.Drama.PendingEventId, Is.EqualTo("night-club-scandal"));
+            Assert.That(run.Drama.PendingSubjectPlayerId, Is.EqualTo(7));
+        }
+
+        [Test]
+        public void BinaryRoundTrip_ARunBlockWithNoGroupsFilled_KeepsEveryAbsenceAbsent()
+        {
+            // "Absent" is load-bearing: it is what tells a resume to fall back to the caller's setup rather
+            // than to a zeroed one. A format that turned a missing market into an empty one would silently
+            // give the manager a shortlist of nobody.
+            var data = SaveCodecFixtures.SampleV5();
+            data.SchemaVersion = SeasonSaveData.CurrentVersion;
+            data.Run = new RunSaveData { OriginalSeed = 12UL };
+
+            RunSaveData back = SaveCodecFixtures.ReadOrFail(Binary, SaveCodecFixtures.Write(Binary, data)).Run;
+
+            Assert.That(back.OriginalSeed, Is.EqualTo(12UL));
+            Assert.That(back.Setup, Is.Null);
+            Assert.That(back.Finances, Is.Null);
+            Assert.That(back.Tactics, Is.Null);
+            Assert.That(back.Eleven, Is.Null);
+            Assert.That(back.Market, Is.Null);
+            Assert.That(back.Morale, Is.Null);
+            Assert.That(back.Drama, Is.Null);
+        }
+
+        [Test]
+        public void AV1Container_StillReadsAndArrivesWithNoRunBlock()
+        {
+            // The additive-field contract from the class's strictness posture, exercised on a real v1 file:
+            // the section simply is not there, the decode does not go looking for it, and the document that
+            // comes back is the v5 one it always was — which the migrator then lifts.
+            byte[] v1 = WriteAsContainerV1(SaveCodecFixtures.SampleV5());
+
+            SeasonSaveData back = SaveCodecFixtures.ReadOrFail(Binary, v1);
+
+            Assert.That(back.SchemaVersion, Is.EqualTo(5));
+            Assert.That(back.Run, Is.Null, "a v1 container has no room for a run block");
+            Assert.That(back.Clubs[0].Squad[0].RoleName, Is.EqualTo("Striker"), "and everything before it reads unchanged");
+
+            Result<SeasonSaveData> migrated = new SaveMigrator().Migrate(back);
+            Assert.That(migrated.IsSuccess, Is.True, migrated.Error);
+            Assert.That(migrated.Value.Run.OriginalSeed, Is.EqualTo(0xDEADBEEFCAFEUL));
+        }
+
+        // A genuine v1 file: the current writer's bytes with the version stamp put back and the run section
+        // (which a v1 reader would never look at) cut off. Hand-made because this build cannot write v1 any
+        // more, and a fixture that only claimed to be v1 would prove nothing about the layout.
+        private static byte[] WriteAsContainerV1(SeasonSaveData v5)
+        {
+            byte[] bytes = SaveCodecFixtures.Write(Binary, v5);
+            Assert.That(bytes[bytes.Length - 1], Is.EqualTo(0), "a document with no run block ends in the run block's null tag");
+
+            var v1 = new byte[bytes.Length - 1];
+            Array.Copy(bytes, v1, v1.Length);
+            v1[4] = 1;
+            return v1;
+        }
+
+        [Test]
         public void BinaryRoundTrip_ThenMapper_RebuildsTheLeagueFaithfully()
         {
             SeasonSaveData parsed = SaveCodecFixtures.ReadOrFail(Binary, SaveCodecFixtures.Write(Binary, SaveCodecFixtures.Sample()));
@@ -210,10 +325,12 @@ namespace Gaffer.Tests
             Assert.That(bytes[1], Is.EqualTo(0x46));
             Assert.That(bytes[2], Is.EqualTo(0x53));
             Assert.That(bytes[3], Is.EqualTo(0x56));
-            Assert.That(bytes[4], Is.EqualTo(1), "container version, low byte first");
+            Assert.That(bytes[4], Is.EqualTo(2), "container version, low byte first");
             Assert.That(bytes[5], Is.EqualTo(0), "container version, high byte — little-endian, on every device");
-            Assert.That(BinarySaveSerializer.CurrentContainerVersion, Is.EqualTo(1),
+            Assert.That(BinarySaveSerializer.CurrentContainerVersion, Is.EqualTo(2),
                 "The container version moved. Add the branch that reads the old layout, then update this test.");
+            Assert.That(BinarySaveSerializer.MinimumSupportedContainerVersion, Is.EqualTo(1),
+                "v1 containers are still on devices — the run block was APPENDED, so they read as before.");
         }
 
         [Test]
@@ -437,7 +554,7 @@ namespace Gaffer.Tests
             Result<SeasonSaveData> parsed = SaveCodecFixtures.Read(Binary, bytes);
 
             Assert.That(parsed.IsFailure, Is.True);
-            Assert.That(parsed.Error, Does.Contain("99").And.Contains("1..1"));
+            Assert.That(parsed.Error, Does.Contain("99").And.Contains("1..2"));
         }
 
         [Test]
@@ -512,7 +629,7 @@ namespace Gaffer.Tests
             // accepted on load rather than converted by a one-shot pass. This is a GENUINE v5 payload —
             // written by the JSON adapter with its shipped settings, exactly as it sits in a file on a
             // device.
-            byte[] legacy = SaveCodecFixtures.Write(Json, SaveCodecFixtures.Sample());
+            byte[] legacy = SaveCodecFixtures.Write(Json, SaveCodecFixtures.SampleV5());
             Assert.That(legacy[0], Is.EqualTo((byte)'{'), "the fixture really is the old text format");
 
             SeasonSaveData back = SaveCodecFixtures.ReadOrFail(Save, legacy);
@@ -521,6 +638,7 @@ namespace Gaffer.Tests
             Assert.That(back.LeagueName, Is.EqualTo("Round Trip League"));
             Assert.That(back.Clubs[0].Squad[0].RoleName, Is.EqualTo("Striker"));
             Assert.That(back.Clubs[1].Squad, Is.Null);
+            Assert.That(back.Run, Is.Null, "a v5 document has no run block — the migrator is what gives it one");
             AssertAttributesAreTheDistinctFixture(back.Clubs[0].Squad[0].Attributes);
         }
 
@@ -530,7 +648,7 @@ namespace Gaffer.Tests
             // The whole upgrade path in one test: an old file loads, the next ordinary save writes it in the
             // new format, and nothing is lost on the way through. No conversion tool is involved — that is
             // the point of accepting both on load.
-            byte[] legacy = SaveCodecFixtures.Write(Json, SaveCodecFixtures.Sample());
+            byte[] legacy = SaveCodecFixtures.Write(Json, SaveCodecFixtures.SampleV5());
 
             SeasonSaveData loaded = SaveCodecFixtures.ReadOrFail(Save, legacy);
             byte[] upgraded = SaveCodecFixtures.Write(Save, loaded);
@@ -560,12 +678,46 @@ namespace Gaffer.Tests
         /// <summary>
         /// The ceiling this change exists to hold, and the reason it is a test rather than a note: a save
         /// re-inflates one innocuous field at a time, and the day it matters is the day it is a 50,000-player
-        /// world on a mobile heap. Measured today at ~51 bytes a player, so 64 leaves about a quarter of
-        /// headroom — enough for a genuinely-needed small field without a format change, and low enough that
-        /// anything careless (a per-player string, a spelled-out enum with no interning, a float that should
-        /// have been a byte) trips it. At 64 the design target still fits in ~3.2 MB.
+        /// world on a mobile heap. Measured today at 50.7 bytes a player (50.2 before schema v6 added the
+        /// run block, which is a fixed per-save cost plus a 40-prospect market), so 64 leaves about a
+        /// quarter of headroom — enough for a genuinely-needed small field without a format change, and low
+        /// enough that anything careless (a per-player string, a spelled-out enum with no interning, a float
+        /// that should have been a byte) trips it. At 50.7 the design target is 2.42 MB; at 64 it is 3.2.
         /// </summary>
         private const int MaxBytesPerPlayer = 64;
+
+        [Test]
+        public void TheRunBlock_CostsAFixedOverheadPlusItsMarket()
+        {
+            // What schema v6 added, measured rather than asserted from the layout — and separated from the
+            // per-player figure, because the two grow differently: everything here except the market is a
+            // fixed cost per SAVE, so it disappears against a world-sized document, while the market is
+            // ordinary player records and is charged at the same rate as everyone else.
+            const int players = 5000;
+            SeasonSaveData world = WorldOf(players);
+            RunSaveData run = world.Run;
+
+            byte[] withRun = SaveCodecFixtures.Write(Binary, world);
+            world.Run = null;
+            byte[] withoutRun = SaveCodecFixtures.Write(Binary, world);
+
+            int cost = withRun.Length - withoutRun.Length;
+            int marketPlayers = run.Market.Count;
+            int moraleEntries = run.Morale.Count;
+
+            // The block's two per-element parts are the market (player records, charged at the same rate as
+            // any other player) and the morale ledger (about a dozen bytes an entry, and an entry per
+            // squad member is the worst case). Everything else — the setup, the money, the shape and its
+            // eleven slots, the drama memory — is a fixed couple of hundred bytes per SAVE. Measured at
+            // 2,501 bytes for a 40-prospect market and 25 live entries.
+            int budget = 256 + (marketPlayers * MaxBytesPerPlayer) + (moraleEntries * 16);
+            Assert.That(cost, Is.LessThan(budget),
+                "the run block costs " + cost + " bytes against a budget of " + budget + " for "
+                + marketPlayers + " market players and " + moraleEntries + " morale entries. If it has "
+                + "outgrown that, something per-player has been added to a group that is supposed to be "
+                + "fixed per save.");
+            Assert.That(cost, Is.GreaterThan(0));
+        }
 
         [Test]
         public void AWorldSizedSave_StaysUnderTheBytesPerPlayerCeiling()
@@ -671,13 +823,15 @@ namespace Gaffer.Tests
             try
             {
                 Directory.CreateDirectory(directory);
-                File.WriteAllBytes(path, SaveCodecFixtures.Write(Json, SaveCodecFixtures.Sample()));
+                File.WriteAllBytes(path, SaveCodecFixtures.Write(Json, SaveCodecFixtures.SampleV5()));
 
                 var store = new JsonSaveStore(Save, new SaveMigrator());
                 Result<SeasonSaveData> loaded = store.Load(path);
 
                 Assert.That(loaded.IsSuccess, Is.True, loaded.Error);
                 Assert.That(loaded.Value.Clubs[0].Squad[0].RoleName, Is.EqualTo("Striker"));
+                Assert.That(loaded.Value.Run, Is.Not.Null, "the load migrated it to v6");
+                Assert.That(loaded.Value.Run.OriginalSeed, Is.EqualTo(0xDEADBEEFCAFEUL));
 
                 // And the next ordinary save upgrades the file in place.
                 Assert.That(store.Save(path, loaded.Value).IsSuccess, Is.True);
@@ -884,7 +1038,91 @@ namespace Gaffer.Tests
                 });
             }
 
+            data.Run = WorldRun(rng, data.Clubs[0].Squad);
             return data;
+        }
+
+        /// <summary>
+        /// A run block the size a real one is: a 40-prospect market (the calibrated default), a full team
+        /// sheet, a squad's worth of live morale, and a drama memory with every event in the catalog fired.
+        /// The size guard measures the format WITH this, because a save carries it.
+        /// </summary>
+        private static RunSaveData WorldRun(Random rng, List<PlayerSaveData> squad)
+        {
+            var market = new List<PlayerSaveData>(40);
+            for (int i = 0; i < 40; i++)
+            {
+                market.Add(new PlayerSaveData
+                {
+                    Id = 1_100_000 + i,
+                    Name = FirstNames[rng.Next(FirstNames.Length)] + " " + LastNames[rng.Next(LastNames.Length)],
+                    Nationality = Nations[rng.Next(Nations.Length)],
+                    RoleName = PersistedPlayerRole.ToName((PlayerRole)rng.Next(12)),
+                    Age = rng.Next(16, 20),
+                    HiddenPotential = rng.Next(70, 100),
+                    Attributes = RandomAttributes(rng),
+                    Traits = new List<string> { TraitIds[rng.Next(TraitIds.Length)] },
+                });
+            }
+
+            var eleven = new List<int>(11);
+            for (int i = 0; i < 11; i++)
+            {
+                eleven.Add(squad[i].Id);
+            }
+
+            var morale = new List<MoraleSaveData>(squad.Count);
+            for (int i = 0; i < squad.Count; i++)
+            {
+                morale.Add(new MoraleSaveData { PlayerId = squad[i].Id, Points = -2.0, WeeksLeft = 4 });
+            }
+
+            var fired = new List<DramaEventSaveData>(10);
+            for (int i = 0; i < 10; i++)
+            {
+                fired.Add(new DramaEventSaveData { Id = "drama-event-" + i, LastFiredWeek = i * 3 });
+            }
+
+            return new RunSaveData
+            {
+                OriginalSeed = 0x0BADC0DE01UL,
+                Setup = new RunSetupSaveData
+                {
+                    ManagedClubIndex = 15,
+                    TeamCount = 20,
+                    PromotionPosition = 3,
+                    SurvivalPosition = 17,
+                    MarketSize = 40,
+                    GuaranteedGems = 3,
+                },
+                Finances = new FinancesSaveData { Cash = 6_000_000L, WeeklyWageBudget = 160_000L, WeeklyWageBill = 152_400L },
+                Tactics = new TacticsSaveData
+                {
+                    FormationName = "4-4-2",
+                    FormationSlots = new List<string>
+                    {
+                        "Goalkeeper", "RightBack", "CentreBack", "CentreBack", "LeftBack",
+                        "RightMidfield", "CentralMidfield", "CentralMidfield", "LeftMidfield",
+                        "Striker", "Striker",
+                    },
+                    Mentality = "Balanced",
+                    Tempo = "Standard",
+                    Pressing = "Standard",
+                    Approach = "Balanced",
+                },
+                Eleven = eleven,
+                Market = market,
+                Morale = morale,
+                Drama = new DramaSaveData
+                {
+                    Week = 24,
+                    LastFiredWeek = 21,
+                    FiredThisSeason = 3,
+                    Events = fired,
+                    PendingEventId = null,
+                    PendingSubjectPlayerId = -1,
+                },
+            };
         }
 
         private static AttributesSaveData RandomAttributes(Random rng)

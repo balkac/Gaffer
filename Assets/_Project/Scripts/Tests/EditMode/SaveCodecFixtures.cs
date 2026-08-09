@@ -55,16 +55,32 @@ namespace Gaffer.Tests
         }
 
         /// <summary>
-        /// The reference document: one club with a full squad and one strength-only club, a player with a
-        /// distinct value in every one of the 29 attributes, traits, a non-trivial season seed, and a
-        /// played result. Every shape the format has to carry is in here exactly once — a null squad, a
-        /// null-vs-empty distinction, a role that must survive BY NAME.
+        /// The reference document at the CURRENT schema: one club with a full squad and one strength-only
+        /// club, a player with a distinct value in every one of the 29 attributes, traits, a non-trivial
+        /// season seed, a played result — and the whole v6 run block, every group of it filled. Every shape
+        /// the format has to carry is in here exactly once: a null squad, a null-vs-empty distinction, a
+        /// role that must survive BY NAME, an empty lineup slot, an original seed that is deliberately NOT
+        /// the match seed (they are two facts, and a codec that confused them would pass on equal ones).
         /// </summary>
         internal static SeasonSaveData Sample()
         {
+            SeasonSaveData data = SampleV5();
+            data.SchemaVersion = SeasonSaveData.CurrentVersion;
+            data.Run = SampleRun();
+            return data;
+        }
+
+        /// <summary>
+        /// The same document as a GENUINE v5 one: schema 5 and no run block at all, exactly as it sits in a
+        /// file the owner already has. The legacy-JSON and migration tests read this rather than
+        /// <see cref="Sample"/>, because a fixture stamped with the current version is not evidence about
+        /// an old one.
+        /// </summary>
+        internal static SeasonSaveData SampleV5()
+        {
             return new SeasonSaveData
             {
-                SchemaVersion = SeasonSaveData.CurrentVersion,
+                SchemaVersion = 5,
                 LeagueName = "Round Trip League",
                 SeasonNumber = 4,
                 MatchSeed = 0xDEADBEEFCAFEUL,
@@ -89,6 +105,76 @@ namespace Gaffer.Tests
                 Results = new List<MatchResultSaveData>
                 {
                     new MatchResultSaveData { Home = 0, Away = 1, HomeGoals = 2, AwayGoals = 1 },
+                },
+            };
+        }
+
+        /// <summary>The v6 run block, with a distinct value in every field so a swapped pair cannot pass.</summary>
+        internal static RunSaveData SampleRun()
+        {
+            return new RunSaveData
+            {
+                OriginalSeed = 0x0BADC0DE01UL,
+                Setup = new RunSetupSaveData
+                {
+                    ManagedClubIndex = 1,
+                    TeamCount = 2,
+                    PromotionPosition = 3,
+                    SurvivalPosition = 4,
+                    MarketSize = 5,
+                    GuaranteedGems = 6,
+                },
+                Finances = new FinancesSaveData
+                {
+                    Cash = 1_250_000L,
+                    WeeklyWageBudget = 160_000L,
+                    WeeklyWageBill = 143_500L,
+                },
+                Tactics = new TacticsSaveData
+                {
+                    FormationName = "4-3-3",
+                    FormationSlots = new List<string>
+                    {
+                        "Goalkeeper",
+                        "RightBack", "CentreBack", "CentreBack", "LeftBack",
+                        "CentralMidfield", "CentralMidfield", "AttackingMidfield",
+                        "RightWing", "Striker", "LeftWing",
+                    },
+                    Mentality = "Attacking",
+                    Tempo = "Patient",
+                    Pressing = "Contain",
+                    Approach = "Counter",
+                },
+
+                // Slot 4 is empty on purpose: a sheet with a hole in it is a state the run can be in, and
+                // the sentinel has to survive the round trip as a hole rather than as player 0.
+                Eleven = new List<int> { 7, 1, 2, 3, -1, 5, 6, 8, 9, 10, 11 },
+                Market = new List<PlayerSaveData>
+                {
+                    new PlayerSaveData
+                    {
+                        Id = 1_100_042, Name = "Ivo Larkin", Nationality = "Spain", RoleName = "CentreBack",
+                        Age = 17, HiddenPotential = 88,
+                        Attributes = new AttributesSaveData { Finishing = 11, Passing = 12, Pace = 13 },
+                        Traits = new List<string> { "derby-beast" },
+                    },
+                },
+                Morale = new List<MoraleSaveData>
+                {
+                    new MoraleSaveData { PlayerId = 7, Points = -3.5, WeeksLeft = 6 },
+                },
+                Drama = new DramaSaveData
+                {
+                    Week = 9,
+                    LastFiredWeek = 7,
+                    FiredThisSeason = 2,
+                    Events = new List<DramaEventSaveData>
+                    {
+                        new DramaEventSaveData { Id = "transfer-request", LastFiredWeek = 7 },
+                        new DramaEventSaveData { Id = "club-takeover", LastFiredWeek = 2 },
+                    },
+                    PendingEventId = "night-club-scandal",
+                    PendingSubjectPlayerId = 7,
                 },
             };
         }

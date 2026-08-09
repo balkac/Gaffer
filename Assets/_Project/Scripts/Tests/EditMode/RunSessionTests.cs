@@ -3,6 +3,7 @@ using Gaffer.Application.Drama;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Run;
 using Gaffer.Application.Season;
+using Gaffer.Application.Serialization;
 using Gaffer.Application.Simulation;
 using Gaffer.Application.Transfers;
 using Gaffer.Common;
@@ -11,6 +12,7 @@ using Gaffer.Domain.Drama;
 using Gaffer.Domain.Leagues;
 using Gaffer.Domain.Players;
 using Gaffer.Domain.Traits;
+using Gaffer.UserData;
 using NUnit.Framework;
 
 namespace Gaffer.Tests
@@ -663,6 +665,13 @@ namespace Gaffer.Tests
 
         // ----- Save / resume ----------------------------------------------------------------------------
 
+        private static RunSession Resume(RunSetup setup, RunBalance balance, SeasonSaveData saved, ulong continuationSeed)
+        {
+            Result<RunSession> resumed = RunSessionFactory.Resume(setup, balance, saved, continuationSeed);
+            Assert.That(resumed.IsSuccess, Is.True, resumed.Error);
+            return resumed.Value;
+        }
+
         [Test]
         public void Resume_FromACapturedRun_ContinuesTheSameFixturesExactly()
         {
@@ -672,10 +681,13 @@ namespace Gaffer.Tests
                 played.AdvanceWeek();
             }
 
-            Gaffer.Application.Serialization.SeasonSaveData saved = played.Capture();
-            Result<RunSession> resumedRun = RunSessionFactory.Resume(Setup(), QuietDrama(), saved);
-            Assert.That(resumedRun.IsSuccess, Is.True, resumedRun.Error);
-            RunSession resumed = resumedRun.Value;
+            SeasonSaveData saved = played.Capture();
+
+            // The save's own seed as the continuation seed — which is what makes this the DETERMINISM pin
+            // it has always been: the core is a pure function of the seed it is given, and given the same
+            // one it reproduces the run exactly. The game does not pass this seed (it passes a fresh one,
+            // see the test below); a test does, and that is the whole point of the argument.
+            RunSession resumed = Resume(Setup(), QuietDrama(), saved, saved.MatchSeed);
 
             Assert.That(resumed.PlayedRounds, Is.EqualTo(played.PlayedRounds));
             Assert.That(resumed.SeasonNumber, Is.EqualTo(played.SeasonNumber));
@@ -689,6 +701,247 @@ namespace Gaffer.Tests
                 Assert.That(resumedNext.Matches[i].HomeGoals, Is.EqualTo(next.Matches[i].HomeGoals), "match " + i);
                 Assert.That(resumedNext.Matches[i].AwayGoals, Is.EqualTo(next.Matches[i].AwayGoals), "match " + i);
             }
+        }
+
+        [Test]
+        public void Resume_OnADifferentContinuationSeed_ReplaysTheHistoryAndChangesTheFuture()
+        {
+            // The counterpart to the test above, and the owner's actual complaint: advancing from a save
+            // always produced the same scorelines. It no longer has to — the caller chooses what the
+            // unplayed fixtures are seeded from, so the game hands over a session-fresh number and the same
+            // eleven can lose the match it won an hour ago. What must NOT move is the history.
+            RunSession played = StartRun(Setup(), QuietDrama());
+            for (int week = 0; week < 4; week++)
+            {
+                played.AdvanceWeek();
+            }
+
+            SeasonSaveData saved = played.Capture();
+            string historyAtSave = TableSignature(played);
+
+            RunSession same = Resume(Setup(), QuietDrama(), saved, saved.MatchSeed);
+            RunSession elsewhere = Resume(Setup(), QuietDrama(), saved, saved.MatchSeed ^ 0x9E3779B97F4A7C15UL);
+
+            Assert.That(TableSignature(same), Is.EqualTo(historyAtSave), "played results are history");
+            Assert.That(TableSignature(elsewhere), Is.EqualTo(historyAtSave), "on any seed at all");
+            Assert.That(elsewhere.PlayedRounds, Is.EqualTo(played.PlayedRounds));
+
+            same.AdvanceToEndOfSeason();
+            elsewhere.AdvanceToEndOfSeason();
+
+            // Compared over the whole remaining season rather than one round: four fixtures could coincide
+            // by luck, ten weeks of them cannot, so this asserts divergence without asserting a coin flip.
+            Assert.That(TableSignature(elsewhere), Is.Not.EqualTo(TableSignature(same)),
+                "a different continuation seed must produce a different future");
+        }
+
+        // The table as a string — club, points, goal difference, in order. Enough to tell two seasons apart
+        // and enough to prove two runs share a history.
+        private static string TableSignature(RunSession session)
+        {
+            var text = new System.Text.StringBuilder();
+            IReadOnlyList<LeagueTableRow> rows = session.Standings();
+            for (int i = 0; i < rows.Count; i++)
+            {
+                text.Append(rows[i].Club.Value).Append(':').Append(rows[i].Points).Append('/')
+                    .Append(rows[i].GoalDifference).Append('|');
+            }
+
+            return text.ToString();
+        }
+
+        // Fires exactly once a season, and the answer leaves a wound live for long enough that it is still
+        // on the ledger several weeks later — which is what a round trip has to carry.
+        private static RunBalance OneLastingDrama()
+        {
+            return new RunBalance(
+                dramaEvents: new DramaCatalog(new[]
+                {
+                    new DramaEvent(
+                        new DramaEventId("test-lasting-wound"), DramaCategory.Personal,
+                        "drama.test.title", "drama.test.body",
+                        requiresSubject: true,
+                        new DramaTrigger(),
+                        baseWeight: 1.0, cooldownWeeks: 0,
+                        new[]
+                        {
+                            new DramaChoice("drama.test.wound", new[]
+                            {
+                                new DramaEffect(DramaEffectKind.SubjectMorale, -4.0, 30),
+                            }),
+                        }),
+                }),
+                drama: new DramaSettings(
+                    maxEventsPerSeason: 1,
+                    minWeeksBetweenEvents: 1,
+                    weeklyChancePerWeight: 1.0,
+                    maxWeeklyChance: 1.0));
+        }
+
+        /// <summary>
+        /// The one that answers the owner's report end to end: he had to re-enter the market size, the cash
+        /// and the wage budget on every load, his tactics and his chosen eleven were gone, and the drama
+        /// budget came back full. So this plays a run that has all of those things in it, writes it through
+        /// the SHIPPED codec (binary container, then the migrator, exactly as the file store does), resumes
+        /// it against a setup whose every field is deliberately wrong — and asserts the run came back, not
+        /// the window's input fields.
+        /// </summary>
+        [Test]
+        public void SaveThenResume_CarriesTheWholeRun_NotJustTheSeason()
+        {
+            RunSession played = StartRun(Setup(), OneLastingDrama());
+
+            // A signing, and a slice of the wage ceiling sold for cash — both are decisions, and both used
+            // to be discarded by a reload that re-seeded the money from the setup.
+            Player signing = MostAffordable(played);
+            Assert.That(played.SignPlayer(signing).IsSuccess, Is.True);
+            Assert.That(played.ShiftWageBudget(-5_000).IsSuccess, Is.True);
+
+            // Tactics, a shape, and an eleven the auto-pick would never choose: the keeper and a striker
+            // swapped, which no selector does by itself.
+            var chosen = new Tactics(Mentality.Attacking, Tempo.Patient, Pressing.Contain, Approach.Counter);
+            Assert.That(played.SetFormation(Formation.F433).IsSuccess, Is.True);
+            Assert.That(played.SetTactics(chosen).IsSuccess, Is.True);
+            LineupOutcome sheet = played.Lineup();
+            Player keeper = sheet.Slots[0];
+            Player striker = sheet.Slots[10];
+            Assert.That(played.PlaceInSlot(0, striker.Id).IsSuccess, Is.True);
+
+            // A week, a drama, an answer that leaves a live wound — then a few quiet weeks on top.
+            played.AdvanceWeek();
+            PendingDrama raised = played.PendingDrama;
+            Assert.That(raised, Is.Not.Null, "the forced catalog fires in the first week");
+            Player wounded = raised.Subject;
+            Assert.That(played.ResolveDrama(0).IsSuccess, Is.True);
+            for (int week = 0; week < 3; week++)
+            {
+                Assert.That(played.AdvanceWeek().IsSuccess, Is.True);
+            }
+
+            Assert.That(played.MoralePointsOf(wounded.Id), Is.EqualTo(-4.0).Within(1e-9), "the wound is still live at the save");
+
+            Finances money = played.Finances;
+            IReadOnlyList<Player> market = played.Market;
+            LineupOutcome before = played.Lineup();
+
+            // Through the real bytes: the shipped codec writes the container, the migrator gates the load.
+            SeasonSaveData reloaded = RoundTripThroughTheCodec(played.Capture());
+
+            // Every knob here is wrong on purpose. If any of them shows up in the resumed run, the run is
+            // still being re-seeded from a window.
+            var wrongSetup = new RunSetup(
+                teamCount: 20,
+                seed: 1UL,
+                managedClubIndex: 0,
+                promotionPosition: 1,
+                survivalPosition: 2,
+                startingCash: 99_000_000L,
+                weeklyWageBudget: 99_000L,
+                marketSize: 40,
+                guaranteedGems: 9,
+                formation: Formation.F532,
+                tactics: Tactics.Balanced);
+
+            RunSession resumed = Resume(wrongSetup, OneLastingDrama(), reloaded, reloaded.MatchSeed);
+
+            // The season, as before.
+            Assert.That(resumed.PlayedRounds, Is.EqualTo(played.PlayedRounds));
+            Assert.That(resumed.SeasonNumber, Is.EqualTo(played.SeasonNumber));
+            Assert.That(resumed.ClubCount, Is.EqualTo(ClubCount));
+
+            // The run's own setup, from the document rather than from wrongSetup.
+            Assert.That(resumed.ManagedClub, Is.EqualTo(played.ManagedClub));
+            Assert.That(resumed.ManagedClubName, Is.EqualTo(played.ManagedClubName));
+            Assert.That(resumed.BoardTarget.PromotionPosition, Is.EqualTo(played.BoardTarget.PromotionPosition));
+            Assert.That(resumed.BoardTarget.SurvivalPosition, Is.EqualTo(played.BoardTarget.SurvivalPosition));
+
+            // The money — including the wage ceiling, which the manager moved himself.
+            Assert.That(resumed.Finances.Cash, Is.EqualTo(money.Cash));
+            Assert.That(resumed.Finances.WeeklyWageBudget, Is.EqualTo(money.WeeklyWageBudget));
+            Assert.That(resumed.Finances.WeeklyWageBill, Is.EqualTo(money.WeeklyWageBill));
+
+            // The signing is on the roster and off the market.
+            Assert.That(resumed.Squad.Contains(signing.Id), Is.True, "the player he signed is still his");
+            Assert.That(IdsOf(resumed.Market), Is.EqualTo(IdsOf(market)), "and the shortlist he was reading is the same one");
+
+            // Tactics, shape and the exact team sheet.
+            LineupOutcome after = resumed.Lineup();
+            Assert.That(after.Formation.Name, Is.EqualTo("4-3-3"));
+            Assert.That(after.Formation.Total, Is.EqualTo(before.Formation.Total));
+            Assert.That(after.Tactics.Mentality, Is.EqualTo(Mentality.Attacking));
+            Assert.That(after.Tactics.Tempo, Is.EqualTo(Tempo.Patient));
+            Assert.That(after.Tactics.Pressing, Is.EqualTo(Pressing.Contain));
+            Assert.That(after.Tactics.Approach, Is.EqualTo(Approach.Counter));
+            Assert.That(after.Slots[0].Id, Is.EqualTo(striker.Id), "the eleven he picked, slot for slot");
+            Assert.That(after.Slots[10].Id, Is.EqualTo(keeper.Id));
+            Assert.That(IdsOf(after.Starters), Is.EqualTo(IdsOf(before.Starters)));
+
+            // Morale is still on the ledger, with the weeks it had left.
+            Assert.That(resumed.MoralePointsOf(wounded.Id), Is.EqualTo(-4.0).Within(1e-9));
+
+            // And the drama engine remembers: this season's budget is spent, so the next week is quiet —
+            // where a fresh engine would fire again immediately, which is what a reload used to hand back.
+            Assert.That(resumed.AdvanceWeek().IsSuccess, Is.True);
+            Assert.That(resumed.PendingDrama, Is.Null, "the season's one event was already spent");
+
+            // The seed the world was generated from survives the round trip, on top of the seed the run is
+            // now playing on.
+            Assert.That(resumed.OriginalSeed, Is.EqualTo(Seed));
+            Assert.That(resumed.Seed, Is.EqualTo(reloaded.MatchSeed));
+        }
+
+        [Test]
+        public void Resume_FromAV5SaveWithNoRunBlock_FallsBackToTheCallersSetup()
+        {
+            // The migration path, from the run's side: a save written before schema v6 carries no money, no
+            // tactics and no market, so those come from the setup exactly as they always did — the run
+            // loads and plays rather than refusing a document that predates the field.
+            RunSession played = StartRun(Setup(), QuietDrama());
+            played.AdvanceWeek();
+
+            SeasonSaveData saved = played.Capture();
+            saved.SchemaVersion = 5;
+            saved.Run = null;
+
+            Result<SeasonSaveData> migrated = new SaveMigrator().Migrate(saved);
+            Assert.That(migrated.IsSuccess, Is.True, migrated.Error);
+
+            var setup = new RunSetup(
+                teamCount: ClubCount, seed: Seed, managedClubIndex: ManagedIndex,
+                promotionPosition: 2, survivalPosition: 6,
+                startingCash: 3_000_000L, weeklyWageBudget: 500_000L,
+                marketSize: 7, guaranteedGems: 1);
+
+            RunSession resumed = Resume(setup, QuietDrama(), migrated.Value, saved.MatchSeed);
+
+            Assert.That(resumed.PlayedRounds, Is.EqualTo(1), "the season still resumes where it stopped");
+            Assert.That(resumed.Finances.Cash, Is.EqualTo(3_000_000L), "the money comes from the setup");
+            Assert.That(resumed.Finances.WeeklyWageBudget, Is.EqualTo(500_000L));
+            Assert.That(resumed.Market.Count, Is.EqualTo(7), "and a fresh market is generated at the setup's size");
+            Assert.That(resumed.OriginalSeed, Is.EqualTo(saved.MatchSeed),
+                "a v5 document's match seed IS the seed its world was generated from");
+        }
+
+        private static SeasonSaveData RoundTripThroughTheCodec(SeasonSaveData data)
+        {
+            var codec = new SaveSerializer();
+            Result<SeasonSaveData> parsed = SaveCodecFixtures.Read(codec, SaveCodecFixtures.Write(codec, data));
+            Assert.That(parsed.IsSuccess, Is.True, parsed.Error);
+
+            Result<SeasonSaveData> migrated = new SaveMigrator().Migrate(parsed.Value);
+            Assert.That(migrated.IsSuccess, Is.True, migrated.Error);
+            return migrated.Value;
+        }
+
+        private static List<int> IdsOf(IReadOnlyList<Player> players)
+        {
+            var ids = new List<int>(players.Count);
+            for (int i = 0; i < players.Count; i++)
+            {
+                ids.Add(players[i].Id.Value);
+            }
+
+            return ids;
         }
     }
 }

@@ -44,24 +44,42 @@ namespace Gaffer.Application.Run
             // A separate rng stream from the match seed, so world generation cannot perturb results.
             League league = generator.Generate(clubCount, new SplitMix64RandomNumberGenerator(runSetup.Seed ^ 0x5EEDD5EEDUL));
 
-            return Result<RunSession>.Success(new RunSession(runSetup, runBalance, league, 1, 0, null));
+            return Result<RunSession>.Success(new RunSession(runSetup, runBalance, league, 1, 0, null, null));
         }
 
         /// <summary>
-        /// Rebuilds a run from a saved document: the league (with full rosters), the season resumed at the
-        /// round it was left on, and the season number. The run continues on the save's own match seed, so
-        /// the remaining fixtures reproduce an uninterrupted run exactly even if the caller's setup was
-        /// since edited. Finances, the market and drama state are not persisted yet (decision #18), so
-        /// they are re-seeded from <paramref name="setup"/> — a reload starts quiet.
+        /// Rebuilds a run from a saved document: the league with its rosters, the season resumed at the
+        /// round it was left on, and — from schema v6 — the rest of the run the save now carries (money,
+        /// tactics, the chosen eleven, the market, morale, the drama engine's memory and any unanswered
+        /// event). Anything the document does not carry falls back to <paramref name="setup"/>, which is
+        /// what a pre-v6 save does for all of it.
+        ///
+        /// <para><b>The continuation seed is the caller's to choose, and that is the whole design.</b>
+        /// Every match's rng comes from a mix of this seed with the fixture's identity, so the seed decides
+        /// the unplayed future. The core cannot invent one — <c>Application</c> may not read a clock, a
+        /// GUID, or any other ambient entropy (NON-NEGOTIABLE #2) — so it does not try: the game passes a
+        /// session-fresh number and gets football's uncertainty (the same tactics and the same eleven can
+        /// still lose), while a test passes a fixed one and gets an exactly reproducible run. Passing
+        /// <c>saved.MatchSeed</c> reproduces the save's own future, match for match, which is what
+        /// <c>RunSessionTests.Resume_FromACapturedRun_ContinuesTheSameFixturesExactly</c> pins.</para>
+        ///
+        /// <para><b>Consequence, accepted deliberately: this makes save-scumming possible.</b> Reload a
+        /// week you did not like on a fresh seed and the scoreline changes — before v6 it could not, because
+        /// the season seed came back out of the file. The owner chose that trade for the uncertainty it
+        /// buys; there is no anti-scum machinery here and none is wanted. What a reload does NOT hand back
+        /// is the drama budget, the cooldowns or the once-per-run marks: those are saved (v6), so the
+        /// scummed week is the same week, played again.</para>
+        ///
+        /// <para>Already-played results are history and cannot move — they are replayed into the table from
+        /// the document, not re-simulated. Only fixtures that have not been played diverge.</para>
         /// </summary>
-        public static Result<RunSession> Resume(RunSetup setup, RunBalance balance, SeasonSaveData saved)
+        public static Result<RunSession> Resume(RunSetup setup, RunBalance balance, SeasonSaveData saved, ulong continuationSeed)
         {
             if (saved == null)
             {
                 return Result<RunSession>.Failure("There is no saved run to resume.");
             }
 
-            RunSetup runSetup = setup ?? RunSetup.Default;
             RunBalance runBalance = Normalize(balance);
 
             RestoredSeason restored = new SeasonSaveMapper().Restore(saved);
@@ -76,12 +94,51 @@ namespace Gaffer.Application.Run
             // with the run's simulator and catalogs, from this same replayed history. The save adapter owns
             // no simulator (ARCHITECTURE §6), so it is not the mapper's job to produce a playable season.
             return Result<RunSession>.Success(new RunSession(
-                runSetup.WithSeed(saved.MatchSeed),
+                ResumedSetup(setup ?? RunSetup.Default, restored.Run, continuationSeed),
                 runBalance,
                 restored.League,
                 restored.SeasonNumber,
                 restored.PlayedRounds,
-                restored.PlayedResults));
+                restored.PlayedResults,
+                restored.Run));
+        }
+
+        /// <summary>
+        /// The setup a resumed run actually plays on: the save's own, on the caller's continuation seed,
+        /// with <paramref name="setup"/> filling only what the document does not know.
+        /// <para>
+        /// The overriding is the point of the change. These knobs — which club is managed, the board's
+        /// targets, how big the market is — are facts about THIS run, and re-reading them from a window's
+        /// input fields on every load is how a saved run came back managing a different club to a different
+        /// target. What still comes from <paramref name="setup"/> is what is not run state: the match
+        /// context (the stakes every fixture is played under, a balance setting), and the money and shape
+        /// for the one case the document cannot answer — a pre-v6 save.
+        /// </para>
+        /// <para>Formation and tactics are deliberately NOT filled in here even though
+        /// <c>RunSetup</c> carries them: <c>RunSession</c> reads the restored ones directly and falls back
+        /// to the setup's itself, so there is one fallback rather than two that could disagree.</para>
+        /// </summary>
+        private static RunSetup ResumedSetup(RunSetup setup, RunState restored, ulong continuationSeed)
+        {
+            RunSetupState saved = restored?.Setup;
+            if (saved == null)
+            {
+                return setup.WithSeed(continuationSeed);
+            }
+
+            return new RunSetup(
+                teamCount: saved.TeamCount,
+                seed: continuationSeed,
+                managedClubIndex: saved.ManagedClubIndex,
+                promotionPosition: saved.PromotionPosition,
+                survivalPosition: saved.SurvivalPosition,
+                startingCash: setup.StartingCash,
+                weeklyWageBudget: setup.WeeklyWageBudget,
+                marketSize: saved.MarketSize,
+                guaranteedGems: saved.GuaranteedGems,
+                formation: setup.Formation,
+                tactics: setup.Tactics,
+                matchContext: setup.MatchContext);
         }
 
         // The fallback chain for balance, applied once at the wiring seam rather than by every

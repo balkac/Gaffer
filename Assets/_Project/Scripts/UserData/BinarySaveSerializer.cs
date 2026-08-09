@@ -51,6 +51,32 @@ namespace Gaffer.UserData
     ///         traits          interned x traitCount
     /// resultCount      varint
     ///   per result: home int, away int, homeGoals int, awayGoals int
+    ///
+    /// --- container v2 only, the run block (schema v6) ---------------------------------------
+    /// runTag           varint   0 = no run block, 1 = one follows
+    ///   originalSeed   u64      the seed the world was generated from
+    ///   setupTag       varint   0 = absent, 1 = present
+    ///     managedClubIndex, teamCount, promotionPosition, survivalPosition,
+    ///     marketSize, guaranteedGems                          all int
+    ///   financesTag    varint   0 = absent, 1 = present
+    ///     cash, weeklyWageBudget, weeklyWageBill              all i64, fixed width
+    ///   tacticsTag     varint   0 = absent, 1 = present
+    ///     formationName  string
+    ///     slotTag        varint   0 = null list, else slotCount + 1
+    ///     slots          interned x slotCount   PlayerRole NAMES, pooled with the players'
+    ///     mentality, tempo, pressing, approach   interned      member NAMES
+    ///   elevenTag      varint   0 = null list, else slotCount + 1
+    ///     ids            int x slotCount        -1 for an empty slot
+    ///   marketTag      varint   0 = null list, else playerCount + 1
+    ///     players        the same player record as a squad's
+    ///   moraleTag      varint   0 = null list, else entryCount + 1
+    ///     per entry: playerId int, points f64, weeksLeft int
+    ///   dramaTag       varint   0 = absent, 1 = present
+    ///     week, lastFiredWeek, firedThisSeason                all int
+    ///     eventTag     varint   0 = null list, else eventCount + 1
+    ///       per event: id interned, lastFiredWeek int
+    ///     pendingEventId          interned   null when nothing is pending
+    ///     pendingSubjectPlayerId  int        -1 for a club-level event
     /// </code>
     ///
     /// <para>
@@ -87,8 +113,18 @@ namespace Gaffer.UserData
     /// </summary>
     public sealed class BinarySaveSerializer : ISerializer
     {
-        /// <summary>The container version this build WRITES — a fact about the documents it produces.</summary>
-        public const ushort CurrentContainerVersion = 1;
+        /// <summary>
+        /// The container version this build WRITES — a fact about the documents it produces.
+        /// <para>
+        /// v2 appends the run block. It is a CONTAINER change and not only a schema one, because a
+        /// positional format cannot skip a section it cannot see: the reader has to be told whether the
+        /// bytes are there, and that is what the version number is for. The two facts stay separate — the
+        /// section's CONTENT is schema v6 and <see cref="SaveMigrator"/> owns whether a document has it,
+        /// while the version here owns whether the FILE has room for it. A v1 container is read exactly as
+        /// before, its document arrives with no run block, and the v5 → v6 migration gives it one.
+        /// </para>
+        /// </summary>
+        public const ushort CurrentContainerVersion = 2;
 
         /// <summary>The oldest container version this build will READ. With
         /// <see cref="CurrentContainerVersion"/> this is the acceptance policy, the container-level twin of
@@ -160,6 +196,8 @@ namespace Gaffer.UserData
                     writer.WriteInt32(result.AwayGoals);
                 }
             }
+
+            WriteRun(writer, data.Run, attributeBuffer);
         }
 
         public Result<SeasonSaveData> Deserialize(Stream stream)
@@ -187,7 +225,7 @@ namespace Gaffer.UserData
                         + MinimumSupportedContainerVersion + ".." + CurrentContainerVersion + ".");
                 }
 
-                return Result<SeasonSaveData>.Success(ReadDocument(reader));
+                return Result<SeasonSaveData>.Success(ReadDocument(reader, containerVersion));
             }
             catch (MalformedSaveException e)
             {
@@ -252,6 +290,167 @@ namespace Gaffer.UserData
         }
 
         /// <summary>
+        /// The run block (container v2, schema v6). Every group is written behind its own tag, because
+        /// every group is independently optional in the document and the format has to carry the
+        /// DIFFERENCE between "empty" and "the save does not know" — that difference is what tells a resume
+        /// whether to keep a manager's empty shortlist or generate him a market.
+        /// </summary>
+        private static void WriteRun(SaveBinaryWriter writer, RunSaveData run, byte[] attributeBuffer)
+        {
+            if (run == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+                return;
+            }
+
+            writer.WriteVarUInt32(SaveBinaryPrimitives.PresentTag);
+            writer.WriteUInt64(run.OriginalSeed);
+
+            RunSetupSaveData setup = run.Setup;
+            if (setup == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+            }
+            else
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.PresentTag);
+                writer.WriteInt32(setup.ManagedClubIndex);
+                writer.WriteInt32(setup.TeamCount);
+                writer.WriteInt32(setup.PromotionPosition);
+                writer.WriteInt32(setup.SurvivalPosition);
+                writer.WriteInt32(setup.MarketSize);
+                writer.WriteInt32(setup.GuaranteedGems);
+            }
+
+            FinancesSaveData finances = run.Finances;
+            if (finances == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+            }
+            else
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.PresentTag);
+                writer.WriteInt64(finances.Cash);
+                writer.WriteInt64(finances.WeeklyWageBudget);
+                writer.WriteInt64(finances.WeeklyWageBill);
+            }
+
+            WriteTactics(writer, run.Tactics);
+
+            List<int> eleven = run.Eleven;
+            if (eleven == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+            }
+            else
+            {
+                writer.WriteVarUInt32((uint)eleven.Count + 1);
+                for (int i = 0; i < eleven.Count; i++)
+                {
+                    writer.WriteInt32(eleven[i]);
+                }
+            }
+
+            List<PlayerSaveData> market = run.Market;
+            if (market == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+            }
+            else
+            {
+                writer.WriteVarUInt32((uint)market.Count + 1);
+                for (int i = 0; i < market.Count; i++)
+                {
+                    WritePlayer(writer, market[i], attributeBuffer);
+                }
+            }
+
+            List<MoraleSaveData> morale = run.Morale;
+            if (morale == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+            }
+            else
+            {
+                writer.WriteVarUInt32((uint)morale.Count + 1);
+                for (int i = 0; i < morale.Count; i++)
+                {
+                    MoraleSaveData entry = morale[i];
+                    writer.WriteInt32(entry.PlayerId);
+                    writer.WriteDouble(entry.Points);
+                    writer.WriteInt32(entry.WeeksLeft);
+                }
+            }
+
+            WriteDrama(writer, run.Drama);
+        }
+
+        private static void WriteTactics(SaveBinaryWriter writer, TacticsSaveData tactics)
+        {
+            if (tactics == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+                return;
+            }
+
+            writer.WriteVarUInt32(SaveBinaryPrimitives.PresentTag);
+            writer.WriteString(tactics.FormationName);
+
+            List<string> slots = tactics.FormationSlots;
+            if (slots == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+            }
+            else
+            {
+                writer.WriteVarUInt32((uint)slots.Count + 1);
+                for (int i = 0; i < slots.Count; i++)
+                {
+                    // Interned: a shape's slot roles are the same twelve names the squad already put in
+                    // the pool, so a whole formation costs eleven bytes rather than eleven words.
+                    writer.WriteInternedString(slots[i]);
+                }
+            }
+
+            writer.WriteInternedString(tactics.Mentality);
+            writer.WriteInternedString(tactics.Tempo);
+            writer.WriteInternedString(tactics.Pressing);
+            writer.WriteInternedString(tactics.Approach);
+        }
+
+        private static void WriteDrama(SaveBinaryWriter writer, DramaSaveData drama)
+        {
+            if (drama == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+                return;
+            }
+
+            writer.WriteVarUInt32(SaveBinaryPrimitives.PresentTag);
+            writer.WriteInt32(drama.Week);
+            writer.WriteInt32(drama.LastFiredWeek);
+            writer.WriteInt32(drama.FiredThisSeason);
+
+            List<DramaEventSaveData> events = drama.Events;
+            if (events == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+            }
+            else
+            {
+                writer.WriteVarUInt32((uint)events.Count + 1);
+                for (int i = 0; i < events.Count; i++)
+                {
+                    writer.WriteInternedString(events[i].Id);
+                    writer.WriteInt32(events[i].LastFiredWeek);
+                }
+            }
+
+            writer.WriteInternedString(drama.PendingEventId);
+            writer.WriteInt32(drama.PendingSubjectPlayerId);
+        }
+
+        /// <summary>
         /// The 29 attributes as 29 raw bytes, in the order below. THIS ORDER IS WIRE FORMAT: unlike JSON,
         /// which named every member and so survived reordering, a positional block means moving a line here
         /// silently swaps two attributes on every player in every existing save. It is pinned byte-for-byte
@@ -302,7 +501,7 @@ namespace Gaffer.UserData
         /// <summary>Reads the document. The object initialisers below depend on C#'s left-to-right member
         /// evaluation: every member is a READ from the stream, so their source order IS the wire order and
         /// reordering a line silently reads the wrong field.</summary>
-        private static SeasonSaveData ReadDocument(SaveBinaryReader reader)
+        private static SeasonSaveData ReadDocument(SaveBinaryReader reader, ushort containerVersion)
         {
             var data = new SeasonSaveData
             {
@@ -335,10 +534,156 @@ namespace Gaffer.UserData
                 });
             }
 
+            // The additive branch the strictness posture describes, made concrete: a v1 container simply has
+            // no run section, so its document arrives without one and the v5 → v6 migration supplies the
+            // block. Nothing here guesses from the document's schema number — the FILE's layout is the
+            // container's business and the FIELDS are the schema's (ARCHITECTURE §11).
+            if (containerVersion >= 2)
+            {
+                data.Run = ReadRun(reader, attributeBuffer);
+            }
+
             // Trailing bytes are ignored on purpose — see the strictness posture on the class: a later
             // container may append sections, and an older build reading one must take the fields it knows
             // rather than refuse the file.
             return data;
+        }
+
+        private static RunSaveData ReadRun(SaveBinaryReader reader, byte[] attributeBuffer)
+        {
+            if (reader.ReadLength("run blocks") == SaveBinaryPrimitives.NullTag)
+            {
+                return null;
+            }
+
+            var run = new RunSaveData { OriginalSeed = reader.ReadUInt64() };
+
+            if (reader.ReadLength("run setups") != SaveBinaryPrimitives.NullTag)
+            {
+                run.Setup = new RunSetupSaveData
+                {
+                    ManagedClubIndex = reader.ReadInt32(),
+                    TeamCount = reader.ReadInt32(),
+                    PromotionPosition = reader.ReadInt32(),
+                    SurvivalPosition = reader.ReadInt32(),
+                    MarketSize = reader.ReadInt32(),
+                    GuaranteedGems = reader.ReadInt32(),
+                };
+            }
+
+            if (reader.ReadLength("finances") != SaveBinaryPrimitives.NullTag)
+            {
+                run.Finances = new FinancesSaveData
+                {
+                    Cash = reader.ReadInt64(),
+                    WeeklyWageBudget = reader.ReadInt64(),
+                    WeeklyWageBill = reader.ReadInt64(),
+                };
+            }
+
+            run.Tactics = ReadTactics(reader);
+
+            uint elevenTag = (uint)reader.ReadLength("lineup slots");
+            if (elevenTag != SaveBinaryPrimitives.NullTag)
+            {
+                int slots = (int)(elevenTag - 1);
+                run.Eleven = new List<int>(Math.Min(slots, MaxPresizedCapacity));
+                for (int i = 0; i < slots; i++)
+                {
+                    run.Eleven.Add(reader.ReadInt32());
+                }
+            }
+
+            uint marketTag = (uint)reader.ReadLength("market players");
+            if (marketTag != SaveBinaryPrimitives.NullTag)
+            {
+                int players = (int)(marketTag - 1);
+                run.Market = new List<PlayerSaveData>(Math.Min(players, MaxPresizedCapacity));
+                for (int i = 0; i < players; i++)
+                {
+                    run.Market.Add(ReadPlayer(reader, attributeBuffer));
+                }
+            }
+
+            uint moraleTag = (uint)reader.ReadLength("morale entries");
+            if (moraleTag != SaveBinaryPrimitives.NullTag)
+            {
+                int entries = (int)(moraleTag - 1);
+                run.Morale = new List<MoraleSaveData>(Math.Min(entries, MaxPresizedCapacity));
+                for (int i = 0; i < entries; i++)
+                {
+                    run.Morale.Add(new MoraleSaveData
+                    {
+                        PlayerId = reader.ReadInt32(),
+                        Points = reader.ReadDouble(),
+                        WeeksLeft = reader.ReadInt32(),
+                    });
+                }
+            }
+
+            run.Drama = ReadDrama(reader);
+            return run;
+        }
+
+        private static TacticsSaveData ReadTactics(SaveBinaryReader reader)
+        {
+            if (reader.ReadLength("tactical setups") == SaveBinaryPrimitives.NullTag)
+            {
+                return null;
+            }
+
+            var tactics = new TacticsSaveData { FormationName = reader.ReadString() };
+
+            uint slotTag = (uint)reader.ReadLength("formation slots");
+            if (slotTag != SaveBinaryPrimitives.NullTag)
+            {
+                int slots = (int)(slotTag - 1);
+                tactics.FormationSlots = new List<string>(Math.Min(slots, MaxPresizedCapacity));
+                for (int i = 0; i < slots; i++)
+                {
+                    tactics.FormationSlots.Add(reader.ReadInternedString());
+                }
+            }
+
+            tactics.Mentality = reader.ReadInternedString();
+            tactics.Tempo = reader.ReadInternedString();
+            tactics.Pressing = reader.ReadInternedString();
+            tactics.Approach = reader.ReadInternedString();
+            return tactics;
+        }
+
+        private static DramaSaveData ReadDrama(SaveBinaryReader reader)
+        {
+            if (reader.ReadLength("drama records") == SaveBinaryPrimitives.NullTag)
+            {
+                return null;
+            }
+
+            var drama = new DramaSaveData
+            {
+                Week = reader.ReadInt32(),
+                LastFiredWeek = reader.ReadInt32(),
+                FiredThisSeason = reader.ReadInt32(),
+            };
+
+            uint eventTag = (uint)reader.ReadLength("fired drama events");
+            if (eventTag != SaveBinaryPrimitives.NullTag)
+            {
+                int events = (int)(eventTag - 1);
+                drama.Events = new List<DramaEventSaveData>(Math.Min(events, MaxPresizedCapacity));
+                for (int i = 0; i < events; i++)
+                {
+                    drama.Events.Add(new DramaEventSaveData
+                    {
+                        Id = reader.ReadInternedString(),
+                        LastFiredWeek = reader.ReadInt32(),
+                    });
+                }
+            }
+
+            drama.PendingEventId = reader.ReadInternedString();
+            drama.PendingSubjectPlayerId = reader.ReadInt32();
+            return drama;
         }
 
         private static ClubSaveData ReadClub(SaveBinaryReader reader, byte[] attributeBuffer)

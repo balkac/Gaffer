@@ -8,6 +8,7 @@ using Gaffer.Application.Simulation;
 using Gaffer.Application.Transfers;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
+using Gaffer.Domain.Drama;
 using Gaffer.Domain.Leagues;
 using Gaffer.Domain.Players;
 using Gaffer.Domain.Traits;
@@ -34,7 +35,10 @@ namespace Gaffer.Application.Run
     ///
     /// <para>Deterministic: the same <see cref="RunSetup.Seed"/> and the same commands reproduce the run,
     /// match for match (NON-NEGOTIABLE #2). Match streams, world generation, the market and drama each
-    /// derive their own stream from the seed, so a change in one cannot perturb another.</para>
+    /// derive their own stream from the seed, so a change in one cannot perturb another. The run never
+    /// invents a seed — it cannot read a clock or a GUID, and it does not want to; a resume plays on
+    /// whatever seed its caller hands <see cref="RunSessionFactory.Resume"/>, which is what lets the game
+    /// re-roll the future while a test replays it exactly.</para>
     /// </summary>
     public sealed class RunSession
     {
@@ -59,6 +63,7 @@ namespace Gaffer.Application.Run
         private readonly BoardTarget _target;
         private readonly MatchContext _context;
         private readonly ClubId _managedClub;
+        private readonly ulong _originalSeed;
 
         private League _league;
         private LeagueSeason _season;
@@ -75,13 +80,24 @@ namespace Gaffer.Application.Run
         /// Built through <see cref="RunSessionFactory"/> only — one wiring seam for the whole graph, so
         /// two callers cannot guess at it differently (ARCHITECTURE §6). <paramref name="playedRounds"/>
         /// and <paramref name="playedResults"/> resume a season part-way through; zero and null start one.
+        ///
+        /// <para><paramref name="restored"/> is the rest of the run a save carries (v6) — money, tactics,
+        /// the eleven, the market, morale, drama — and null starts one. THIS IS THE ONE PLACE THAT DECIDES
+        /// WHAT AN ABSENT PIECE MEANS: each fallback below is written once, so a save without a market and
+        /// a fresh run take the same path to having one, and the save adapter never has to invent a value
+        /// to hand over.</para>
         /// </summary>
-        internal RunSession(RunSetup setup, RunBalance balance, League league, int seasonNumber, int playedRounds, IReadOnlyList<MatchResult> playedResults)
+        internal RunSession(RunSetup setup, RunBalance balance, League league, int seasonNumber, int playedRounds, IReadOnlyList<MatchResult> playedResults, RunState restored)
         {
             _setup = setup;
             _balance = balance;
             _league = league;
             _seasonNumber = seasonNumber < 1 ? 1 : seasonNumber;
+
+            // The seed the world was generated from, carried forward across every resume. It is NOT what
+            // the coming weeks are played on — see the note on RunSessionFactory.Resume — so nothing in the
+            // sim reads it; it exists so a run stays reproducible from its save for a bug report.
+            _originalSeed = restored != null ? restored.OriginalSeed : setup.Seed;
 
             _simulator = new MatchSimulator(
                 new PoissonChanceGenerator(balance.Simulation),
@@ -97,19 +113,41 @@ namespace Gaffer.Application.Run
             _context = setup.MatchContext;
             _target = new BoardTarget(setup.PromotionPosition, setup.SurvivalPosition);
             _managedClub = new ClubId(Clamp(setup.ManagedClubIndex, 0, league.Clubs.Count - 1));
-            _formation = setup.Formation;
-            _tactics = setup.Tactics;
+            _formation = restored?.Formation ?? setup.Formation;
+            _tactics = restored?.Tactics ?? setup.Tactics;
 
             _season = NewSeason(league, playedRounds, playedResults);
-            _finances = new Finances(setup.StartingCash, setup.WeeklyWageBudget, TotalWages(ManagedSquad()));
-            _market = GenerateMarket();
+            RestoreMorale(restored);
+            _finances = restored?.Finances ?? new Finances(setup.StartingCash, setup.WeeklyWageBudget, TotalWages(ManagedSquad()));
+            _market = restored?.Market != null ? new List<Player>(restored.Market) : GenerateMarket();
+
+            // Auto-pick first even when a sheet is being restored: it is what binds the shape and tactics
+            // onto the season and fills any slot the saved sheet cannot name, so a restored eleven is a
+            // correction to a complete team sheet rather than the only thing standing between the run and
+            // an empty one.
             AutoPickAndBind();
+            RestoreEleven(restored);
+            RestoreDrama(restored);
             CheckComplete();
         }
 
         // ----- Queries: the read model a view renders from ---------------------------------------------
 
         public int SeasonNumber => _seasonNumber;
+
+        /// <summary>
+        /// The seed the coming weeks are derived from — the run's own seed at Start, and the CONTINUATION
+        /// seed the caller chose at Resume. A save writes it to <c>SeasonSaveData.MatchSeed</c>, so handing
+        /// it back to <see cref="RunSessionFactory.Resume"/> replays the same future exactly.
+        /// </summary>
+        public ulong Seed => _setup.Seed;
+
+        /// <summary>
+        /// The seed this run's WORLD was generated from. It survives every resume unchanged, and nothing in
+        /// the simulation reads it — it is the number a bug report needs to rebuild the run from nothing,
+        /// which is worth keeping even though the game never replays a run that way.
+        /// </summary>
+        public ulong OriginalSeed => _originalSeed;
 
         /// <summary>Rounds played so far this season — the week the run is on.</summary>
         public int PlayedRounds => _season.CurrentRound;
@@ -262,7 +300,45 @@ namespace Gaffer.Application.Run
         public SeasonSaveData Capture()
         {
             SyncLeague();
-            return new SeasonSaveMapper().Capture(_league, _season, _setup.Seed, _seasonNumber);
+            return new SeasonSaveMapper().Capture(_league, _season, _setup.Seed, _seasonNumber, CaptureRun());
+        }
+
+        // Everything the season document does not hold: the money, the manager's own decisions, the market
+        // he is looking at, the morale his answers left behind, and the drama engine's memory. Domain types
+        // out — turning them into a document is the mapper's job, not the run's (ARCHITECTURE §5).
+        private RunState CaptureRun()
+        {
+            return new RunState(
+                originalSeed: _originalSeed,
+                setup: new RunSetupState(
+                    // The index the run SETTLED on, not the raw setup number: it was clamped into the
+                    // league at construction, and saving the unclamped one would resume a different club.
+                    managedClubIndex: _managedClub.Value,
+                    teamCount: _league.Clubs.Count,
+                    promotionPosition: _setup.PromotionPosition,
+                    survivalPosition: _setup.SurvivalPosition,
+                    marketSize: _setup.MarketSize,
+                    guaranteedGems: _setup.GuaranteedGems),
+                finances: _finances,
+                formation: _formation,
+                tactics: _tactics,
+                eleven: SlotIds(),
+                market: _market,
+                morale: _season.Morale.CaptureEntries(),
+                drama: _drama.CaptureState(),
+                pendingEvent: _pending != null ? _pending.Event.Id : default,
+                pendingSubjectPlayerId: _pending?.Subject != null ? _pending.Subject.Id.Value : RunSaveData.NoPlayer);
+        }
+
+        private int[] SlotIds()
+        {
+            var ids = new int[_slots.Length];
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                ids[i] = _slots[i] != null ? _slots[i].Id.Value : RunSaveData.NoPlayer;
+            }
+
+            return ids;
         }
 
         // ----- Commands --------------------------------------------------------------------------------
@@ -816,6 +892,98 @@ namespace Gaffer.Application.Run
             return new Player(player.Id, player.Name, player.Nationality, player.Role, player.Age, player.Attributes, player.HiddenPotential, traits);
         }
 
+        // ----- Resuming a saved run ----------------------------------------------------------------------
+
+        // Each of these is a no-op when the save did not carry that piece, which is what makes an absent
+        // group in the document mean "leave it as a fresh run would have it" (see the constructor).
+
+        private void RestoreMorale(RunState restored)
+        {
+            IReadOnlyList<MoraleEntry> morale = restored?.Morale;
+            if (morale == null)
+            {
+                return;
+            }
+
+            // Applied rather than injected: an entry's REMAINING weeks is a duration from where the run
+            // now stands, so the ordinary Apply is the exact inverse of the capture and there is no second
+            // way into the ledger to keep in step with it.
+            for (int i = 0; i < morale.Count; i++)
+            {
+                MoraleEntry entry = morale[i];
+                _season.Morale.Apply(entry.Player, entry.Points, entry.WeeksLeft);
+            }
+        }
+
+        // A saved sheet names players by id, so a squad that has changed underneath the save degrades one
+        // slot at a time: an id nobody carries leaves that slot empty rather than refusing the run.
+        private void RestoreEleven(RunState restored)
+        {
+            IReadOnlyList<int> eleven = restored?.Eleven;
+            if (eleven == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                _slots[i] = i < eleven.Count && eleven[i] != RunSaveData.NoPlayer
+                    ? FindInSquad(new PlayerId(eleven[i]))
+                    : null;
+            }
+
+            BindStarters();
+        }
+
+        private void RestoreDrama(RunState restored)
+        {
+            if (restored == null)
+            {
+                return;
+            }
+
+            _drama.RestoreState(restored.Drama);
+            _pending = RestorePending(restored);
+        }
+
+        // The unanswered event, rebuilt against the live catalog and the live squad. Only the event's id
+        // and its subject are saved: everything else a PendingDrama holds is this week's context, and every
+        // part of that — the room, the eleven, the position, the streak, the window — is already restored
+        // above, so storing it would be storing a derivation.
+        //
+        // Tolerant (ARCHITECTURE §11): an event the catalog no longer defines, or a subject who is no
+        // longer at the club, clears the block instead of failing the load. The manager loses a decision he
+        // never got to make; the alternative is a run that cannot be opened.
+        private PendingDrama RestorePending(RunState restored)
+        {
+            if (string.IsNullOrEmpty(restored.PendingEvent.Value))
+            {
+                return null;
+            }
+
+            DramaEvent raised = _balance.DramaEvents.Find(restored.PendingEvent);
+            if (raised == null)
+            {
+                return null;
+            }
+
+            Squad squad = ManagedSquad();
+            if (squad == null)
+            {
+                return null;
+            }
+
+            Player subject = restored.PendingSubjectPlayerId == RunSaveData.NoPlayer
+                ? null
+                : FindInSquad(new PlayerId(restored.PendingSubjectPlayerId));
+            if (raised.RequiresSubject && subject == null)
+            {
+                return null;
+            }
+
+            return new PendingDrama(raised, subject, DramaContext(squad));
+        }
+
         // ----- Lineup ownership ------------------------------------------------------------------------
 
         // Re-picks the best eleven for the current formation and binds shape, sheet and tactics onto the
@@ -944,14 +1112,20 @@ namespace Gaffer.Application.Run
                 return;
             }
 
-            var context = new DramaWeekContext(
+            _pending = _drama.TickWeek(DramaContext(squad), new SplitMix64RandomNumberGenerator(DramaSeed()));
+        }
+
+        // This week's state as the drama layer sees it. Shared with the resume path, which rebuilds a saved
+        // pending event's context rather than storing it — one definition of "what this week looks like",
+        // so a restored decision cannot be answered against a different room than a fresh one.
+        private DramaWeekContext DramaContext(Squad squad)
+        {
+            return new DramaWeekContext(
                 squad.Players,
                 StartersList(),
                 TablePosition,
                 LossStreak,
                 IsWindowOpen);
-
-            _pending = _drama.TickWeek(context, new SplitMix64RandomNumberGenerator(DramaSeed()));
         }
 
         // A well-distributed per-run, per-season, per-week seed, mixed apart from every match stream so

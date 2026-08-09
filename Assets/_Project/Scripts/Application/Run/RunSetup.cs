@@ -11,6 +11,14 @@ namespace Gaffer.Application.Run
     /// it. The scalar defaults live in the constructor signature and are baked into every calling assembly
     /// at compile time, so a changed default needs a full recompile before it is live everywhere (see
     /// <c>SettingsDefaultContractTests</c>).
+    /// <para>
+    /// IT SETS A RUN UP; IT DOES NOT DESCRIBE ONE. From schema v6 a save carries the run's own managed
+    /// club, board targets, market size, money, shape and tactics, so
+    /// <see cref="RunSessionFactory.Resume"/> reads those from the document and this type answers only for
+    /// what a save cannot — the <see cref="MatchContext"/> — plus everything at all for a pre-v6 document.
+    /// A window that edits <see cref="StartingCash"/> and then loads a run no longer moves that run's
+    /// money, which was the bug.
+    /// </para>
     /// </summary>
     public sealed class RunSetup
     {
@@ -91,10 +99,11 @@ namespace Gaffer.Application.Run
         public static RunSetup Default { get; } = new RunSetup();
 
         /// <summary>
-        /// This setup on a different seed. Resuming a save uses it: the run must continue on the seed the
-        /// save was written with, or the remaining fixtures diverge from the run being resumed, however
-        /// the caller's own seed field has been edited since. Copies every member — a new one added above
-        /// belongs here too.
+        /// This setup on a different seed. What resuming a PRE-v6 save uses: such a document carries no
+        /// setup of its own, so the caller's stands and only the seed is replaced — with the continuation
+        /// seed, not the save's, since from v6 the caller chooses what the unplayed future is played on
+        /// (<see cref="RunSessionFactory.Resume"/>). A v6 save brings its own setup and does not come
+        /// through here. Copies every member — a new one added above belongs here too.
         /// </summary>
         public RunSetup WithSeed(ulong seed)
         {

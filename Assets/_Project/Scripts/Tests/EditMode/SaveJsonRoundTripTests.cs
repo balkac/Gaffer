@@ -77,6 +77,26 @@ namespace Gaffer.Tests
         }
 
         [Test]
+        public void JsonRoundTrip_CarriesTheV6RunBlock()
+        {
+            // The legacy codec is also the readable format for a save pasted into a bug report, so the run
+            // block has to survive it — and the nested groups are exactly the shape a serializer is most
+            // likely to flatten or drop.
+            RunSaveData back = Read(Write(Sample())).Run;
+
+            Assert.That(back.OriginalSeed, Is.EqualTo(0x0BADC0DE01UL));
+            Assert.That(back.Setup.ManagedClubIndex, Is.EqualTo(1));
+            Assert.That(back.Finances.Cash, Is.EqualTo(1_250_000L));
+            Assert.That(back.Tactics.Mentality, Is.EqualTo("Attacking"));
+            Assert.That(back.Tactics.FormationSlots.Count, Is.EqualTo(11));
+            Assert.That(back.Eleven[4], Is.EqualTo(-1), "the empty-slot sentinel is a number, not an absence");
+            Assert.That(back.Market[0].Name, Is.EqualTo("Ivo Larkin"));
+            Assert.That(back.Morale[0].Points, Is.EqualTo(-3.5).Within(1e-9));
+            Assert.That(back.Drama.PendingEventId, Is.EqualTo("night-club-scandal"));
+            Assert.That(back.Drama.Events[1].Id, Is.EqualTo("club-takeover"));
+        }
+
+        [Test]
         public void JsonRoundTrip_ThenMapper_RebuildsTheLeagueFaithfully()
         {
             SeasonSaveData original = Sample();

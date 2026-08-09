@@ -89,6 +89,29 @@ namespace Gaffer.Application.Drama
             return 1.0 + (_settings.RatingPerPoint * PointsOf(id));
         }
 
+        /// <summary>
+        /// Every live entry, for a save (schema v6). Points AND the weeks each has LEFT, because that is
+        /// what a resume has to put back: an entry restored at its original duration would let a wound
+        /// outlive the run that caused it. Allocates a fresh list — this runs once per save, not per week,
+        /// so the ledger's allocation-free tick (PERFORMANCE §8) is not what is being measured here.
+        /// <para>Restoring is <see cref="Apply"/> once per entry: an entry's remaining weeks IS a duration
+        /// from where the run stands, so there is no second code path to keep in step with this one.</para>
+        /// </summary>
+        public IReadOnlyList<MoraleEntry> CaptureEntries()
+        {
+            var captured = new List<MoraleEntry>(_entries.Count);
+            foreach (KeyValuePair<PlayerId, List<Entry>> pair in _entries)
+            {
+                List<Entry> list = pair.Value;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    captured.Add(new MoraleEntry(pair.Key, list[i].Points, list[i].WeeksLeft));
+                }
+            }
+
+            return captured;
+        }
+
         /// <summary>Ages every entry a week and drops the expired — call once per played round.</summary>
         public void TickWeek()
         {

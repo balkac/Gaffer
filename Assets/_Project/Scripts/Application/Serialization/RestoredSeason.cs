@@ -22,11 +22,17 @@ namespace Gaffer.Application.Serialization
     public sealed class RestoredSeason
     {
         public RestoredSeason(League league, int seasonNumber, int playedRounds, IReadOnlyList<MatchResult> playedResults)
+            : this(league, seasonNumber, playedRounds, playedResults, null)
+        {
+        }
+
+        public RestoredSeason(League league, int seasonNumber, int playedRounds, IReadOnlyList<MatchResult> playedResults, RunState run)
         {
             League = league;
             SeasonNumber = seasonNumber;
             PlayedRounds = playedRounds;
             PlayedResults = playedResults;
+            Run = run;
         }
 
         public League League { get; }
@@ -38,5 +44,13 @@ namespace Gaffer.Application.Serialization
 
         /// <summary>The results already played, in the order they were played, to replay into the table.</summary>
         public IReadOnlyList<MatchResult> PlayedResults { get; }
+
+        /// <summary>
+        /// The run around the season (v6): money, tactics, the eleven, morale, drama and the market. Null
+        /// when the document carried no run block — a pre-v6 save read without going through
+        /// <see cref="SaveMigrator"/>. It rides along here rather than in a second call because a save is
+        /// one document and reading it twice is how two readers come to disagree about it.
+        /// </summary>
+        public RunState Run { get; }
     }
 }

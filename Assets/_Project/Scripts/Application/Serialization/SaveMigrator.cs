@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Gaffer.Common;
 using Gaffer.Domain.Players;
 
@@ -37,6 +38,11 @@ namespace Gaffer.Application.Serialization
                 {
                     return Result<SeasonSaveData>.Failure(step.Error);
                 }
+            }
+
+            if (data.SchemaVersion < 6)
+            {
+                MigrateToV6(data);
             }
 
             // Validation of the current shape, after the chain: a v5 document written by this build is only
@@ -98,6 +104,34 @@ namespace Gaffer.Application.Serialization
             return Result.Success();
         }
 
+        /// <summary>
+        /// v5 → v6: the document gains a <see cref="RunSaveData"/> block.
+        /// <para>
+        /// It fills ONE field and invents nothing else, which is the whole discipline of the step. A v5
+        /// document holds exactly one fact about the run as a run — its
+        /// <see cref="SeasonSaveData.MatchSeed"/> — and that fact IS the original seed, because before v6
+        /// nothing ever re-rolled it: the seed a v5 save was playing on is the seed its world was generated
+        /// from. Everything else the block can carry (the money, the tactics, the eleven, the market, the
+        /// morale, the drama memory, the setup) was never written down, so the step leaves each group
+        /// absent rather than guessing at it — and an absent group means "fall back to the caller's setup
+        /// or start fresh", which is precisely what a v5 load already did. The result: a v5 save resumes
+        /// with exactly the behaviour it has today, and no field quietly changes meaning on the way.
+        /// </para>
+        /// <para>
+        /// Total, not a <c>Result</c>: there is no v5 document this can refuse. Idempotent by
+        /// construction — a document that already has a block keeps it.
+        /// </para>
+        /// </summary>
+        private static void MigrateToV6(SeasonSaveData data)
+        {
+            if (data.Run != null)
+            {
+                return;
+            }
+
+            data.Run = new RunSaveData { OriginalSeed = data.MatchSeed };
+        }
+
         /// <summary>Every role name in the document must resolve to a defined member. An unparseable one is an
         /// expected failure of the load (the file is corrupt, or was written by a build that knew a role this
         /// one does not), surfaced as a <see cref="Result"/> so the caller can fall back — never a silent
@@ -111,13 +145,33 @@ namespace Gaffer.Application.Serialization
                     continue;
                 }
 
-                foreach (PlayerSaveData player in club.Squad)
+                Result squad = ValidateRoleNames(club.Squad, $"club {club.Id}");
+                if (squad.IsFailure)
                 {
-                    if (!PersistedPlayerRole.TryParse(player.RoleName, out PlayerRole _))
-                    {
-                        return Result.Failure(
-                            $"Save has an unknown role '{player.RoleName}' for player {player.Id} ('{player.Name}').");
-                    }
+                    return squad;
+                }
+            }
+
+            // The v6 market is a roster like any other, and it reaches the same mapper — so it passes the
+            // same gate. Without this a hand-edited prospect would sail past migration and throw inside
+            // Restore, which is the one place a bad file must never be able to reach (see
+            // SeasonSaveMapper.ReadRole).
+            if (data.Run?.Market != null)
+            {
+                return ValidateRoleNames(data.Run.Market, "the market");
+            }
+
+            return Result.Success();
+        }
+
+        private static Result ValidateRoleNames(List<PlayerSaveData> players, string where)
+        {
+            foreach (PlayerSaveData player in players)
+            {
+                if (!PersistedPlayerRole.TryParse(player.RoleName, out PlayerRole _))
+                {
+                    return Result.Failure(
+                        $"Save has an unknown role '{player.RoleName}' for player {player.Id} ('{player.Name}') in {where}.");
                 }
             }
 

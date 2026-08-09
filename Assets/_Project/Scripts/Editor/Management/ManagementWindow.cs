@@ -436,9 +436,11 @@ namespace Gaffer.Editor.Management
             Refresh();
         }
 
-        // Reads the run back and resumes it on the save's own match seed. Finances, the market and drama state
-        // are not persisted yet (decision #18), so the session re-seeds them from the setup — the run state
-        // (rosters, table, season number) is what survives a reload.
+        // Reads the run back and resumes it on a SESSION-FRESH seed, so the unplayed fixtures are not the
+        // ones the save was heading for — the same eleven can lose the match it won before the reload
+        // (RunSessionFactory.Resume documents the trade, including that this makes save-scumming possible).
+        // The run itself — money, tactics, the team sheet, the market, morale, drama — comes out of the
+        // document from schema v6, not out of this window's fields.
         private void LoadRun()
         {
             Result<SeasonSaveData> loaded = SaveStore().Load(SavePath);
@@ -457,7 +459,8 @@ namespace Gaffer.Editor.Management
                 return;
             }
 
-            Result<RunSession> resumed = RunSessionFactory.Resume(Setup(), balance.Value, loaded.Value);
+            Result<RunSession> resumed = RunSessionFactory.Resume(
+                Setup(), balance.Value, loaded.Value, Gaffer.Infrastructure.Persistence.ContinuationSeed.Fresh());
             if (resumed.IsFailure)
             {
                 _saveStatus = resumed.Error;
@@ -465,7 +468,11 @@ namespace Gaffer.Editor.Management
                 return;
             }
 
-            Adopt(resumed.Value, "Loaded run from " + SavePath);
+            // The two seeds, printed because they are what a bug report needs: the original one rebuilds
+            // this world from nothing, and the continuation one replays the future this load just rolled.
+            // Pass the second back to Resume and the same weeks come out again.
+            Adopt(resumed.Value, "Loaded run from " + SavePath +
+                " (world seed " + resumed.Value.OriginalSeed + ", continuing on " + resumed.Value.Seed + ")");
         }
 
         private static JsonSaveStore SaveStore()

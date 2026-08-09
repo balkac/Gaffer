@@ -303,9 +303,10 @@ namespace Gaffer.Editor.SeasonPlayer
             Refresh();
         }
 
-        // Reads the run back, migrates it to the current schema, and resumes it on the save's own match seed.
-        // Formation, tactics, the economy and drama state are session settings, not saved, so they come from
-        // the setup — the run state (rosters, table, season number) is what persists.
+        // Reads the run back, migrates it to the current schema, and resumes it on a SESSION-FRESH seed, so
+        // the unplayed fixtures diverge from the ones the save was heading for (RunSessionFactory.Resume
+        // documents that trade). Formation, tactics, the money, the market, morale and drama all come out
+        // of the document from schema v6; only what a save cannot know still comes from the setup.
         private void LoadRun()
         {
             Result<SeasonSaveData> loaded = SaveStore().Load(SavePath);
@@ -316,7 +317,8 @@ namespace Gaffer.Editor.SeasonPlayer
                 return;
             }
 
-            Result<RunSession> resumed = RunSessionFactory.Resume(Setup(), Balance(), loaded.Value);
+            Result<RunSession> resumed = RunSessionFactory.Resume(
+                Setup(), Balance(), loaded.Value, Gaffer.Infrastructure.Persistence.ContinuationSeed.Fresh());
             if (resumed.IsFailure)
             {
                 _saveStatus = resumed.Error;
@@ -324,7 +326,10 @@ namespace Gaffer.Editor.SeasonPlayer
                 return;
             }
 
-            Adopt(resumed.Value, "Loaded run from " + SavePath);
+            // Both seeds, for the same reason the Management window prints them: the original rebuilds this
+            // world from nothing, the continuation one replays exactly the future this load just rolled.
+            Adopt(resumed.Value, "Loaded run from " + SavePath +
+                " (world seed " + resumed.Value.OriginalSeed + ", continuing on " + resumed.Value.Seed + ")");
         }
 
         private static JsonSaveStore SaveStore()

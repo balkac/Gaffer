@@ -1,4 +1,5 @@
 using System;
+using Gaffer.Application.Simulation;
 using Gaffer.Domain.Drama;
 using Gaffer.Domain.Players;
 using Gaffer.Domain.Traits;
@@ -51,6 +52,83 @@ namespace Gaffer.Tests
             Assert.That((int)Position.Forward, Is.EqualTo(3));
 
             AssertNoMemberWasAddedUnpinned(typeof(Position), 4);
+        }
+
+        /// <summary>
+        /// The four tactical axes cross the save boundary from schema v6, BY NAME
+        /// (<c>PersistedEnum</c>) — so what a save contains is <c>"VeryAttacking"</c>, and the numbers
+        /// below are not themselves the wire format. They are pinned anyway, for two reasons that are
+        /// specific rather than ceremonial: the SCALES the sim reads are arithmetic ON the ordinals
+        /// (<c>MentalityScale</c> is <c>(int)Mentality - (int)Balanced</c>), so a reordered member silently
+        /// re-balances every match rather than merely re-labelling a dropdown; and the count check is what
+        /// catches a member appended without a thought for the saves that will meet it. If a member is ever
+        /// added, APPEND it — the neutral value must keep its place in the middle for the scales to hold.
+        /// </summary>
+        [Test]
+        public void TacticalAxes_MemberValues_ArePinned()
+        {
+            Assert.That((int)Mentality.VeryDefensive, Is.EqualTo(0));
+            Assert.That((int)Mentality.Defensive, Is.EqualTo(1));
+            Assert.That((int)Mentality.Balanced, Is.EqualTo(2));
+            Assert.That((int)Mentality.Attacking, Is.EqualTo(3));
+            Assert.That((int)Mentality.VeryAttacking, Is.EqualTo(4));
+            AssertNoMemberWasAddedUnpinned(typeof(Mentality), 5);
+
+            Assert.That((int)Tempo.Patient, Is.EqualTo(0));
+            Assert.That((int)Tempo.Standard, Is.EqualTo(1));
+            Assert.That((int)Tempo.Intense, Is.EqualTo(2));
+            AssertNoMemberWasAddedUnpinned(typeof(Tempo), 3);
+
+            Assert.That((int)Pressing.Contain, Is.EqualTo(0));
+            Assert.That((int)Pressing.Standard, Is.EqualTo(1));
+            Assert.That((int)Pressing.Press, Is.EqualTo(2));
+            AssertNoMemberWasAddedUnpinned(typeof(Pressing), 3);
+
+            Assert.That((int)Approach.Possession, Is.EqualTo(0));
+            Assert.That((int)Approach.Balanced, Is.EqualTo(1));
+            Assert.That((int)Approach.Counter, Is.EqualTo(2));
+            AssertNoMemberWasAddedUnpinned(typeof(Approach), 3);
+        }
+
+        /// <summary>
+        /// The names themselves, which from v6 ARE the wire format for these four. Spelled out as literals
+        /// so that renaming a member fails here — at the commit that renames it — instead of on a player's
+        /// device, where the axis would quietly read back as the neutral value.
+        /// </summary>
+        [Test]
+        public void TacticalAxes_MemberNames_AreTheSaveContract()
+        {
+            Assert.That(Names(typeof(Mentality)), Is.EqualTo(
+                new[] { "VeryDefensive", "Defensive", "Balanced", "Attacking", "VeryAttacking" }));
+            Assert.That(Names(typeof(Tempo)), Is.EqualTo(new[] { "Patient", "Standard", "Intense" }));
+            Assert.That(Names(typeof(Pressing)), Is.EqualTo(new[] { "Contain", "Standard", "Press" }));
+            Assert.That(Names(typeof(Approach)), Is.EqualTo(new[] { "Possession", "Balanced", "Counter" }));
+        }
+
+        /// <summary>
+        /// And <c>PlayerRole</c>'s names, for the same reason twice over: they are the save contract for a
+        /// player's role (v5) AND, from v6, for every slot of a saved formation.
+        /// </summary>
+        [Test]
+        public void PlayerRole_MemberNames_AreTheSaveContract()
+        {
+            Assert.That(Names(typeof(PlayerRole)), Is.EqualTo(new[]
+            {
+                "Goalkeeper", "RightBack", "CentreBack", "LeftBack", "DefensiveMidfield", "CentralMidfield",
+                "AttackingMidfield", "RightMidfield", "LeftMidfield", "RightWing", "LeftWing", "Striker",
+            }));
+        }
+
+        private static string[] Names(Type enumType)
+        {
+            Array values = Enum.GetValues(enumType);
+            var names = new string[values.Length];
+            for (int i = 0; i < values.Length; i++)
+            {
+                names[i] = values.GetValue(i).ToString();
+            }
+
+            return names;
         }
 
         [Test]

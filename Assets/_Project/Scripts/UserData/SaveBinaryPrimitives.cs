@@ -33,6 +33,12 @@ namespace Gaffer.UserData
         /// trait-less player's list, a string the document does not carry).</summary>
         internal const uint NullTag = 0;
 
+        /// <summary>Present, for an optional SECTION rather than an optional value: the record that follows
+        /// is there. Deliberately the same number as <see cref="NewInternedTag"/> and for the same reason a
+        /// list's "count + 1" encoding works — 0 is reserved for absence, so 1 is the first thing anything
+        /// else can mean. Container v2's run block is a nest of these.</summary>
+        internal const uint PresentTag = 1;
+
         /// <summary>An interned string that appears here for the FIRST time: its bytes follow inline and it
         /// is appended to the file's string pool. Every later occurrence is <c>PoolBase + index</c>.</summary>
         internal const uint NewInternedTag = 1;

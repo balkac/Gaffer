@@ -89,6 +89,15 @@ namespace Gaffer.UserData
             }
         }
 
+        /// <summary>A signed 64-bit value as its unchecked <c>ulong</c> reinterpretation — fixed eight bytes.
+        /// Fixed rather than varint because the money it carries is routinely in the millions, where a
+        /// varint costs four to five bytes anyway, and because there are three of them PER SAVE rather than
+        /// per player: 24 bytes on a whole file is not where a size budget is spent.</summary>
+        internal void WriteInt64(long value)
+        {
+            WriteUInt64(unchecked((ulong)value));
+        }
+
         /// <summary>IEEE-754 bits, little-endian. Writing the BITS rather than a formatted number is what
         /// keeps a strength exact across a round trip and independent of the device's culture.</summary>
         internal void WriteDouble(double value)

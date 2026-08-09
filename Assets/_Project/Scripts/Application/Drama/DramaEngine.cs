@@ -64,6 +64,55 @@ namespace Gaffer.Application.Drama
         }
 
         /// <summary>
+        /// The engine's memory as data, for a save (schema v6). Everything that makes drama rare is in
+        /// here; nothing that is balance or catalog is, because config is not serialized and definitions
+        /// rebind by id on load (TDD §10).
+        /// </summary>
+        public DramaEngineState CaptureState()
+        {
+            var marks = new List<DramaEventMark>(_lastFiredWeek.Count);
+            foreach (KeyValuePair<DramaEventId, int> fired in _lastFiredWeek)
+            {
+                marks.Add(new DramaEventMark(fired.Key, fired.Value));
+            }
+
+            return new DramaEngineState(_week, _lastFiredAnyWeek, _firedThisSeason, marks);
+        }
+
+        /// <summary>
+        /// Puts a saved memory back, replacing whatever this engine had. An id the current catalog no
+        /// longer defines is kept rather than dropped — the mark costs one dictionary entry, and dropping
+        /// it would silently clear the cooldown of an event a later build (or a re-enabled asset) brings
+        /// back. That is the tolerant posture save data takes (ARCHITECTURE §11); it is the opposite of
+        /// what <see cref="DramaCatalog.ValidateAgainst"/> does to authored content, and both are correct.
+        /// </summary>
+        public void RestoreState(DramaEngineState state)
+        {
+            if (state == null)
+            {
+                return;
+            }
+
+            _lastFiredWeek.Clear();
+            _firedEver.Clear();
+
+            IReadOnlyList<DramaEventMark> marks = state.Events;
+            if (marks != null)
+            {
+                for (int i = 0; i < marks.Count; i++)
+                {
+                    DramaEventMark mark = marks[i];
+                    _lastFiredWeek[mark.Event] = mark.LastFiredWeek;
+                    _firedEver.Add(mark.Event);
+                }
+            }
+
+            _week = state.Week;
+            _lastFiredAnyWeek = state.LastFiredWeek;
+            _firedThisSeason = state.FiredThisSeason;
+        }
+
+        /// <summary>
         /// Advances the engine one week and maybe raises an event. Null means a quiet week — by
         /// design the common case. The rng draw order is fixed (fire roll, then the event pick, then
         /// the subject pick for an event that needs one), so a seeded stream reproduces the same drama.
