@@ -41,6 +41,26 @@ namespace Gaffer.Infrastructure.Configuration
         [Range(1, 99)] [SerializeField] private byte attributeFloor = 25;
         [Range(1, 99)] [SerializeField] private byte physicalFloor = 15;
 
+        [Header("In-season development — how often careers move, and what minutes are worth")]
+        [Tooltip("Match weeks between development ticks. 1 is every week: finer, but a week's growth is " +
+                 "under a whole attribute point and every tick rebuilds each club's roster.")]
+        [Range(1, 38)] [SerializeField] private int weeksPerTick = 4;
+
+        [Tooltip("Match weeks in a nominal season — the denominator that makes a tick a fraction of a " +
+                 "season. A real league's own round count is used where there is one.")]
+        [Range(1, 100)] [SerializeField] private int seasonWeeks = 38;
+
+        [Tooltip("Growth multiplier for a player who started every match in the period. The calibrated " +
+                 "curve describes someone who plays, so this is 1.")]
+        [SerializeField] private double starterPlayingTime = 1.0;
+
+        [Tooltip("Growth multiplier for a squad player who did not start — training, not matches. Lower " +
+                 "this to make squad rotation matter more.")]
+        [SerializeField] private double benchPlayingTime = 0.45;
+
+        [Tooltip("Growth multiplier for an unattached player on the transfer market — no first team at all.")]
+        [SerializeField] private double unattachedPlayingTime = 0.35;
+
         private void OnValidate()
         {
             ClampToValidRanges();
@@ -66,7 +86,12 @@ namespace Gaffer.Infrastructure.Configuration
                 maxDeclineYears: maxDeclineYears,
                 generalDeclineFactor: generalDeclineFactor,
                 attributeFloor: attributeFloor,
-                physicalFloor: physicalFloor);
+                physicalFloor: physicalFloor,
+                weeksPerTick: weeksPerTick,
+                seasonWeeks: seasonWeeks,
+                starterPlayingTime: starterPlayingTime,
+                benchPlayingTime: benchPlayingTime,
+                unattachedPlayingTime: unattachedPlayingTime);
         }
 
         /// <summary>
@@ -97,6 +122,13 @@ namespace Gaffer.Infrastructure.Configuration
 
             declinePerYear = Math.Clamp(declinePerYear, 0.0, 10.0);
             generalDeclineFactor = Math.Clamp(generalDeclineFactor, 0.0, 5.0);
+
+            // Playing-time multipliers scale growth, so a negative one would make appearances SHRINK a
+            // young player — not a tuning choice, and nothing would be raised (CONVENTIONS §6). The upper
+            // bound is generous enough that an experiment can overweight minutes without being clamped.
+            starterPlayingTime = Math.Clamp(starterPlayingTime, 0.0, 5.0);
+            benchPlayingTime = Math.Clamp(benchPlayingTime, 0.0, 5.0);
+            unattachedPlayingTime = Math.Clamp(unattachedPlayingTime, 0.0, 5.0);
         }
     }
 }

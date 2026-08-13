@@ -29,3 +29,8 @@ MonoBehaviour:
   generalDeclineFactor: 0.6
   attributeFloor: 25
   physicalFloor: 15
+  weeksPerTick: 4
+  seasonWeeks: 38
+  starterPlayingTime: 1
+  benchPlayingTime: 0.45
+  unattachedPlayingTime: 0.35
