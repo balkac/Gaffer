@@ -175,15 +175,52 @@ namespace Gaffer.Tests
         // ----- Counting -----------------------------------------------------------------------------------
 
         [Test]
-        public void Recognise_ThreeGoalsInOneMatch_IsAHattrickAndNotAlsoABrace()
+        public void Recognise_ThreeGoalsInOneMatch_IsAHattrickEvenInAnOrdinaryFixture()
         {
+            // A hat-trick is rare enough to carry a match on its own — measured at 0.7% of all moments —
+            // so unlike a brace it needs no occasion to be worth remembering.
             Player player = Striker();
             IReadOnlyList<CareerMoment> moments = new MomentRecogniser().Recognise(
                 new JourneyLog(), Us, new List<Player> { player },
                 Match(Goal(10, player.Id), Goal(40, player.Id), Goal(80, player.Id)), Ordinary(), 1, 1);
 
             Assert.That(Only(moments, CareerMomentKind.Hattrick).Count, Is.EqualTo(3));
-            Assert.That(Has(moments, CareerMomentKind.Brace), Is.False, "A hat-trick was also counted as a brace.");
+        }
+
+        [Test]
+        public void Recognise_TwoGoalsInAnOrdinaryMatch_IsDeliberatelyNoMomentAtAll()
+        {
+            // Pinning an ABSENCE that was chosen (CONVENTIONS §5). Reading Gate B's output showed a brace
+            // was 20.2% of every moment in the game — a good striker scores twice several times a season,
+            // so it is a Tuesday, and the strongest career read "scored twice" fourteen times. Nothing in a
+            // list feels rare. If a BraceRule ever comes back it must arrive with a condition that makes it
+            // rare, and this test is what will notice if it comes back without one.
+            Player player = Striker();
+            var log = new JourneyLog();
+            log.Restore(PlayerJourney.Restore(player.Id, player.Name, appearances: 60, goals: 30, moments: null));
+
+            IReadOnlyList<CareerMoment> moments = new MomentRecogniser().Recognise(
+                log, Us, new List<Player> { player },
+                Match(Goal(22, player.Id), Goal(64, player.Id)), Ordinary(), 3, 20);
+
+            Assert.That(moments, Is.Empty,
+                "An everyday brace is being recorded as a moment again.");
+        }
+
+        [Test]
+        public void Recognise_TheSameTwoGoalsInADerby_IsStillToldByTheOccasion()
+        {
+            // The other half: dropping the brace does not lose the match, it stops naming the ordinary one.
+            // A fixture worth naming still gets its line, and it carries how many he scored.
+            Player player = Striker();
+            var log = new JourneyLog();
+            log.Restore(PlayerJourney.Restore(player.Id, player.Name, appearances: 60, goals: 30, moments: null));
+
+            IReadOnlyList<CareerMoment> moments = new MomentRecogniser().Recognise(
+                log, Us, new List<Player> { player },
+                Match(Goal(22, player.Id), Goal(64, player.Id)), Derby(), 3, 20);
+
+            Assert.That(Only(moments, CareerMomentKind.DerbyGoal).Count, Is.EqualTo(2));
         }
 
         [Test]

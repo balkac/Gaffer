@@ -35,7 +35,13 @@ namespace Gaffer.Application.Narrative
         /// <summary>A goal in a relegation six-pointer — the other end, and a different story.</summary>
         RelegationGoal = 14,
 
-        /// <summary>Two in one match.</summary>
+        /// <summary>
+        /// Two in one match. <b>Nothing recognises this today</b>, deliberately: reading Gate B's output
+        /// showed a brace was 20.2% of every moment in the game, because a good striker scores twice
+        /// several times a season. The kind is kept rather than deleted so saves that already carry one
+        /// still parse, and so a future rule can re-introduce it under a condition that makes it rare —
+        /// his first, say. A brace in a fixture worth naming is already told by the occasion rules.
+        /// </summary>
         Brace = 3,
 
         /// <summary>Three in one match. Rare enough to carry a season on its own.</summary>

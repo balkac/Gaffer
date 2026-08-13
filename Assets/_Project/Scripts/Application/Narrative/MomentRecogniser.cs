@@ -27,17 +27,26 @@ namespace Gaffer.Application.Narrative
     /// </summary>
     public sealed class MomentRecogniser
     {
+        // The shipped vocabulary, TUNED BY READING IT (Gate B, 2026-08-13). Two changes, both cuts:
+        //
+        // A BRACE IS NOT A MOMENT. Measured across 67 careers, it was 20.2% of everything recognised — a
+        // good striker scores twice several times a season, so it is a Tuesday, and the strongest career
+        // read "scored twice" fourteen times. Nothing in a list feels rare, which is the exact bet Gate B
+        // settles. A brace that happened in a fixture worth naming is still told, by the occasion rules.
+        // Compare Hattrick at 0.7%: THAT is rare, and reads it.
+        //
+        // APPEARANCE MILESTONES START AT 100. They were 24.6% on 25/50/100/200 — a 25th game is not an
+        // occasion, it is arithmetic, and at a match a week the early ones arrive in a clump.
         private static readonly IMomentRule[] DefaultRules =
         {
             new DebutRule(),
             new FirstGoalRule(),
             new HattrickRule(),
-            new BraceRule(),
             new DerbyGoalRule(),
             new TitleDeciderGoalRule(),
             new RelegationGoalRule(),
             new BigMatchGoalRule(),
-            MilestoneRule.ForAppearances(25, 50, 100, 200),
+            MilestoneRule.ForAppearances(100, 200, 300),
             MilestoneRule.ForGoals(10, 25, 50, 100),
         };
 
