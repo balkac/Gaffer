@@ -28,7 +28,7 @@
 | 0 | Kurulum + İnandırıcılık Çekirdeği | ✅ Tamam | **L** | ★ Gate A |
 | 1 | Tuning + Test Ağı | ✅ Tamam (Gate A geçildi) | M | ★ Gate A |
 | 2 | Sezon İskeleti | 🟡 Çekirdek bitti · JSON adapter kaldı | M | |
-| 3 | Yönetim Sistemleri | 🟡 Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO + **birleşik yönetim (canlı transfer + haftalık maaş gideri + transfer dönemleri)** ✅ · devam | **L** | |
+| 3 | Yönetim Sistemleri | 🟡 Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO + **birleşik yönetim (canlı transfer + haftalık maaş gideri + transfer dönemleri)** ✅ · **sezon-içi gelişim + oynama süresi + kalıcı piyasa** ✅ · devam (rakip menajer AI'ı) | **L** | |
 | 4 | Karakter + Dram | 🟡 Çekirdek bitti (trait + dram + moral; karar #31) · playtest kalibrasyonu kaldı (dram frekans-normalizasyonu + kart etki-önizlemesi + olay kopyası — PROGRESS "Kalan") + Unity-doğrulaması | **L** | |
 | 5 | Hafıza + Anlatı | ⬜ | M | ★ Gate B |
 | 6 | Meta / Roguelike | ⬜ | M | |
@@ -90,7 +90,10 @@ Karar döngüsünü tamamla.
 - `PlayerGenerator` (deterministik): **isim + milliyet** + attribute + gizli potansiyel dağılımı + trait/kişilik ağırlıklı atama. Attribute'lar **gruplu 0–100 set** (Teknik / Set-piece / Fiziksel & Hareket / Kalecilik) ve **pozisyona uygun** üretilir (GDD §4.2, ART_STYLE §4.1).
 - **Keşfedilebilir wonderkid garantisi** (CM 01/02 dersi): her run'da alt liglerde, ucuz, düşük-görünür ama yüksek-gizli-potansiyelli, keşfedilmeyi bekleyen az sayıda cevher garantili üretilir (TDD §5).
 - Taktik (dizilim + tempo/pres/risk eksenleri), kadro seçimi.
-- Transfer + **scout belirsizliği** (potansiyel maskeli), basit antrenman. **Düşük-sürtünme model** (basit teklif/karşı-teklif, ajan bürokrasisi yok; "keşfet-büyüt-sat" flip'i çekirdek ödül) ama **run ekonomisi gergin** (satmak bedel taşır — para basma makinesi değil; GDD §4.4).
+- Transfer + **scout belirsizliği** (potansiyel maskeli). **Düşük-sürtünme model** (basit teklif/karşı-teklif, ajan bürokrasisi yok; "keşfet-büyüt-sat" flip'i çekirdek ödül) ama **run ekonomisi gergin** (satmak bedel taşır — para basma makinesi değil; GDD §4.4).
+- **Sezon içi gelişim** (eski "basit antrenman" maddesinin yerini alır): oyuncular sezon başında bir sıçramayla değil, **haftalık** gelişir; oynama süresi gelişimi sürükler (ilk 11 tam, yedek kısmi, hiç oynamayan çok az) — rotasyon böylece gerçek bir karar olur.
+- **Kalıcı transfer piyasası:** havuz her yaz silinip yeniden üretilmez; sezonlar arası **yaşar, yaşlanır, gelişir**, ve **satılan oyuncu takip edilebilir kalır** (Faz 5'in yolculuk günlüğü buna dayanır). Havuzun tazelenmesi emeklilik ↔ yeni nesil dengesiyle olur, boyut sabit kalır.
+- *Ölçek kısıtı (50.000 oyunculuk havuz):* gelişim **tembel değerlendirilir** — sürekli okunanlar (yönetilen kadro + lig kulüpleri, ~500 oyuncu) haftalık gerçekten geliştirilir, geri kalan havuz **bakıldığı an** son geliştirildiği haftadan bugüne getirilir. Haftalık maliyet O(havuz) değil **O(görünen)**. Determinizm korunur: gelişim `(oyuncu, sezon, hafta)` seed'inden türer, ne zaman bakıldığı sonucu değiştirmez (NON-NEGOTIABLE #2). Ölçüm ve gerekçe: PROGRESS, 2026-08-13.
 - Rakip menajer AI'ı: kural tabanlı transfer/taktik.
 
 **Çıkış kriteri:** Kadro, taktik, transfer, antrenman kararları anlamlı ve sonuçlu; oyuncular üretiliyor (elle karakter yok); **keşif fantezisi gerçek** — ara sıra düşük-görünür genç patlıyor, garanti cevher cevhere dönüşüyor (TDD §11 keşif doğrulaması).

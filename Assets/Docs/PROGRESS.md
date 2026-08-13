@@ -6,6 +6,68 @@
 
 ---
 
+## Sezon içi gelişim + kalıcı piyasa · 2026-08-13 (Faz 3'ün açık maddesi, Faz 5'ten önce)
+
+Sahibi iki şey istedi: **sezon içinde oyuncu gelişimi görmek** ve **piyasadaki oyuncuların da gelişmesi**, FM gerçekçiliğinde. Roadmap'e bakınca bunun yeni kapsam olmadığı görüldü — Faz 3'ün hiç yapılmamış *"basit antrenman"* teslimatı bu. Faz 5'in kapsamına dokunulmadı; roadmap Faz 3 altında somutlaştırıldı (sahibinin onayıyla).
+
+**Bulgu — piyasa her yaz siliniyordu.** `RunSession.StartNextSeason` (`RunSession.cs:553`) her sezon başında `_market = GenerateMarket()` ile havuzu **çöpe atıp sıfırdan üretiyordu**, yeni bir id aralığıyla. Sonuçları: izlenen 17 yaşındaki cevher yazın gelişmiyor değil, **ortadan kayboluyordu**; ve satılan oyuncu `_market`'e geri konsa da (`RunSession.cs:639`) aynı yerde siliniyordu — yani *"sattığın oyuncuyu takip et"* (Faz 5, yolculuk günlüğü) bugünkü mimaride **imkânsızdı**. Piyasa oyuncularının gelişmesi de kalıcılık olmadan anlamsız. Bu yüzden sıra: önce kalıcılık, sonra gelişim.
+
+**Ölçüm — neden "herkesi her hafta geliştir" kapalı bir kapı.** 50.000 oyunculuk havuzda tam bir `PlayerDevelopment.Develop` geçişi (Mac, Release, tek geçiş): **22.04 ms · 5.0 MB çöp (104 B/oyuncu, oyuncu başına 0.441 µs)**. Haftalık uygulanırsa sezon başına **838 ms CPU + ~190 MB çöp**; mobilde 3–4 kat. Boehm GC (non-compacting) altında bu, PERFORMANCE §8'in alloc disiplinini ve FPS kararlılığı sözünü doğrudan bozar.
+
+**Karar — tembel (lazy) gelişim.** İki hız: **(a)** sürekli okunanlar — yönetilen kadro + lig kulüplerinin kadroları, ~500 oyuncu — **haftalık gerçekten** geliştirilir (**0.22 ms/hafta**; bunlar zaten maç simülasyonu tarafından her hafta okunuyor). **(b)** 50.000'lik havuz, oyuncu başına "en son kaç. haftaya kadar geliştirildi" bilgisiyle tutulur ve **bakıldığı an** güncellenir; market listesinde `ListView` yalnız ~56 satır render ettiği için maliyet **0.025 ms**. 20 hafta geriden gelen bir oyuncu tek çağrıda 20 hafta ilerletilir → 38 değil **tek** `Player` allocation. Toplam: 838 ms → ~8 ms/sezon, 190 MB → birkaç yüz KB.
+
+Determinizm bozulmaz (NON-NEGOTIABLE #2): gelişim `(oyuncu, sezon, hafta)`'dan türeyen seed'le hesaplanır — `SeasonTransition.MixSeed` zaten bu kalıpta — dolayısıyla **ne zaman bakıldığı sonucu değiştirmez**. *Bilinen kısıt:* piyasayı OVR'a göre **sıralamak** havuzun tamamının güncel olmasını gerektirir; bu, her karede değil **pencere açılışında tek bir 22 ms'lik geçişle** karşılanacak.
+
+**Sub-puan çözünürlüğü.** Sezonluk +7 OVR haftaya bölününce ~0.2 puan/hafta düşer — `byte` attribute'un altında. Ek state (oyuncu × attribute kesirli birikim → 50.000'de save patlaması) **gerekmiyor**: `PlayerDevelopment.WholeStep` kesri zaten olasılıkla tam adıma çeviriyor (0.2 → %20 ihtimalle +1), yani *"Mart'ta Bitiricilik'i 1 arttı"* hissi stateless doğar. Sezon toplamı ortalamada aynı — **ölçülerek doğrulanacak**, varsayılmayacak.
+
+**Sahibinin verdiği iki mekanik kararı.** (1) **Oynama süresi gelişimi sürükler** — ilk 11 tam, yedek kısmi, hiç oynamayan çok az; kulüpsüz havuz sabit düşük oranda. Rotasyon böylece gerçek bir karar olur. Kalibrasyon pinleri (gol 2.692/maç · favori %51.6 · ev %38.2 · deplasman %35.8) bu değişiklikten sonra **yeniden ölçülecek**. (2) **Havuz boyutu sabit kalır** — her yaz emekli olanların yerine yeni 16 yaşındakiler girer (FM modeli), havuz büyümez.
+
+**Faz 5 kararı (anlatının editörde nerede görüneceği).** Anlatı, skor listesinin **yerine değil yanına**. Gerekçe doğrulanabilirlik: isimli gol satırları anlatıyla değiştirilirse, garip görünen bir cümlenin anlatı hatası mı yoksa simülasyonun gerçekten öyle sonuçlanması mı olduğu ayırt edilemez. Editörün işi metni yargılamak; ham olgular yanında durmalı. Faz 7'nin gerçek maç ekranında yalnız anlatı kalır.
+
+**Yapılan — dilim 1: kalıcı piyasa (2026-08-13).** `MarketRenewal` (`Application/Season/Renewal`) eklendi: havuzdaki herkes bir yıl gelişip yaşlanır, kariyeri bitenler emekli olur, açık **yeni nesille** kapanır. `RunSession.StartNextSeason` artık `GenerateMarket()` değil `RenewMarket()` çağırıyor. Emeklilik kuralı `SquadRenewal`'ın içinden çıkarılıp `Retirement`'a taşındı — **tek sahip** (ARCHITECTURE §8a); kadro veterani ile kulüpsüz veteran aynı şartlarla bırakır, ve rng çekim sırası korunduğu için lig davranışı bit-aynı kaldı (harness çıktısı değişiklik öncesi/sonrası birebir aynı doğrulandı).
+
+**Id uzayı — tesadüften kurala.** Lig ve market id'lerini bugüne dek yalnızca aritmetik ayırıyordu: market'in sezon-adımı, ligin yıllık birkaç akademi girişini geçiyordu ve bunu hiçbir yer söylemiyordu. Piyasa kalıcı olunca çakışma teorik olmaktan çıktı — **imzalanan bir serbest oyuncu market id'sini kadroya taşır**, `SeasonTransition` de "buradaki en yüksek id'nin bir fazlası" diye tahsis eder, yani sonraki akademi genci market bloğunun içinde doğardı. İki oyuncunun aynı id'yi paylaşması, Faz 5'in **yolculuk günlüğünde iki kariyeri tek hikâyeye karıştırır** — sebebinden çok sonra, saçmalayan bir cümle olarak ortaya çıkar. Kural `Domain/Players/PlayerIdSpace` içine yazıldı (`MarketBase` altı lig-yerlisi, üstü market, `SeasonStride` ile sezon blokları), `SeasonTransition.MaxPlayerId` market id'lerini artık **saymıyor**, ve havuz boyu blok genişliğiyle sınırlandı. **Emekli olanın id'si asla yeniden dağıtılmıyor.**
+
+**Ölçülen (50.000 havuz, 20 sezon üst üste).** Havuz her sezon **tam 50.000**'de kalıyor (yukarı tırmanma yok), **tek bir id çakışması yok**, sezon dönüşü **~8–28 ms + 5.3 MB** (sezonda bir kez, geçiş anında — haftalık değil), ortalama yaş **26.2–26.6**'da dengeye oturuyor (emeklilik ↔ yeni nesil kendi kendini dengeliyor). İzlenen 20 kişilik kohort doğal sönüyor: 10. sezonda 16/20, 20. sezonda 0/20 — yani kariyerler ~20 yılda bitiyor. Test 458 → **473** (15 yeni pin: kimlik, yaşlanma, gelişim, havuz boyu, emeklilik, cevher garantisi, determinizm, id yeniden-kullanmama, id-uzayı taşması, ve run üzerinden "sattığın oyuncu yazın duruyor"). Kalibrasyon değişmedi, 5 gate PASS, `dotnet format` temiz. *(Editör/Unity tarafına dokunulmadı; Unity derleme doğrulaması bekliyor.)*
+
+**Yapılan — dilim 2: sezon içi gelişim + oynama süresi (2026-08-13).** Gelişim, kariyerin "yetenek" yarısı ile "yaş" yarısına ayrıldı: `PlayerDevelopment.DevelopPeriod` (bir sezonun bir kesrini uygular, **yaşa dokunmaz**) ve `AgeOneYear`. `Develop` = ikisinin bileşimi, **bit-aynı** (testle kilitli). Sonuç: yetenek sezon içinde, yaş yılda bir kez hareket ediyor. `SeasonTransition` ve `MarketRenewal` artık **yalnızca yaşlandırıyor** — yoksa her yıl iki sezonluk gelişim dağıtılırdı.
+
+**Tick.** `RunSession` her hafta ilk 11'leri sayıyor (`LeagueSeason.StartersOf` — **tüm lig**, yalnız yönetilen kulüp değil; yoksa rakipler futbolla ilgisi olmayan bir sebeple geri kalırdı), ve `WeeksPerTick` (4) haftada bir kadroları geliştiriyor. Sezon sonunda artan haftalar `FlushDevelopment` ile ödeniyor — yoksa her yıl o kesir sessizce buharlaşırdı. Tick ilk 11'i **yeniden seçmiyor**, id üzerinden **yeniden bağlıyor**: menajerin elle kurduğu takım her dört haftada bir bozulmamalı.
+
+Haftalık değil dört haftalık olmasının iki sebebi: bir haftanın gelişimi ~0.2 attribute puanı — yazılacağı `byte`'ın çözünürlüğünün altında — ve her tick kulüp kadrolarını yeniden kurup ezberlenmiş ilk 11'leri düşürüyor. Dörtte bir sezonda ~9 görünür adım, dokuzda bir maliyet. `WeeksPerTick` config (`DevelopmentBalanceSO`).
+
+**Oynama süresi yalnız büyümeyi ölçekler, düşüşü asla.** İlk 11 tam (1.0), yedek kısmi (0.45), kulüpsüz 0.35 — hepsi config. Düşüş ölçeklenseydi 36 yaşındaki bir oyuncuyu korumanın en iyi yolu onu oynatmamak olurdu; futbolun tam tersi.
+
+**Market: tembel yakalama.** Haftalık saatte değil, **bakıldığında** — `Market` getter'ı, `Capture()` ve rollover öncesi. Tek `int` saat (50.000 oyuncuya 50.000 saat değil: aralarında kimse dokunmadığı için hepsi aynı haftaları borçlu). Resume'da saat oynanan hafta sayısından kuruluyor, **save formatı değişmedi**.
+
+**Oynama süresinin gerçek etkisi u21'de.** 10. sezonda yönetilen kadronun u21 ortalaması: herkes tam gelişirse **49.08**, oynama süresi ağırlıklıyken **43.77**. Oynamayan genç ~5 puan geri kalıyor — mekanizma çalışıyor ve gence şans vermek gerçek bir karar oldu.
+
+---
+
+### Dilim 2'nin öz-denetimi · 2026-08-13 — **dört hata bulundu ve kapandı**
+
+Sahibi işin standartlara karşı denetlenmesini istedi. İlk raporladığım sayılar **yanlıştı**: lig ortalamasının çöktüğünü söylemiştim, gerçekte kendi soktuğum bir hatayı ölçüyordum. Doğru sayılar aşağıda. Dört kusurun dördü de ölçülerek kanıtlandı, düzeltildi ve her birine regresyon testi yazıldı.
+
+**#1 — Rakip kulüplerin gelişimi her yaz siliniyordu (en ağırı).** `RunSession` ligin *ikinci bir kopyasını* tutuyor ve `SyncLeague` yalnız **yönetilen** kulübü geri katlıyordu. Tek roster'ın değiştiği dünyada doğruydu; tick yirmi roster'ı birden yeniden yazmaya başlayınca yanlış oldu — ve `StartNextSeason` o kopyayı `SeasonTransition`'a veriyor. Ölçülen: altı sezonda senin ilk 11'in 63.0 → **64.8** yükselirken ligin 60.6 → **59.9** düşüyordu, fark 2.4'ten 4.9'a açılıyordu. Düzeltmeden sonra lig 60.6 → **63.6**, fark 1.24'e kapanıyor. `SyncLeague` artık her kulübü katlıyor ve **değişen yoksa hiç allocate etmiyor** (imza gibi tek-kulüp durumu artık kulüp listesini kopyalamıyor bile — eskisi her çağrıda kopyalıyordu).
+
+**#2 — Save/reload gelişimi yiyordu.** Tick'ler arasında biriken haftalar bellekteydi, dokümanda değil; reload sayacı sıfırlıyor ve birikeni siliyordu. Ölçülen: her maçtan sonra kaydeden biri **bir sezonda 0.407 kadro OVR** kaybediyordu (bir sezonluk gelişimin ~%10'u), her yıl bileşik. Save-scum kadroyu kavuruyordu. `Capture()` artık yazmadan önce hak edilmiş gelişimi ödüyor — **save formatı değişmeden**. Tick sınırında kaydetmek artık **birebir nötr** (ölçüldü: 4/8/12 haftada kaydetmenin farkı tam 0.000).
+
+**#3 — Bayat `Player` referansı sessizce yanlış oyuncuyu imzalıyordu.** `Player` bir class ve `Equals` override etmiyor, yani `List.Remove` **referansla** eşleşiyor. Ertelenmiş gelişim havuzdaki her nesneyi değiştirdiği için, elinde eski satır tutan bir çağıran (her UI böyle çalışır: nesneyi bağlar, sonra haftalar ilerler) oyuncunun **gelişmemiş kopyasını** kadroya koyup, `Remove` hiçbir şeyle eşleşmediği için **canlısını markette bırakıyordu**. İkisi de çağrı noktasında hiçbir şey haber vermiyor. `SignPlayer`/`SellPlayer` ve dram çözümü artık **id üzerinden canlı örneği** çözüyor.
+
+**#4 — Market haftalık ritimdeydi, kadrolar 4 haftalıkken.** Her hafta yeni liste dönmek `ManagementWindow`'un "havuz kımıldadı mı" nöbetini tetikliyor ve 50.000 oyuncuyu haftada bir yeniden sıralatıyordu — sahibinin en baştaki *"market büyüyünce editörde kasıyor"* şikâyetinin kapısı. Market artık kadrolarla **aynı 4 haftalık periyotta** ilerliyor; kalan kısım yalnız capture ve rollover'da ödeniyor.
+
+**Küçük temizlik:** `DevelopSquads`'ın scratch buffer'ı kaldırıldı — kopyalanmak zorunda olduğu için (`Squad.Owning` listeyi devralıyor) allocation'ı **önlemiyor, üstüne biniyordu**; her oyuncuyu iki kez yazıyordu (PERFORMANCE §8'in amacının tersi).
+
+**Doğru ölçüm (20 kulüp, 50.000 market, 10 sezon, düzeltmelerden sonra).** En kötü hafta **0.6–0.9 ms** (tick haftalarında 4.4–6.2 ms tepe) · rollover 22–32 ms · market ekranı 4 izlenmemiş haftadan sonra **17 ms**, aynı periyotta ikinci okuma **0 ms** (memoize) · dünya üretimi 54 ms. **Lig ilk 11'i 61.24 → 63.74 (7. sezon tepe) → 63.45** — dünya gelişip platoya oturuyor, çürümüyor. Kadro *ortalamasının* düşmesi ayrı ve bilinen bir şey: kadrolar 20 → 29 büyüyor (sezonda +1, 2026-08-09'da kabul edilen akademi maliyeti) ve genç/kenar kuyruğu ortalamayı seyreltiyor; tahliye yolu hâlâ **sözleşmeler**.
+
+**Bilinen, sınırlandırılmış sapma (açık madde).** Tick periyodunun **ortasında** kaydedip yüklemek gelişimi daha ince taneli ödüyor ve küçük bir pozitif sapma yaratıyor: her hafta kaydetmek bir sezonda **+0.178 OVR** (%0.29). Sınırda (4/8/12 haftada bir) sapma tam sıfır. Kaybolan bir şey yok, toplam hâlâ tam bir sezon; fark yalnız taneleme. Bunu tam sıfırlamak biriken periyodu save'e yazmayı gerektirir (yeni alan) — **sahibinin kararına bırakıldı**, Faz 5 zaten save v7 açacak.
+
+Test 473 → **488** (+15: iki dilim + dört kusurun regresyon pinleri + sezon-içi determinizm). Kalibrasyon değişmedi (5 gate PASS, çıktı birebir aynı — `SeasonRunner` rollover kullanmıyor). `dotnet format` temiz. **Editör/Infrastructure/Presentation gerçek Unity assembly'lerine karşı derlendi: 0 hata.** `DevelopmentBalance.asset`'e beş yeni alan elle eklendi — Unity'de gözle doğrulanacak.
+
+**Sıra.** ~~Faz 3 kapanışı~~ ✅ (kalıcı piyasa · sezon içi gelişim · oynama süresi · ölçüm) → Faz 4'ün kalan tek maddesi (dram olay kopyası) → Faz 5 (anlatı, Gate B). Dram kopyası ile anlatı cümleleri **tek geçişte** yazılacak: aynı string table, aynı ses tonu; ayrı ayrı yazmak aynı üslubu iki kez aramak olur.
+
+---
+
 ## Akademi girişindeki kadro tavanı kaldırıldı · 2026-08-09 (sahibinin tasarım kararı)
 
 2026-08-08'in "Kalan" listesindeki **"altyapı girişi kadro 25'teyken duruyor — kural gözden geçirilmeli"** maddesi kapandı. Gözden geçirildi ve **kural değişti.**
