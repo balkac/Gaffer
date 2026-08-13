@@ -185,6 +185,8 @@ Dar ama kapalı.
 
 ## MVP sonrası ufuk (bilinçli ertelenenler)
 
+**Maç simülasyonu katman 5 — maç içi olaylar ve kararlar** (GDD §4.1/5, sahibinin kararı 2026-08-13): yorgunluk · sakatlık · kart · **oyuncu değişikliği ve maç içi taktik hamlesi**. *Neden ertelendi:* bu tek bir özellik değil, katmanın tamamı — yorgunluk ve sakatlık olmadan "değişiklik yap" bir buton, karar değil, çünkü basmak için sebep yok. Ve `MatchSimulator` bugün tek atışta çalışıyor (şans üret → çöz → topla); araya girilecek bir an yaratmak onu durum-makinesine çevirmek ve **beş kalibrasyon pinini birden yeniden ölçmek** demek — GDD'nin kendi deyişiyle "oyunun dengesi burada yaşar". Doğru sırası Faz 7'den sonra: çalışan bir maç ekranı varken eklenen yorgunluk ölçülebilir, ekran yokken eklenen ölçülemez. *(Faz 5'in anlatısı bundan bağımsız çalışır: anlatı skoru okur, oynatmaz — bu ayrım kopyayı kalibrasyona dokunmadan değiştirebilmemizin sebebi.)*
+
 2D "key moments" görselleştirme · **paylaşılabilir "legend card"** (Efsaneler Salonu kartı — MVP'de yalnız çekirdek liste var) · idle/idle-hybrid katman · derin ilişki ağı · geniş dram içeriği (yüzlerce olay, set-piece zincirleri) · derin arketip ağacı · çok ligli dünya · community data / gerçek isim · **monetizasyon** (kozmetik, ödüllü reklam, premium unlock) · gelişmiş rakip AI · Türkçe ünlü-uyumu ek-motoru · daha zengin/RPG-vari menajer (görünüş, backstory).
 
 ---

@@ -12,9 +12,19 @@ namespace Gaffer.Common.Localization
     public readonly struct TextArguments
     {
         public TextArguments(string player, string club)
+            : this(player, club, null, null)
+        {
+        }
+
+        /// <summary>Also carries the numbers a match line needs (Faz 5.4). Both are already TEXT: a
+        /// number becomes words at the edge, where the locale that will read it is known, rather than
+        /// inside a formatter that would have to guess at a culture (CONVENTIONS §6).</summary>
+        public TextArguments(string player, string club, string minute, string count)
         {
             Player = player;
             Club = club;
+            Minute = minute;
+            Count = count;
         }
 
         /// <summary>The player the event happened to. Empty for a club-level event.</summary>
@@ -22,6 +32,12 @@ namespace Gaffer.Common.Localization
 
         /// <summary>The managed club's name.</summary>
         public string Club { get; }
+
+        /// <summary>The minute, already rendered. Empty for a line that did not happen in a match.</summary>
+        public string Minute { get; }
+
+        /// <summary>The number the line names — goals, a milestone, a fee — already rendered.</summary>
+        public string Count { get; }
 
         /// <summary>The value for a placeholder name, or false when this template asks for something
         /// the formatter does not carry — which is a template bug, never a blank.</summary>
@@ -34,6 +50,12 @@ namespace Gaffer.Common.Localization
                     return true;
                 case TextTemplate.ClubPlaceholder:
                     value = Club;
+                    return true;
+                case TextTemplate.MinutePlaceholder:
+                    value = Minute;
+                    return true;
+                case TextTemplate.CountPlaceholder:
+                    value = Count;
                     return true;
                 default:
                     value = null;
@@ -69,12 +91,25 @@ namespace Gaffer.Common.Localization
         /// <summary>The club the manager runs.</summary>
         public const string ClubPlaceholder = "club";
 
+        /// <summary>The minute a match moment happened in (Faz 5.4).</summary>
+        public const string MinutePlaceholder = "minute";
+
+        /// <summary>
+        /// The number the line is about — goals in the match, the milestone reached, the fee. One
+        /// placeholder rather than one per kind, because a template only ever needs the number its own
+        /// sentence names, and a second would only ever go unused.
+        /// </summary>
+        public const string CountPlaceholder = "count";
+
         /// <summary>The apostrophes a suffix is attached with. The straight one is what a keyboard
         /// gives you; the typographic one is what a word processor silently turns it into, and a rule
         /// that only knew about the first would be trivially bypassed by pasting from one.</summary>
         private static readonly char[] SuffixMarks = { '\'', '’', 'ʼ' };
 
-        private static readonly string[] SupportedNames = { PlayerPlaceholder, ClubPlaceholder };
+        private static readonly string[] SupportedNames =
+        {
+            PlayerPlaceholder, ClubPlaceholder, MinutePlaceholder, CountPlaceholder,
+        };
 
         /// <summary>Every placeholder a template may use.</summary>
         public static IReadOnlyList<string> Supported => SupportedNames;
