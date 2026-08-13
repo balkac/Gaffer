@@ -187,12 +187,12 @@ namespace Gaffer.Tests
             // The market is deferred, not frozen: reading it is what brings it up to date, and by the end
             // of a season somebody in it must have moved.
             RunSession session = StartRun();
-            Dictionary<int, double> before = RatingsOf(session.Market);
+            Dictionary<int, double> before = RatingsOf(session.GetMarket());
 
             Result<IReadOnlyList<WeekOutcome>> played = session.AdvanceToEndOfSeason();
             Assert.That(played.IsSuccess, Is.True, played.Error);
 
-            Dictionary<int, double> after = RatingsOf(session.Market);
+            Dictionary<int, double> after = RatingsOf(session.GetMarket());
 
             int moved = 0;
             foreach (KeyValuePair<int, double> entry in before)
@@ -216,8 +216,8 @@ namespace Gaffer.Tests
             Result<WeekOutcome> week = session.AdvanceWeek();
             Assert.That(week.IsSuccess, Is.True, week.Error);
 
-            Dictionary<int, double> first = RatingsOf(session.Market);
-            Dictionary<int, double> second = RatingsOf(session.Market);
+            Dictionary<int, double> first = RatingsOf(session.GetMarket());
+            Dictionary<int, double> second = RatingsOf(session.GetMarket());
 
             foreach (KeyValuePair<int, double> entry in first)
             {
@@ -340,7 +340,7 @@ namespace Gaffer.Tests
             // stale, weaker copy into the squad while List.Remove matched nothing and quietly left the live
             // one on the market. Neither half raises anything at the call site.
             RunSession session = StartRun();
-            var before = new List<Player>(session.Market);
+            var before = new List<Player>(session.GetMarket());
 
             // Far enough in for a tick period to have reached the market, and stopping on a week the
             // window is actually open — signing is refused outside one, which would fail this test for a
@@ -360,7 +360,7 @@ namespace Gaffer.Tests
             Player live = null;
             for (int i = 0; i < before.Count && stale == null; i++)
             {
-                Player current = Find(session.Market, before[i].Id);
+                Player current = Find(session.GetMarket(), before[i].Id);
                 if (current != null && !ReferenceEquals(current, before[i]))
                 {
                     stale = before[i];
@@ -374,7 +374,7 @@ namespace Gaffer.Tests
             Result<TransferOutcome> signing = session.SignPlayer(stale);
             Assert.That(signing.IsSuccess, Is.True, signing.Error);
 
-            Assert.That(Find(session.Market, stale.Id), Is.Null,
+            Assert.That(Find(session.GetMarket(), stale.Id), Is.Null,
                 "He was signed but is still on the market — Remove matched nothing.");
             Player inSquad = Find(session.Squad.Players, stale.Id);
             Assert.That(inSquad, Is.Not.Null, "He was not added to the squad.");

@@ -172,9 +172,9 @@ namespace Gaffer.Tools.SeasonHarness
             int wageAffordable = 0;
             int bothAffordable = 0;
             int discretionaryAffordable = 0;
-            var fees = new List<long>(session.Market.Count);
-            var wages = new List<long>(session.Market.Count);
-            foreach (Player prospect in session.Market)
+            var fees = new List<long>(session.GetMarket().Count);
+            var wages = new List<long>(session.GetMarket().Count);
+            foreach (Player prospect in session.GetMarket())
             {
                 long fee = session.FeeOf(prospect);
                 long wage = session.WeeklyWageOf(prospect);
@@ -247,7 +247,7 @@ namespace Gaffer.Tools.SeasonHarness
                 bool anyCashShort = false;
                 bool anyWageShort = false;
 
-                foreach (Player prospect in session.Market)
+                foreach (Player prospect in session.GetMarket())
                 {
                     long fee = session.FeeOf(prospect);
                     long wage = session.WeeklyWageOf(prospect);
@@ -270,7 +270,7 @@ namespace Gaffer.Tools.SeasonHarness
 
                 if (cheapest == null)
                 {
-                    if (session.Market.Count == 0)
+                    if (session.GetMarket().Count == 0)
                     {
                         return "nothing left to buy";
                     }

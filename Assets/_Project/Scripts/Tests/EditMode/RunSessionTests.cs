@@ -332,7 +332,7 @@ namespace Gaffer.Tests
             Assert.That(session.Finances.WeeklyWageBill, Is.EqualTo(wageBefore - wage));
             Assert.That(session.Squad.Count, Is.EqualTo(squadBefore - 1));
             Assert.That(session.Squad.Contains(subject.Id), Is.False);
-            Assert.That(session.Market, Contains.Item(subject));
+            Assert.That(session.GetMarket(), Contains.Item(subject));
             Assert.That(outcome.Lineup.Starters, Has.No.Member(subject));
             Assert.That(session.PendingDrama, Is.Null, "the event is answered");
         }
@@ -415,7 +415,7 @@ namespace Gaffer.Tests
             Assert.That(session.Finances.Cash, Is.EqualTo(cashBefore - signed.Value.Fee));
             Assert.That(session.Finances.WeeklyWageBill, Is.EqualTo(wageBefore + signed.Value.WeeklyWage));
             Assert.That(session.Squad.Count, Is.EqualTo(squadBefore + 1));
-            Assert.That(session.Market, Has.No.Member(target));
+            Assert.That(session.GetMarket(), Has.No.Member(target));
             Assert.That(signed.Value.Lineup.Starters.Count, Is.EqualTo(session.Formation.Total));
         }
 
@@ -429,13 +429,13 @@ namespace Gaffer.Tests
             Result<TransferOutcome> signed = session.SignPlayer(target);
 
             Assert.That(signed.IsFailure, Is.True);
-            Assert.That(session.Market, Contains.Item(target));
+            Assert.That(session.GetMarket(), Contains.Item(target));
         }
 
         private static Player MostAffordable(RunSession session)
         {
             Player cheapest = null;
-            foreach (Player player in session.Market)
+            foreach (Player player in session.GetMarket())
             {
                 if (cheapest == null || session.FeeOf(player) < session.FeeOf(cheapest))
                 {
@@ -821,7 +821,7 @@ namespace Gaffer.Tests
             Assert.That(played.MoralePointsOf(wounded.Id), Is.EqualTo(-4.0).Within(1e-9), "the wound is still live at the save");
 
             Finances money = played.Finances;
-            IReadOnlyList<Player> market = played.Market;
+            IReadOnlyList<Player> market = played.GetMarket();
             LineupOutcome before = played.Lineup();
 
             // Through the real bytes: the shipped codec writes the container, the migrator gates the load.
@@ -862,7 +862,7 @@ namespace Gaffer.Tests
 
             // The signing is on the roster and off the market.
             Assert.That(resumed.Squad.Contains(signing.Id), Is.True, "the player he signed is still his");
-            Assert.That(IdsOf(resumed.Market), Is.EqualTo(IdsOf(market)), "and the shortlist he was reading is the same one");
+            Assert.That(IdsOf(resumed.GetMarket()), Is.EqualTo(IdsOf(market)), "and the shortlist he was reading is the same one");
 
             // Tactics, shape and the exact team sheet.
             LineupOutcome after = resumed.Lineup();
@@ -917,7 +917,7 @@ namespace Gaffer.Tests
             Assert.That(resumed.PlayedRounds, Is.EqualTo(1), "the season still resumes where it stopped");
             Assert.That(resumed.Finances.Cash, Is.EqualTo(3_000_000L), "the money comes from the setup");
             Assert.That(resumed.Finances.WeeklyWageBudget, Is.EqualTo(500_000L));
-            Assert.That(resumed.Market.Count, Is.EqualTo(7), "and a fresh market is generated at the setup's size");
+            Assert.That(resumed.GetMarket().Count, Is.EqualTo(7), "and a fresh market is generated at the setup's size");
             Assert.That(resumed.OriginalSeed, Is.EqualTo(saved.MatchSeed),
                 "a v5 document's match seed IS the seed its world was generated from");
         }

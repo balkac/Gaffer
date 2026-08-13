@@ -206,17 +206,16 @@ namespace Gaffer.Application.Run
         /// season by <see cref="RenewMarket"/>, so a prospect is still there next summer — older, better —
         /// and so is anyone you sold.
         ///
-        /// <para>Reading it is what brings the pool's development up to the current week
-        /// (<see cref="CatchUpMarket"/>) — the deferral that keeps a 50,000-player world off the weekly
-        /// clock. The result is the same either way; only when the arithmetic happens differs.</para>
+        /// <para>A METHOD, not a property, and that is the convention rather than a preference: calling
+        /// it brings the pool's development up to the current week (<see cref="CatchUpMarket"/>), which is
+        /// real work — up to 17 ms across 50,000 players — and a state change. CONVENTIONS §2 reserves a
+        /// noun property for a cheap, side-effect-free value and sends everything else to a
+        /// <c>Get</c>-prefixed method; a property here read like a field access over a sixth of a frame.</para>
         /// </summary>
-        public IReadOnlyList<Player> Market
+        public IReadOnlyList<Player> GetMarket()
         {
-            get
-            {
-                CatchUpMarket();
-                return _market;
-            }
+            CatchUpMarket();
+            return _market;
         }
 
         /// <summary>The drama waiting on an answer, or null. A raised event blocks the next week.</summary>
@@ -713,7 +712,7 @@ namespace Gaffer.Application.Run
                 _market.RemoveAt(listed);
             }
 
-            RecordMoment(CareerMomentKind.Signing, signing.Id, result.Value.Fee);
+            RecordMoment(CareerMomentKind.Signing, signing, result.Value.Fee);
             SyncLeague();
             AutoPickAndBind();
 
@@ -759,7 +758,7 @@ namespace Gaffer.Application.Run
             _finances = result.Value.Finances;
             _season.UpdateSquad(_managedClub, result.Value.Squad);
             AddToMarket(leaving);
-            RecordMoment(CareerMomentKind.Sale, leaving.Id, result.Value.Fee);
+            RecordMoment(CareerMomentKind.Sale, leaving, result.Value.Fee);
             SyncLeague();
             AutoPickAndBind();
 
@@ -1341,26 +1340,26 @@ namespace Gaffer.Application.Run
         {
             for (int i = 0; i < retired.Count; i++)
             {
-                PlayerId player = retired[i].Id;
-                if (_journeys.IsFollowing(player))
+                Player player = retired[i];
+                if (_journeys.IsFollowing(player.Id))
                 {
-                    _journeys.Follow(player).Add(new CareerMoment(
-                        CareerMomentKind.Retirement, player, _managedClub, endedSeason, finalRound));
+                    _journeys.Follow(player.Id, player.Name).Add(new CareerMoment(
+                        CareerMomentKind.Retirement, player.Id, _managedClub, endedSeason, finalRound));
                 }
             }
 
             for (int i = 0; i < arrived.Count; i++)
             {
-                RecordMoment(CareerMomentKind.AcademyArrival, arrived[i].Id);
+                RecordMoment(CareerMomentKind.AcademyArrival, arrived[i]);
             }
         }
 
         // A moment that did not come out of a match — an arrival, a sale, a retirement. Recorded where the
         // event actually happens, because a transfer is not a match event.
-        private void RecordMoment(CareerMomentKind kind, PlayerId player, long count = 0L)
+        private void RecordMoment(CareerMomentKind kind, Player player, long count = 0L)
         {
-            _journeys.Follow(player).Add(new CareerMoment(
-                kind, player, _managedClub, _seasonNumber, _season.CurrentRound, CareerMoment.NoMinute, count));
+            _journeys.Follow(player.Id, player.Name).Add(new CareerMoment(
+                kind, player.Id, _managedClub, _seasonNumber, _season.CurrentRound, CareerMoment.NoMinute, count));
         }
 
         // ----- In-season development ----------------------------------------------------------------------

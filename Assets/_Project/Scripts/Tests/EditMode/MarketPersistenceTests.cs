@@ -315,7 +315,7 @@ namespace Gaffer.Tests
 
             PlayAndRollOver(session);
 
-            Assert.That(Contains(session.Market, sold.Id), Is.True,
+            Assert.That(Contains(session.GetMarket(), sold.Id), Is.True,
                 "The player you sold vanished over the summer.");
         }
 
@@ -323,12 +323,12 @@ namespace Gaffer.Tests
         public void StartNextSeason_TheProspectYouWereWatching_IsStillThereADevelopedYearOlder()
         {
             RunSession session = StartRun();
-            Player watched = Youngest(session.Market);
+            Player watched = Youngest(session.GetMarket());
             int ageBefore = watched.Age;
 
             PlayAndRollOver(session);
 
-            Player found = Find(session.Market, watched.Id);
+            Player found = Find(session.GetMarket(), watched.Id);
             Assert.That(found, Is.Not.Null, "The prospect you were tracking was deleted over the summer.");
             Assert.That(found.Age, Is.EqualTo(ageBefore + 1));
         }
@@ -340,14 +340,14 @@ namespace Gaffer.Tests
             // the academy allocates "one past the highest id here". Without the league/market partition the
             // next youth would be born inside the block the market is about to hand out.
             RunSession session = StartRun();
-            Player target = Youngest(session.Market);
+            Player target = Youngest(session.GetMarket());
             Result<TransferOutcome> signing = session.SignPlayer(target);
             Assert.That(signing.IsSuccess, Is.True, signing.Error);
             Assert.That(PlayerIdSpace.IsMarket(target.Id), Is.True, "The market is expected to allocate above the base.");
 
             PlayAndRollOver(session);
 
-            var marketIds = IdsOf(session.Market);
+            var marketIds = IdsOf(session.GetMarket());
             for (int club = 0; club < session.ClubCount; club++)
             {
                 Squad squad = session.SquadOf(new ClubId(club));

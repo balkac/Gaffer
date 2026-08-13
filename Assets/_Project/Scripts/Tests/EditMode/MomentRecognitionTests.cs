@@ -152,7 +152,7 @@ namespace Gaffer.Tests
             // let him pass his tenth without it ever being a day.
             Player player = Striker();
             var log = new JourneyLog();
-            log.Restore(PlayerJourney.Restore(player.Id, appearances: 30, goals: 9, moments: null));
+            log.Restore(PlayerJourney.Restore(player.Id, player.Name, appearances: 30, goals: 9, moments: null));
 
             IReadOnlyList<CareerMoment> moments = new MomentRecogniser().Recognise(
                 log, Us, new List<Player> { player },
@@ -168,7 +168,7 @@ namespace Gaffer.Tests
             // in a list feels rare — which is the whole bet Gate B is asked to settle.
             Player player = Striker();
             var log = new JourneyLog();
-            log.Restore(PlayerJourney.Restore(player.Id, appearances: 60, goals: 30, moments: null));
+            log.Restore(PlayerJourney.Restore(player.Id, player.Name, appearances: 60, goals: 30, moments: null));
 
             IReadOnlyList<CareerMoment> moments = new MomentRecogniser().Recognise(
                 log, Us, new List<Player> { player }, Match(Goal(55, player.Id)), Ordinary(), 3, 20);

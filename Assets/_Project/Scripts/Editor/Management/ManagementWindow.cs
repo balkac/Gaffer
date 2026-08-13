@@ -1888,13 +1888,13 @@ namespace Gaffer.Editor.Management
         }
 
         // Refills the strongest-first order, but only when the run's market has actually moved under it.
-        // _session.Market is the session's own list: a signing, a sale or a drama sale mutates it in place
+        // _session.GetMarket() is the session's own list: a signing, a sale or a drama sale mutates it in place
         // (so the count moves) and a summer rollover replaces it outright (so the instance moves). Nothing
         // else touches it — market players do not develop mid-season — so instance-plus-count is a
         // sufficient watch, and it keeps an n log n sort off every week advance and every drag-drop.
         private void SyncMarketOrder()
         {
-            IReadOnlyList<Player> market = _session.Market;
+            IReadOnlyList<Player> market = _session.GetMarket();
             if (ReferenceEquals(market, _orderedFrom) && market.Count == _orderedCount)
             {
                 return;

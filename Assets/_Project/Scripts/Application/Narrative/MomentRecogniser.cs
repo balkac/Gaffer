@@ -88,10 +88,10 @@ namespace Gaffer.Application.Narrative
             for (int i = 0; i < starters.Count; i++)
             {
                 Player player = starters[i];
-                PlayerJourney journey = log.Follow(player.Id);
+                PlayerJourney journey = log.Follow(player.Id, player.Name);
                 _goalsThisMatch.TryGetValue(player.Id.Value, out int goals);
 
-                var asked = new MomentOccasion(
+                var asked = new MatchOccasion(
                     player,
                     club,
                     season,

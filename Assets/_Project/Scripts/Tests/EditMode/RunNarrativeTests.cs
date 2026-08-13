@@ -120,9 +120,9 @@ namespace Gaffer.Tests
             session.AdvanceWeek();
 
             Assert.That(session.Journeys.Count, Is.EqualTo(session.Lineup().Starters.Count));
-            for (int i = 0; i < session.Market.Count; i++)
+            for (int i = 0; i < session.GetMarket().Count; i++)
             {
-                Assert.That(session.Journeys.IsFollowing(session.Market[i].Id), Is.False,
+                Assert.That(session.Journeys.IsFollowing(session.GetMarket()[i].Id), Is.False,
                     "A player nobody has signed is being followed.");
             }
         }

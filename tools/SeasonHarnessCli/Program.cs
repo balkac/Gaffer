@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using Gaffer.Application.Narrative;
 using Gaffer.Application.Run;
 using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
@@ -151,8 +152,84 @@ namespace Gaffer.Tools.SeasonHarness.Cli
                 case "market":
                     return PrintMarket(new MarketProbe().Measure(
                         new RunSetup(startingCash: cash, weeklyWageBudget: wageBudget)));
+                case "story":
+                    PrintStories(new StoryProbe().Measure(config.TeamCount, config.SeasonCount, config.Seed, marketSize: 200, guaranteedGems: 3));
+                    return 0;
                 default:
-                    return Fail($"Unknown probe '{probe}'. Try ranks, academy or market.");
+                    return Fail($"Unknown probe '{probe}'. Try ranks, academy, market or story.");
+            }
+        }
+
+        // Gate B, read as prose. Deliberately plain: the question is whether the SHAPE of a career reads
+        // as though someone wrote it, and dressing the output up would answer a different question.
+        private static void PrintStories(StoryReport report)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"Story probe — {report.Club}, {report.Seasons} seasons");
+            Console.WriteLine($"  {report.Careers} careers followed, {report.MomentCount} moments, {report.MomentsPerCareer:F1} per career");
+            Console.WriteLine();
+
+            if (report.Careers == 0)
+            {
+                Console.WriteLine("  Nothing was followed. The narrative layer is not wired in.");
+                return;
+            }
+
+            int show = report.Arcs.Count < 5 ? report.Arcs.Count : 5;
+            for (int i = 0; i < show; i++)
+            {
+                PrintArc(report.Arcs[i], i + 1);
+            }
+
+            Console.WriteLine("Read the top arc and ask the only question that matters:");
+            Console.WriteLine("does it read like a career, or like a list of things that happened?");
+        }
+
+        private static void PrintArc(StoryArc arc, int rank)
+        {
+            string name = string.IsNullOrEmpty(arc.Name) ? "(left the club)" : arc.Name;
+            Console.WriteLine($"  {rank}. {name} — {arc.Moments.Count} moments over {arc.SeasonsSpanned} season(s), score {arc.Score:F1}");
+            for (int i = 0; i < arc.Moments.Count; i++)
+            {
+                CareerMoment moment = arc.Moments[i];
+                Console.WriteLine($"       S{moment.Season} w{moment.Round,-2} {Describe(moment)}");
+            }
+
+            Console.WriteLine();
+        }
+
+        // Dev-tool English (NON-NEGOTIABLE #8 exemption: this assembly cannot enter a build). The shipped
+        // wording comes from the string table in Faz 5.4 — this is the SHAPE under it, nothing more.
+        private static string Describe(CareerMoment moment)
+        {
+            switch (moment.Kind)
+            {
+                case CareerMomentKind.Debut:
+                    return "made his debut";
+                case CareerMomentKind.FirstGoal:
+                    return $"scored his first goal ({moment.Minute}')";
+                case CareerMomentKind.BigMatchGoal:
+                    return $"scored in a match that mattered ({moment.Minute}')";
+                case CareerMomentKind.Brace:
+                    return "scored twice";
+                case CareerMomentKind.Hattrick:
+                    return "scored a hat-trick";
+                case CareerMomentKind.AppearanceMilestone:
+                    return $"made his {moment.Count}th appearance";
+                case CareerMomentKind.GoalMilestone:
+                    return $"reached {moment.Count} goals";
+                case CareerMomentKind.Signing:
+                    return $"signed for {moment.Count:N0}";
+                case CareerMomentKind.Sale:
+                    return $"sold for {moment.Count:N0}";
+                case CareerMomentKind.AcademyArrival:
+                    return "came through the academy";
+                case CareerMomentKind.BreakoutSeason:
+                    return "kicked on";
+                case CareerMomentKind.Retirement:
+                    return "retired";
+                default:
+                    return moment.Kind.ToString();
             }
         }
 
@@ -392,6 +469,8 @@ namespace Gaffer.Tools.SeasonHarness.Cli
             Console.WriteLine("                             (--seasons is the league sample size)");
             Console.WriteLine("                    academy  how often the guaranteed youth intake arrives");
             Console.WriteLine("                    market   what the two budgets can actually reach");
+            Console.WriteLine("                    story    Gate B: the strongest careers a run produced");
+            Console.WriteLine("                             (--seasons is how many to play, try 20)");
             Console.WriteLine("  --cash <n>          market probe: transfer cash to start on");
             Console.WriteLine("  --wage-budget <n>   market probe: weekly wage ceiling to start on");
             Console.WriteLine("Exit code 1 if any gate fails, 2 on a bad argument.");

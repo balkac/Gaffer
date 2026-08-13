@@ -4,67 +4,6 @@ using Gaffer.Domain.Players;
 namespace Gaffer.Application.Narrative
 {
     /// <summary>
-    /// One player's history at the club: the moments worth remembering, and the running totals that let
-    /// the next one be recognised. "Is this his first goal" and "is this his fiftieth game" cannot be
-    /// answered from a match — only from what came before — which is why the log is an INPUT to
-    /// recognition and not merely its output.
-    /// </summary>
-    public sealed class PlayerJourney
-    {
-        private readonly List<CareerMoment> _moments = new List<CareerMoment>();
-
-        public PlayerJourney(PlayerId player)
-        {
-            Player = player;
-        }
-
-        public PlayerId Player { get; }
-
-        /// <summary>Appearances so far. The counter, not a count of Debut moments — most games are not moments.</summary>
-        public int Appearances { get; private set; }
-
-        public int Goals { get; private set; }
-
-        public IReadOnlyList<CareerMoment> Moments => _moments;
-
-        public bool HasPlayed => Appearances > 0;
-
-        public void RecordAppearance()
-        {
-            Appearances++;
-        }
-
-        public void RecordGoals(int goals)
-        {
-            Goals += goals;
-        }
-
-        public void Add(CareerMoment moment)
-        {
-            _moments.Add(moment);
-        }
-
-        /// <summary>
-        /// Rebuilds a journey from a save (5.2). The totals are restored rather than recomputed from the
-        /// moments, because they were never derivable from them — a player's fiftieth appearance is a
-        /// moment, his forty-ninth is not, and the counter is the only thing that knew.
-        /// </summary>
-        public static PlayerJourney Restore(PlayerId player, int appearances, int goals, IReadOnlyList<CareerMoment> moments)
-        {
-            var journey = new PlayerJourney(player) { Appearances = appearances, Goals = goals };
-            if (moments != null)
-            {
-                for (int i = 0; i < moments.Count; i++)
-                {
-                    journey._moments.Add(moments[i]);
-                }
-            }
-
-            return journey;
-        }
-    }
-
-    /// <summary>
     /// Every journey the run is keeping — the memory half of "Story = Simulation + Character + Memory"
     /// (CLAUDE.md). What Faz 5 is built on, and what the market had to become persistent for: a log
     /// cannot follow a player the world deletes every summer (PROGRESS 2026-08-13).
@@ -102,14 +41,14 @@ namespace Gaffer.Application.Narrative
         /// "when does a player start being followed" is one rule in one place rather than a decision each
         /// caller makes for itself (ARCHITECTURE §8a).
         /// </summary>
-        public PlayerJourney Follow(PlayerId player)
+        public PlayerJourney Follow(PlayerId player, string name)
         {
             if (_journeys.TryGetValue(player.Value, out PlayerJourney existing))
             {
                 return existing;
             }
 
-            var opened = new PlayerJourney(player);
+            var opened = new PlayerJourney(player, name);
             _journeys.Add(player.Value, opened);
             return opened;
         }
