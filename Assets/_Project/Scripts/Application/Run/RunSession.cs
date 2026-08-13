@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Gaffer.Application.Drama;
 using Gaffer.Application.Generation;
+using Gaffer.Application.Narrative;
 using Gaffer.Application.Progression;
 using Gaffer.Application.Season;
 using Gaffer.Application.Serialization;
@@ -57,6 +58,13 @@ namespace Gaffer.Application.Run
         private readonly PlayerDevelopment _development;
         private readonly SplitMix64RandomNumberGenerator _developmentRng = new SplitMix64RandomNumberGenerator(0);
         private readonly Scout _scout;
+
+        // The run's memory (Faz 5). Journeys open for players the manager actually has, never for the
+        // 50,000 he does not — see JourneyLog. The recogniser is stateless between calls; the log is the
+        // state, and it is both what recognition reads and what it writes.
+        private readonly MomentRecogniser _recogniser = new MomentRecogniser();
+        private readonly JourneyLog _journeys = new JourneyLog();
+        private readonly List<CareerMoment> _weekMoments = new List<CareerMoment>();
         private readonly DramaEngine _drama;
         private readonly SeasonEvaluator _evaluator = new SeasonEvaluator();
         private readonly BoardTarget _target;
@@ -319,6 +327,18 @@ namespace Gaffer.Application.Run
             return _season.Morale.PointsOf(player);
         }
 
+        /// <summary>
+        /// A player's history at the club, or null when the manager has never had him. The read model the
+        /// sale moment and the season recap are written from (Faz 5.5).
+        /// </summary>
+        public PlayerJourney JourneyOf(PlayerId player)
+        {
+            return _journeys.Find(player);
+        }
+
+        /// <summary>Every journey the run is keeping — the Gate B instrument reads this.</summary>
+        public JourneyLog Journeys => _journeys;
+
         /// <summary>What the manager knows about a prospect at this scouting accuracy (the mask, TDD §5).</summary>
         public ScoutReport Observe(Player player, double accuracy)
         {
@@ -412,6 +432,10 @@ namespace Gaffer.Application.Run
             RecordAppearances();
 
             WeekResult week = _season.AdvanceWeek(_context, _setup.Seed);
+
+            // Read what the week meant BEFORE anything else touches the roster: the development tick
+            // below replaces every player object, and recognition needs the eleven that actually played.
+            RecogniseMoments(week);
 
             // Wages bite every week (GDD §4.4): the bill leaves the transfer cash whether or not the
             // week went well. The SeasonPlayer window skipped this, so its economy silently stood still.
@@ -605,6 +629,11 @@ namespace Gaffer.Application.Run
             Squad before = ManagedSquad();
             IReadOnlyList<Player> beforePlayers = before != null ? before.Players : NoPlayers;
 
+            // The season that is ending, so a retirement is dated to the last year the player actually
+            // played rather than to the one he was already gone for.
+            int endedSeason = _seasonNumber;
+            int finalRound = _season.RoundCount;
+
             _seasonNumber++;
             _league = _transition.ToNextSeason(_league, _setup.Seed, _seasonNumber);
             _season = NewSeason(_league, 0, null);
@@ -625,10 +654,14 @@ namespace Gaffer.Application.Run
             _verdict = null;
             AutoPickAndBind();
 
+            List<Player> retired = Missing(beforePlayers, afterPlayers);
+            List<Player> arrived = Missing(afterPlayers, beforePlayers);
+            RecordSummer(retired, arrived, endedSeason, finalRound);
+
             return Result<SeasonRollover>.Success(new SeasonRollover(
                 seasonNumber: _seasonNumber,
-                retired: Missing(beforePlayers, afterPlayers),
-                arrived: Missing(afterPlayers, beforePlayers),
+                retired: retired,
+                arrived: arrived,
                 finances: _finances,
                 market: _market,
                 lineup: BuildLineupOutcome()));
@@ -680,6 +713,7 @@ namespace Gaffer.Application.Run
                 _market.RemoveAt(listed);
             }
 
+            RecordMoment(CareerMomentKind.Signing, signing.Id, result.Value.Fee);
             SyncLeague();
             AutoPickAndBind();
 
@@ -725,6 +759,7 @@ namespace Gaffer.Application.Run
             _finances = result.Value.Finances;
             _season.UpdateSquad(_managedClub, result.Value.Squad);
             AddToMarket(leaving);
+            RecordMoment(CareerMomentKind.Sale, leaving.Id, result.Value.Fee);
             SyncLeague();
             AutoPickAndBind();
 
@@ -1259,6 +1294,75 @@ namespace Gaffer.Application.Run
                 chanceProfile: ChanceProfile.FromTactics(_tactics, _balance.TacticsBalance));
         }
 
+        // ----- Narrative ------------------------------------------------------------------------------------
+
+        // Reads the managed club's match for the moments it produced. Only the managed club: a journey is
+        // kept for players the manager has, and reading twenty clubs would open 500 journeys a week for
+        // careers nobody will ever look at.
+        private void RecogniseMoments(WeekResult week)
+        {
+            _weekMoments.Clear();
+
+            MatchResult? played = ManagedMatchIn(week);
+            if (played == null)
+            {
+                return;
+            }
+
+            // Copied out of the recogniser's reusable buffer, whose documented lifetime ends at the next
+            // call — the outcome below outlives it.
+            IReadOnlyList<CareerMoment> recognised = _recogniser.Recognise(
+                _journeys, _managedClub, StartersList(), played.Value, _context, _seasonNumber, week.Round);
+            for (int i = 0; i < recognised.Count; i++)
+            {
+                _weekMoments.Add(recognised[i]);
+            }
+        }
+
+        private MatchResult? ManagedMatchIn(WeekResult week)
+        {
+            for (int i = 0; i < week.Matches.Count; i++)
+            {
+                MatchResult match = week.Matches[i];
+                if (match.Home == _managedClub || match.Away == _managedClub)
+                {
+                    return match;
+                }
+            }
+
+            return null;
+        }
+
+        // The summer's two ends of a career. A retirement is only recorded for a player the log was
+        // already following — someone who never got a game has no story to close, and opening a journey
+        // to write its last line would be the log describing a stranger. An academy arrival always opens
+        // one: he is yours from that day, and "he came through the academy" is where his story starts.
+        private void RecordSummer(List<Player> retired, List<Player> arrived, int endedSeason, int finalRound)
+        {
+            for (int i = 0; i < retired.Count; i++)
+            {
+                PlayerId player = retired[i].Id;
+                if (_journeys.IsFollowing(player))
+                {
+                    _journeys.Follow(player).Add(new CareerMoment(
+                        CareerMomentKind.Retirement, player, _managedClub, endedSeason, finalRound));
+                }
+            }
+
+            for (int i = 0; i < arrived.Count; i++)
+            {
+                RecordMoment(CareerMomentKind.AcademyArrival, arrived[i].Id);
+            }
+        }
+
+        // A moment that did not come out of a match — an arrival, a sale, a retirement. Recorded where the
+        // event actually happens, because a transfer is not a match event.
+        private void RecordMoment(CareerMomentKind kind, PlayerId player, long count = 0L)
+        {
+            _journeys.Follow(player).Add(new CareerMoment(
+                kind, player, _managedClub, _seasonNumber, _season.CurrentRound, CareerMoment.NoMinute, count));
+        }
+
         // ----- In-season development ----------------------------------------------------------------------
 
         // Credits this week's appearance to everyone in every club's eleven. The whole league, on purpose:
@@ -1635,7 +1739,8 @@ namespace Gaffer.Application.Run
                 windowPhase: WindowPhase,
                 drama: _pending,
                 verdict: _verdict,
-                finalPosition: _season.IsComplete ? position : 0);
+                finalPosition: _season.IsComplete ? position : 0,
+                moments: _weekMoments);
         }
 
         // Everything in `players` that is not in `other`, by id — the summer's ins and outs.

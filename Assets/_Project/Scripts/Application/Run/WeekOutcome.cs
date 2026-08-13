@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Gaffer.Application.Drama;
+using Gaffer.Application.Narrative;
 using Gaffer.Application.Season;
 using Gaffer.Application.Transfers;
 
@@ -15,6 +16,8 @@ namespace Gaffer.Application.Run
     /// </summary>
     public sealed class WeekOutcome
     {
+        private static readonly IReadOnlyList<CareerMoment> NoMoments = System.Array.Empty<CareerMoment>();
+
         /// <summary>
         /// Every value is required: this record is only ever built by <see cref="RunSession"/> at the end
         /// of a played week, where all of it is known, so there is no default worth having and an omitted
@@ -34,7 +37,8 @@ namespace Gaffer.Application.Run
             TransferWindowPhase windowPhase,
             PendingDrama drama,
             SeasonVerdict? verdict,
-            int finalPosition)
+            int finalPosition,
+            IReadOnlyList<CareerMoment> moments = null)
         {
             Round = round;
             PlayedRounds = playedRounds;
@@ -50,6 +54,7 @@ namespace Gaffer.Application.Run
             Drama = drama;
             Verdict = verdict;
             FinalPosition = finalPosition;
+            Moments = moments ?? NoMoments;
         }
 
         /// <summary>The round that was played, 0-based (round + 1 is the "week N" a view shows).</summary>
@@ -95,5 +100,13 @@ namespace Gaffer.Application.Run
 
         /// <summary>The managed club's final position, set with <see cref="Verdict"/>; 0 otherwise.</summary>
         public int FinalPosition { get; }
+
+        /// <summary>
+        /// What this week meant to the people in it — the moments the narrative layer recognised
+        /// (Faz 5). Empty on most weeks, and that is the point: a week where nothing happened to
+        /// anybody should say so. The view REPLAYS these rather than asking the log what changed
+        /// (NON-NEGOTIABLE #4); the log itself is the run's memory, not a diff source.
+        /// </summary>
+        public IReadOnlyList<CareerMoment> Moments { get; }
     }
 }
