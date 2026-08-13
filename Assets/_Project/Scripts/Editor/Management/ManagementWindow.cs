@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Gaffer.Application.Drama;
+using Gaffer.Application.Narrative;
 using Gaffer.Application.Progression;
 using Gaffer.Application.Run;
 using Gaffer.Application.Season;
@@ -1888,13 +1889,13 @@ namespace Gaffer.Editor.Management
         }
 
         // Refills the strongest-first order, but only when the run's market has actually moved under it.
-        // _session.Market is the session's own list: a signing, a sale or a drama sale mutates it in place
+        // _session.GetMarket() is the session's own list: a signing, a sale or a drama sale mutates it in place
         // (so the count moves) and a summer rollover replaces it outright (so the instance moves). Nothing
         // else touches it — market players do not develop mid-season — so instance-plus-count is a
         // sufficient watch, and it keeps an n log n sort off every week advance and every drag-drop.
         private void SyncMarketOrder()
         {
-            IReadOnlyList<Player> market = _session.Market;
+            IReadOnlyList<Player> market = _session.GetMarket();
             if (ReferenceEquals(market, _orderedFrom) && market.Count == _orderedCount)
             {
                 return;
@@ -2304,10 +2305,44 @@ namespace Gaffer.Editor.Management
                     block.Add(MakeLabel(scorers, 10, HarnessPalette.Muted));
                 }
 
+                // The narrative goes BESIDE the facts, never over them. If the prose replaced the named
+                // scorers there would be no way to tell a sentence that reads wrong from a match that
+                // WENT that way — and judging the copy is the only reason these are in the editor at all
+                // (Faz 5, PROGRESS 2026-08-13). The real match screen in Faz 7 keeps only the prose.
+                if (involvesManaged)
+                {
+                    AddMomentLines(block);
+                }
+
                 card.Add(block);
             }
 
             return card;
+        }
+
+        // This week's recognised moments, in the locale the dev windows are set to. Most weeks there are
+        // none, and the card simply says nothing — which is the shape being judged as much as the words:
+        // a line that appears every week is a fixture list, and nothing in a fixture list feels rare.
+        private void AddMomentLines(VisualElement block)
+        {
+            IReadOnlyList<CareerMoment> moments = _lastWeek.Moments;
+            if (moments.Count == 0)
+            {
+                return;
+            }
+
+            var lines = new VisualElement();
+            lines.style.marginTop = 4;
+            lines.style.marginLeft = 8;
+
+            for (int i = 0; i < moments.Count; i++)
+            {
+                Label line = MakeLabel(HarnessMoments.Line(moments[i], _session), 11, HarnessPalette.Chalk);
+                line.style.whiteSpace = WhiteSpace.Normal;
+                lines.Add(line);
+            }
+
+            block.Add(lines);
         }
 
         private string FormatScorers(MatchResult match)

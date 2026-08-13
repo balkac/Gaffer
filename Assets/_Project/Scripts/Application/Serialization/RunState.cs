@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using Gaffer.Application.Drama;
+using Gaffer.Application.Narrative;
+using Gaffer.Application.Progression;
 using Gaffer.Application.Simulation;
 using Gaffer.Application.Transfers;
 using Gaffer.Domain.Drama;
@@ -38,7 +40,9 @@ namespace Gaffer.Application.Serialization
             IReadOnlyList<MoraleEntry> morale,
             DramaEngineState drama,
             DramaEventId pendingEvent,
-            int pendingSubjectPlayerId)
+            int pendingSubjectPlayerId,
+            IReadOnlyList<PlayerJourney> journeys = null,
+            DevelopmentPeriod development = null)
         {
             OriginalSeed = originalSeed;
             Setup = setup;
@@ -50,6 +54,8 @@ namespace Gaffer.Application.Serialization
             Morale = morale;
             Drama = drama;
             PendingEvent = pendingEvent;
+            Journeys = journeys;
+            Development = development;
             PendingSubjectPlayerId = pendingSubjectPlayerId;
         }
 
@@ -76,6 +82,14 @@ namespace Gaffer.Application.Serialization
 
         /// <summary>The unanswered event, or the default id when the week is clear.</summary>
         public DramaEventId PendingEvent { get; }
+
+        /// <summary>The run's memory — one journey per player the manager has had. Null on a save
+        /// written before v7: nothing was recorded, so there is nothing to restore and nothing to invent.</summary>
+        public IReadOnlyList<PlayerJourney> Journeys { get; }
+
+        /// <summary>Development earned but not yet paid out. Null starts the period empty, which is what a
+        /// pre-v7 save means and what a fresh run is.</summary>
+        public DevelopmentPeriod Development { get; }
 
         public int PendingSubjectPlayerId { get; }
     }

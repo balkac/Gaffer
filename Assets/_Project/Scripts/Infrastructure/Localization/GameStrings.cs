@@ -43,6 +43,86 @@ namespace Gaffer.Infrastructure.Localization
                 Locales.Shipped,
                 new[]
                 {
+                    // --- the narrative layer (Faz 5.4) -----------------------------------------------
+                    // One line per kind of career moment. House rules on top of the ones above, and they
+                    // are what keep a journey readable rather than a fixture list:
+                    //   * ONE sentence. These stack — a career prints a dozen of them in a column — and a
+                    //     second sentence in each turns a timeline into an essay.
+                    //   * The line says what HAPPENED, never how anyone felt about it. "His first goal for
+                    //     the club" earns its weight from being true and rare; "the moment he announced
+                    //     himself" is the game telling the player what to feel, which is the one thing a
+                    //     memory must not do.
+                    //   * The name is ATOMIC and takes no suffix (TextTemplate enforces this, and it is a
+                    //     build failure, not a note). Turkish is written natively AROUND that constraint:
+                    //     the name sits where a Turkish sentence can leave it uninflected — usually first,
+                    //     or before a comma — rather than the English word order being copied and a suffix
+                    //     wished onto it.
+                    Row(
+                        "moment.debut",
+                        "{player} made his first appearance for the club.",
+                        "{player} kulüpteki ilk maçına çıktı."),
+                    // The minute arrives ALREADY MARKED — "68'" rather than "68" — because the mark is
+                    // part of how a minute is written, and writing it in the template would put an
+                    // apostrophe straight after an interpolated value, which is exactly the shape the
+                    // suffix guard exists to refuse. It caught this copy on the first run. Rendering the
+                    // mark at the edge also leaves each locale free to write a minute its own way.
+                    Row(
+                        "moment.first_goal",
+                        "{minute} — {player} scored his first goal for the club.",
+                        "{minute} — {player} kulüpteki ilk golünü attı."),
+                    Row(
+                        "moment.big_match_goal",
+                        "{minute} — {player} scored on the day it mattered.",
+                        "{minute} — {player} büyük maçta golünü buldu."),
+                    Row(
+                        "moment.derby_goal",
+                        "{minute} — {player} scored in the derby.",
+                        "{minute} — {player} derbide golü attı."),
+                    Row(
+                        "moment.title_decider_goal",
+                        "{minute} — {player} scored with the title on the line.",
+                        "{minute} — {player} şampiyonluk yolunda golü attı."),
+                    Row(
+                        "moment.relegation_goal",
+                        "{minute} — {player} scored in a relegation six-pointer.",
+                        "{minute} — {player} küme düşme mücadelesinde golü attı."),
+                    Row(
+                        "moment.brace",
+                        "{player} scored twice.",
+                        "{player} iki gol attı."),
+                    Row(
+                        "moment.hattrick",
+                        "{player} scored a hat-trick.",
+                        "{player} hat-trick yaptı."),
+                    Row(
+                        "moment.appearance_milestone",
+                        "{player} reached {count} appearances for the club.",
+                        "{player} kulüpteki {count}. maçına çıktı."),
+                    Row(
+                        "moment.goal_milestone",
+                        "{player} reached {count} goals for the club.",
+                        "{player} kulüpteki {count}. golüne ulaştı."),
+                    Row(
+                        "moment.signing",
+                        "{player} signed for {club}.",
+                        "{player} artık {club} oyuncusu."),
+                    Row(
+                        "moment.sale",
+                        "{player} was sold.",
+                        "{player} satıldı."),
+                    Row(
+                        "moment.academy_arrival",
+                        "{player} came through the academy.",
+                        "{player} altyapıdan geldi."),
+                    Row(
+                        "moment.breakout_season",
+                        "{player} kicked on this season.",
+                        "{player} bu sezon sıçrama yaptı."),
+                    Row(
+                        "moment.retirement",
+                        "{player} hung up his boots.",
+                        "{player} kariyerini noktaladı."),
+
                     // --- transfer-request ------------------------------------------------------------
                     // He is good enough that someone came in for him and the window is open. Refusing
                     // costs him morale, selling takes his fee, keeping him costs cash.

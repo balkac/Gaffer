@@ -189,7 +189,36 @@ namespace Gaffer.Application.Progression
         /// </summary>
         public Player Develop(Player player, IRandom rng)
         {
+            return AgeOneYear(DevelopPeriod(player, 1.0, 1.0, rng));
+        }
+
+        /// <summary>
+        /// Moves a player's ability by <paramref name="seasonFraction"/> of a season's worth and
+        /// <b>leaves his age alone</b> — the in-season half of a career, so a teenager is measurably
+        /// better in March than he was in August instead of jumping once every summer (the owner's ask,
+        /// 2026-08-13). Ageing is <see cref="AgeOneYear"/>'s job and happens once, at the rollover; a
+        /// caller that ticks through a season and then ages gives exactly one year of career, not two.
+        ///
+        /// <para><paramref name="playingTime"/> scales GROWTH only, never decline. Minutes are what a
+        /// young player improves on, so a regular starter keeps the full calibrated rate and a reserve
+        /// grows more slowly — which is what makes rotation a decision. A body, on the other hand, ages
+        /// whether or not it plays: a thirty-five-year-old left out of the side declines exactly as fast
+        /// as one picked every week, and pretending otherwise would make benching veterans a way to
+        /// preserve them.</para>
+        ///
+        /// <para>At <c>seasonFraction: 1.0, playingTime: 1.0</c> every number and every rng draw is
+        /// identical to what the once-a-season call always produced, which is what lets
+        /// <see cref="Develop"/> stay bit-for-bit unchanged (NON-NEGOTIABLE #2).</para>
+        /// </summary>
+        public Player DevelopPeriod(Player player, double seasonFraction, double playingTime, IRandom rng)
+        {
+            if (seasonFraction <= 0.0)
+            {
+                return player;
+            }
+
             Attributes attributes = player.Attributes;
+            double time = playingTime < 0.0 ? 0.0 : playingTime;
 
             double growthRate = GrowthRate(player.Age) * GrowthMultiplierOf(player);
             if (growthRate > 0.0)
@@ -199,7 +228,9 @@ namespace Gaffer.Application.Progression
                 {
                     // Raising each role attribute by this lifts the role rating by about the same amount
                     // (weights sum to 1); capping at the gap keeps the rating from overshooting potential.
-                    double perAttribute = Math.Min(growthRate * gap * SeasonVariance(rng), gap);
+                    // The cap is applied to the PERIOD's share, so ticking a season through in pieces can
+                    // no more overshoot the ceiling than one whole-season call could.
+                    double perAttribute = Math.Min(growthRate * gap * SeasonVariance(rng) * seasonFraction * time, gap);
                     attributes = AdjustRoleAttributes(attributes, player.Role, perAttribute, rng);
                 }
             }
@@ -208,7 +239,7 @@ namespace Gaffer.Application.Progression
             if (yearsPastPeak > 0)
             {
                 double amount = _settings.DeclinePerYear * Math.Min(yearsPastPeak, _settings.MaxDeclineYears)
-                    * SeasonVariance(rng) * DeclineRateMultiplierOf(player);
+                    * SeasonVariance(rng) * DeclineRateMultiplierOf(player) * seasonFraction;
 
                 // Two-part decline so the OVR actually falls once past this player's own peak, hardest for
                 // the pace-reliant. (1) A general erosion of the role's own rating attributes — his overall
@@ -220,7 +251,19 @@ namespace Gaffer.Application.Progression
                 attributes = ApplyDecline(attributes, amount, rng);
             }
 
-            return new Player(player.Id, player.Name, player.Nationality, player.Role, player.Age + 1, attributes, player.HiddenPotential, player.Traits);
+            return attributes.Equals(player.Attributes)
+                ? player
+                : new Player(player.Id, player.Name, player.Nationality, player.Role, player.Age, attributes, player.HiddenPotential, player.Traits);
+        }
+
+        /// <summary>
+        /// A birthday and nothing else. Split out from <see cref="Develop"/> because ability and age no
+        /// longer move together: ability creeps up through the season (<see cref="DevelopPeriod"/>) while
+        /// age turns over exactly once, at the rollover.
+        /// </summary>
+        public Player AgeOneYear(Player player)
+        {
+            return new Player(player.Id, player.Name, player.Nationality, player.Role, player.Age + 1, player.Attributes, player.HiddenPotential, player.Traits);
         }
 
         // Adjusts exactly the attributes the role is scored on by a signed amount, so both growth (positive)

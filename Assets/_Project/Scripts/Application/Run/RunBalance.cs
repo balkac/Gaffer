@@ -33,6 +33,7 @@ namespace Gaffer.Application.Run
             RenewalSettings renewal = null,
             DramaSettings drama = null,
             MoraleSettings morale = null,
+            MatchContextSettings matchContexts = null,
             EconomySettings economy = null,
             ScoutingSettings scouting = null,
             Gaffer.Domain.Traits.TraitCatalog traits = null,
@@ -45,6 +46,7 @@ namespace Gaffer.Application.Run
             Renewal = renewal ?? RenewalSettings.Default;
             Drama = drama ?? DramaSettings.Default;
             Morale = morale ?? MoraleSettings.Default;
+            MatchContexts = matchContexts ?? MatchContextSettings.Default;
             Economy = economy ?? EconomySettings.Default;
             Scouting = scouting ?? ScoutingSettings.Default;
             Traits = traits ?? Gaffer.Domain.Traits.TraitCatalog.Default;
@@ -64,6 +66,10 @@ namespace Gaffer.Application.Run
         public DramaSettings Drama { get; }
 
         public MoraleSettings Morale { get; }
+
+        /// <summary>When a league fixture stops being just another game — the run-in, the places that
+        /// count as a title race or a relegation fight (<see cref="MatchContextBuilder"/>).</summary>
+        public MatchContextSettings MatchContexts { get; }
 
         public EconomySettings Economy { get; }
 

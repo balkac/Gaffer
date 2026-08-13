@@ -29,7 +29,7 @@ namespace Gaffer.Application.Simulation
         // The core is synchronous and single-threaded, so unsynchronised slots are safe.
         private const int CacheSlots = 2;
 
-        private readonly Squad[] _cachedSquads = new Squad[CacheSlots];
+        private readonly IReadOnlyList<Player>[] _cachedSquads = new IReadOnlyList<Player>[CacheSlots];
         private readonly double[][] _cachedCumulative = new double[CacheSlots][];
         private readonly int[] _cachedCounts = new int[CacheSlots];
         private int _nextSlot;
@@ -48,15 +48,15 @@ namespace Gaffer.Application.Simulation
             _weights = weights ?? ScorerWeights.Default;
         }
 
-        public PlayerId? SelectScorer(Squad squad, IRandom rng)
+        public PlayerId? SelectScorer(IReadOnlyList<Player> onThePitch, IRandom rng)
         {
-            if (squad == null || squad.Count == 0)
+            if (onThePitch == null || onThePitch.Count == 0)
             {
                 return null;
             }
 
-            IReadOnlyList<Player> players = squad.Players;
-            double[] cumulative = CumulativeWeightsOf(squad, players, out int count);
+            IReadOnlyList<Player> players = onThePitch;
+            double[] cumulative = CumulativeWeightsOf(onThePitch, players, out int count);
 
             // The vector is accumulated in roster order from 0.0, exactly as the old two-pass scan
             // accumulated its running total, so the last entry is bit-identical to that scan's total —
@@ -89,11 +89,11 @@ namespace Gaffer.Application.Simulation
 
         // Returns this squad's cumulative weight vector, building it on a miss. Slots are replaced
         // round-robin, which for the two squads of a match means each keeps its own.
-        private double[] CumulativeWeightsOf(Squad squad, IReadOnlyList<Player> players, out int count)
+        private double[] CumulativeWeightsOf(IReadOnlyList<Player> onThePitch, IReadOnlyList<Player> players, out int count)
         {
             for (int slot = 0; slot < CacheSlots; slot++)
             {
-                if (ReferenceEquals(_cachedSquads[slot], squad))
+                if (ReferenceEquals(_cachedSquads[slot], onThePitch))
                 {
                     count = _cachedCounts[slot];
                     return _cachedCumulative[slot];
@@ -117,7 +117,7 @@ namespace Gaffer.Application.Simulation
                 buffer[i] = running;
             }
 
-            _cachedSquads[target] = squad;
+            _cachedSquads[target] = onThePitch;
             _cachedCounts[target] = players.Count;
             count = players.Count;
             return buffer;

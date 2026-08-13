@@ -28,9 +28,9 @@
 | 0 | Kurulum + İnandırıcılık Çekirdeği | ✅ Tamam | **L** | ★ Gate A |
 | 1 | Tuning + Test Ağı | ✅ Tamam (Gate A geçildi) | M | ★ Gate A |
 | 2 | Sezon İskeleti | 🟡 Çekirdek bitti · JSON adapter kaldı | M | |
-| 3 | Yönetim Sistemleri | 🟡 Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO + **birleşik yönetim (canlı transfer + haftalık maaş gideri + transfer dönemleri)** ✅ · devam | **L** | |
+| 3 | Yönetim Sistemleri | 🟡 Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO + **birleşik yönetim (canlı transfer + haftalık maaş gideri + transfer dönemleri)** ✅ · **sezon-içi gelişim + oynama süresi + kalıcı piyasa** ✅ · devam (rakip menajer AI'ı) | **L** | |
 | 4 | Karakter + Dram | 🟡 Çekirdek bitti (trait + dram + moral; karar #31) · playtest kalibrasyonu kaldı (dram frekans-normalizasyonu + kart etki-önizlemesi + olay kopyası — PROGRESS "Kalan") + Unity-doğrulaması | **L** | |
-| 5 | Hafıza + Anlatı | ⬜ | M | ★ Gate B |
+| 5 | Hafıza + Anlatı | ✅ Tamam (★ Gate B geçildi 2026-08-13) | M | ★ Gate B |
 | 6 | Meta / Roguelike | ⬜ | M | |
 | 7 | UI + Art + Localization | ⬜ | **L** | |
 | 8 | MVP Ship | ⬜ | M | ★ Gate C |
@@ -90,7 +90,10 @@ Karar döngüsünü tamamla.
 - `PlayerGenerator` (deterministik): **isim + milliyet** + attribute + gizli potansiyel dağılımı + trait/kişilik ağırlıklı atama. Attribute'lar **gruplu 0–100 set** (Teknik / Set-piece / Fiziksel & Hareket / Kalecilik) ve **pozisyona uygun** üretilir (GDD §4.2, ART_STYLE §4.1).
 - **Keşfedilebilir wonderkid garantisi** (CM 01/02 dersi): her run'da alt liglerde, ucuz, düşük-görünür ama yüksek-gizli-potansiyelli, keşfedilmeyi bekleyen az sayıda cevher garantili üretilir (TDD §5).
 - Taktik (dizilim + tempo/pres/risk eksenleri), kadro seçimi.
-- Transfer + **scout belirsizliği** (potansiyel maskeli), basit antrenman. **Düşük-sürtünme model** (basit teklif/karşı-teklif, ajan bürokrasisi yok; "keşfet-büyüt-sat" flip'i çekirdek ödül) ama **run ekonomisi gergin** (satmak bedel taşır — para basma makinesi değil; GDD §4.4).
+- Transfer + **scout belirsizliği** (potansiyel maskeli). **Düşük-sürtünme model** (basit teklif/karşı-teklif, ajan bürokrasisi yok; "keşfet-büyüt-sat" flip'i çekirdek ödül) ama **run ekonomisi gergin** (satmak bedel taşır — para basma makinesi değil; GDD §4.4).
+- **Sezon içi gelişim** (eski "basit antrenman" maddesinin yerini alır): oyuncular sezon başında bir sıçramayla değil, **haftalık** gelişir; oynama süresi gelişimi sürükler (ilk 11 tam, yedek kısmi, hiç oynamayan çok az) — rotasyon böylece gerçek bir karar olur.
+- **Kalıcı transfer piyasası:** havuz her yaz silinip yeniden üretilmez; sezonlar arası **yaşar, yaşlanır, gelişir**, ve **satılan oyuncu takip edilebilir kalır** (Faz 5'in yolculuk günlüğü buna dayanır). Havuzun tazelenmesi emeklilik ↔ yeni nesil dengesiyle olur, boyut sabit kalır.
+- *Ölçek kısıtı (50.000 oyunculuk havuz):* gelişim **tembel değerlendirilir** — sürekli okunanlar (yönetilen kadro + lig kulüpleri, ~500 oyuncu) haftalık gerçekten geliştirilir, geri kalan havuz **bakıldığı an** son geliştirildiği haftadan bugüne getirilir. Haftalık maliyet O(havuz) değil **O(görünen)**. Determinizm korunur: gelişim `(oyuncu, sezon, hafta)` seed'inden türer, ne zaman bakıldığı sonucu değiştirmez (NON-NEGOTIABLE #2). Ölçüm ve gerekçe: PROGRESS, 2026-08-13.
 - Rakip menajer AI'ı: kural tabanlı transfer/taktik.
 
 **Çıkış kriteri:** Kadro, taktik, transfer, antrenman kararları anlamlı ve sonuçlu; oyuncular üretiliyor (elle karakter yok); **keşif fantezisi gerçek** — ara sıra düşük-görünür genç patlıyor, garanti cevher cevhere dönüşüyor (TDD §11 keşif doğrulaması).
@@ -175,12 +178,16 @@ Dar ama kapalı.
 
 - **★ Gate A (Faz 1 sonu):** ✅ **GEÇILDI (2026-07-07)** — gol 2.69/maç, favori %51.6 kazanır, ev > deplasman, şampiyon dağılımı sağlıklı; regresyon testleriyle kilitli. *En ucuz iptal/pivot noktası olmaktan çıktı.*
   - *2026-08-06 notu:* kapı geçerli, ama **ev-avantajı kanıtı sanıldığından zayıfmış** — tek tohuma dayanıyordu ve 5 tohumluk süpürmede biri (`20250101`) tersine dönüyor (ev %36.3 < deplasman %36.8). Bir sezon 380 maç, SE ≈ 2.5 puan; ~3 puanlık fark tek örneklemde inversiyona açık. İddia havuzlanmış 1.900 maça taşındı (%41.7 vs %34.2, >3 puan marj). Gol ve favori bantları beş tohumda da tutuyor. Ayrıntı: [`PROGRESS.md`](PROGRESS.md).
-- **★ Gate B (Faz 5 sonu):** Hikaye kendiliğinden beliriyor mu? Bu emergent dram bahsinin tutup tutmadığı an.
+- **★ Gate B (Faz 5 sonu):** ✅ **GEÇILDI (2026-08-13)** — sahibinin okumasıyla. Kendiliğinden 17 sezonluk bir kulüp efsanesi belirdi (646 maç, 211 gol, hat-trick'ler, derbi golleri, şampiyonluk maçı golleri) ve sezonlarıyla okunduğunda kariyer gibi durdu. *İlk okuma geçmemişti* ve iki tur düzeltme gerekti: sözlük fazla cömetti (ikili gol anların %20'siydi → kaldırıldı), ve çıktı düz bir an akışıydı → **sezon katmanı** eklendi ("kariyer sezonlarını ve başarılarını anlatır"). **Kabul edilen çekince:** her sezon tam 38 maç — sakatlık, yorgunluk ve düşüş yok, yani kariyerlerde kötü haber hiç yok. Bu **katman 5**'in yokluğu (MVP sonrası ufuk); geldiğinde kariyerlere gerçeklik katacak asıl şey odur.
 - **★ Gate C (Faz 8):** MVP Definition of Done karşılandı mı? Ship kararı.
 
 ---
 
 ## MVP sonrası ufuk (bilinçli ertelenenler)
+
+**Maç simülasyonu katman 5 — maç içi olaylar ve kararlar** (GDD §4.1/5, sahibinin kararı 2026-08-13): yorgunluk · sakatlık · kart · **oyuncu değişikliği ve maç içi taktik hamlesi**. *Neden ertelendi:* bu tek bir özellik değil, katmanın tamamı — yorgunluk ve sakatlık olmadan "değişiklik yap" bir buton, karar değil, çünkü basmak için sebep yok. Ve `MatchSimulator` bugün tek atışta çalışıyor (şans üret → çöz → topla); araya girilecek bir an yaratmak onu durum-makinesine çevirmek ve **beş kalibrasyon pinini birden yeniden ölçmek** demek — GDD'nin kendi deyişiyle "oyunun dengesi burada yaşar". Doğru sırası Faz 7'den sonra: çalışan bir maç ekranı varken eklenen yorgunluk ölçülebilir, ekran yokken eklenen ölçülemez. *(Faz 5'in anlatısı bundan bağımsız çalışır: anlatı skoru okur, oynatmaz — bu ayrım kopyayı kalibrasyona dokunmadan değiştirebilmemizin sebebi.)*
+
+**Kupa / rezerv maçları — gençlerin oynadığı yer** (sahibinin kararı 2026-08-13, seçenek A'nın devamı): ilk 11 güncel ratingle seçildiği için 16–19 yaşındaki bir cevher lig maçına asla giremiyor; ölçüldü, üç sezon tutulup satılan sekiz oyuncunun sekizi de **sıfır maç** oynadı — yani oyunun en çok ödüllendiren döngüsü (keşfet-büyüt-sat) günlükte yalnız "imza" ve "satış" bırakıyor. Auto-pick'e gençlik payı eklemek **bilinçle reddedildi**: rotasyon sezon-içi gelişimle gerçek bir karar hâline getirildi, otomatikleştirmek onu geri alır. Doğru çözüm gencin oynayacağı ayrı bir kanal.
 
 2D "key moments" görselleştirme · **paylaşılabilir "legend card"** (Efsaneler Salonu kartı — MVP'de yalnız çekirdek liste var) · idle/idle-hybrid katman · derin ilişki ağı · geniş dram içeriği (yüzlerce olay, set-piece zincirleri) · derin arketip ağacı · çok ligli dünya · community data / gerçek isim · **monetizasyon** (kozmetik, ödüllü reklam, premium unlock) · gelişmiş rakip AI · Türkçe ünlü-uyumu ek-motoru · daha zengin/RPG-vari menajer (görünüş, backstory).
 

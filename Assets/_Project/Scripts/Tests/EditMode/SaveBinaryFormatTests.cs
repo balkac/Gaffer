@@ -325,12 +325,12 @@ namespace Gaffer.Tests
             Assert.That(bytes[1], Is.EqualTo(0x46));
             Assert.That(bytes[2], Is.EqualTo(0x53));
             Assert.That(bytes[3], Is.EqualTo(0x56));
-            Assert.That(bytes[4], Is.EqualTo(2), "container version, low byte first");
+            Assert.That(bytes[4], Is.EqualTo(3), "container version, low byte first");
             Assert.That(bytes[5], Is.EqualTo(0), "container version, high byte — little-endian, on every device");
-            Assert.That(BinarySaveSerializer.CurrentContainerVersion, Is.EqualTo(2),
+            Assert.That(BinarySaveSerializer.CurrentContainerVersion, Is.EqualTo(3),
                 "The container version moved. Add the branch that reads the old layout, then update this test.");
             Assert.That(BinarySaveSerializer.MinimumSupportedContainerVersion, Is.EqualTo(1),
-                "v1 containers are still on devices — the run block was APPENDED, so they read as before.");
+                "v1 and v2 containers are still on devices — every section was APPENDED, so they read as before.");
         }
 
         [Test]
@@ -554,7 +554,7 @@ namespace Gaffer.Tests
             Result<SeasonSaveData> parsed = SaveCodecFixtures.Read(Binary, bytes);
 
             Assert.That(parsed.IsFailure, Is.True);
-            Assert.That(parsed.Error, Does.Contain("99").And.Contains("1..2"));
+            Assert.That(parsed.Error, Does.Contain("99").And.Contains("1..3"));
         }
 
         [Test]

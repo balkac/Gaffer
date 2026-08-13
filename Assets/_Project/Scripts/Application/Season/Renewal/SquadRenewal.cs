@@ -82,7 +82,7 @@ namespace Gaffer.Application.Season
             {
                 Player player = squadPlayers[i];
                 _rng.Reseed(RetireSeed(seasonSeed, player.Id.Value, seasonNumber));
-                if (Retires(player, _rng))
+                if (Retirement.Retires(player, _settings, _rng))
                 {
                     // A retiree is replaced by a youth of the same role — the line balance is preserved.
                     intakeRoles.Add(player.Role);
@@ -170,37 +170,6 @@ namespace Gaffer.Application.Season
             }
 
             return _thinnestCandidates[rng.NextInt(candidateCount)];
-        }
-
-        // Twilight is where retirement starts to bite and Hard is where it is certain — both later for
-        // keepers, who play on longest. Between them the odds climb with age and ease for a higher rating,
-        // so a star lingers while a fading squad player calls it a day.
-        private bool Retires(Player player, IRandom rng)
-        {
-            bool keeper = player.Role == PlayerRole.Goalkeeper;
-            int twilight = keeper ? _settings.KeeperTwilightAge : _settings.OutfielderTwilightAge;
-            int hard = keeper ? _settings.KeeperHardAge : _settings.OutfielderHardAge;
-
-            if (player.Age >= hard)
-            {
-                return true;
-            }
-
-            if (player.Age < twilight)
-            {
-                return false;
-            }
-
-            // The twilight band is the divisor. A config where Hard is not past Twilight would make it
-            // zero, and 0/0 is NaN — `rng.NextDouble() < NaN` is false, so nobody would ever retire and
-            // squads would age forever with nothing thrown anywhere (CONVENTIONS §6). Clamping the band
-            // keeps the answer sensible instead of resting on the two returns above happening to cover
-            // that config today. A no-op for every Hard > Twilight, which is every shipped value.
-            int twilightBand = hard > twilight ? hard - twilight : 1;
-            double progress = (double)(player.Age - twilight) / twilightBand;
-            double rating = PlayerRatings.ForRole(player);
-            double chance = progress * (1.0 - (_settings.RetirementRatingEase * (rating / 100.0)));
-            return rng.NextDouble() < chance;
         }
 
         // The guaranteed academy gem (TDD §5): low visible ability — no higher than an ordinary prospect, so

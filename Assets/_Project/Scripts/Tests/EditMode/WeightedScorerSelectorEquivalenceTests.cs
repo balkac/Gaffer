@@ -128,7 +128,7 @@ namespace Gaffer.Tests
                 // memo has to survive being asked for the other side's squad in between, and a third
                 // roster has to evict cleanly rather than answer with a stale vector.
                 Squad squad = squads[i % squads.Count];
-                PlayerId? actual = selector.SelectScorer(squad, actualRng);
+                PlayerId? actual = selector.SelectScorer(squad.Players, actualRng);
                 PlayerId? expected = ReferenceSelect(squad, oracleRng, weights);
 
                 Assert.That(actual?.Value, Is.EqualTo(expected?.Value), $"Draw {i} over squad {i % squads.Count} picked a different scorer than the linear scan.");

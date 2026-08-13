@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Gaffer.Application.Drama;
 using Gaffer.Application.Generation;
+using Gaffer.Application.Progression;
 using Gaffer.Application.Run;
 using Gaffer.Application.Season;
 using Gaffer.Application.Serialization;
@@ -39,6 +40,15 @@ namespace Gaffer.Tests
             return new RunBalance(drama: new DramaSettings(maxEventsPerSeason: 0));
         }
 
+        // Drama silenced (it blocks the week on an answer) and the development tick pushed past any window
+        // these tests play, so the run's loop can be compared against a bare one.
+        private static RunBalance NoDevelopment()
+        {
+            return new RunBalance(
+                drama: new DramaSettings(maxEventsPerSeason: 0),
+                development: new DevelopmentSettings(weeksPerTick: 1000));
+        }
+
         private static RunSetup Setup()
         {
             return new RunSetup(
@@ -66,7 +76,14 @@ namespace Gaffer.Tests
         public void AdvanceWeek_DrivenThroughTheSession_ReproducesTheSeasonDrivenThroughLeagueSeason()
         {
             const int weeks = 6;
-            RunSession session = StartRun(Setup(), QuietDrama());
+
+            // Development is silenced for this pin, not forgotten. The run does MORE than LeagueSeason's
+            // week loop now — every WeeksPerTick weeks it develops all twenty rosters, which changes the
+            // strengths the next round is played on — so a bare season would legitimately diverge from
+            // round five and the pin would be asserting something false. Pushing the tick past the window
+            // keeps this test measuring what it was written to measure: that the ORDER of the week loop is
+            // the same one, not that the run has stopped doing anything else.
+            RunSession session = StartRun(Setup(), NoDevelopment());
 
             var throughSession = new List<MatchResult>();
             for (int week = 0; week < weeks; week++)
@@ -76,7 +93,7 @@ namespace Gaffer.Tests
                 throughSession.AddRange(outcome.Value.Matches);
             }
 
-            IReadOnlyList<MatchResult> direct = PlayedDirectly(weeks);
+            IReadOnlyList<MatchResult> direct = PlayedDirectly(weeks, session.SeasonMatchSeed, RivalriesOf(session));
 
             Assert.That(throughSession.Count, Is.EqualTo(direct.Count));
             for (int i = 0; i < direct.Count; i++)
@@ -95,7 +112,21 @@ namespace Gaffer.Tests
 
         // The same world and the same weekly loop, wired by hand the way the editor windows used to wire
         // it. If RunSession ever stops being a pure re-expression of this, this test says so.
-        private static IReadOnlyList<MatchResult> PlayedDirectly(int weeks)
+        // The rivalry map the run drew for itself, rebuilt through the public read model. A season played
+        // without it raises no fixture into a derby, and the two loops would diverge for a reason that has
+        // nothing to do with what this test is pinning.
+        private static RivalryTable RivalriesOf(RunSession session)
+        {
+            var rivalOf = new int[session.ClubCount];
+            for (int club = 0; club < session.ClubCount; club++)
+            {
+                rivalOf[club] = session.RivalOf(new ClubId(club)).Value;
+            }
+
+            return RivalryTable.Restore(rivalOf);
+        }
+
+        private static IReadOnlyList<MatchResult> PlayedDirectly(int weeks, ulong matchSeed, RivalryTable rivalries)
         {
             var generator = new LeagueGenerator(new SquadGenerator(new PlayerGenerator(TraitCatalog.Default)), TraitCatalog.Default);
             League league = generator.Generate(ClubCount, new SplitMix64RandomNumberGenerator(Seed ^ 0x5EEDD5EEDUL));
@@ -106,6 +137,7 @@ namespace Gaffer.Tests
                 new WeightedScorerSelector(ScorerWeights.Default));
 
             var season = new LeagueSeason(league, TraitCatalog.Default, TacticsSettings.Default, MoraleSettings.Default, simulator);
+            season.SetMatchContextBuilder(new MatchContextBuilder(rivalries, MatchContextSettings.Default));
             var managed = new ClubId(ManagedIndex);
             season.SetFormation(managed, Formation.F442);
             season.SetTactics(managed, Tactics.Balanced);
@@ -114,7 +146,7 @@ namespace Gaffer.Tests
             MatchContext context = RunSetup.Default.MatchContext;
             for (int week = 0; week < weeks; week++)
             {
-                season.AdvanceWeek(context, Seed);
+                season.AdvanceWeek(context, matchSeed);
             }
 
             return season.PlayedResults;
@@ -332,7 +364,7 @@ namespace Gaffer.Tests
             Assert.That(session.Finances.WeeklyWageBill, Is.EqualTo(wageBefore - wage));
             Assert.That(session.Squad.Count, Is.EqualTo(squadBefore - 1));
             Assert.That(session.Squad.Contains(subject.Id), Is.False);
-            Assert.That(session.Market, Contains.Item(subject));
+            Assert.That(session.GetMarket(), Contains.Item(subject));
             Assert.That(outcome.Lineup.Starters, Has.No.Member(subject));
             Assert.That(session.PendingDrama, Is.Null, "the event is answered");
         }
@@ -415,7 +447,7 @@ namespace Gaffer.Tests
             Assert.That(session.Finances.Cash, Is.EqualTo(cashBefore - signed.Value.Fee));
             Assert.That(session.Finances.WeeklyWageBill, Is.EqualTo(wageBefore + signed.Value.WeeklyWage));
             Assert.That(session.Squad.Count, Is.EqualTo(squadBefore + 1));
-            Assert.That(session.Market, Has.No.Member(target));
+            Assert.That(session.GetMarket(), Has.No.Member(target));
             Assert.That(signed.Value.Lineup.Starters.Count, Is.EqualTo(session.Formation.Total));
         }
 
@@ -429,13 +461,13 @@ namespace Gaffer.Tests
             Result<TransferOutcome> signed = session.SignPlayer(target);
 
             Assert.That(signed.IsFailure, Is.True);
-            Assert.That(session.Market, Contains.Item(target));
+            Assert.That(session.GetMarket(), Contains.Item(target));
         }
 
         private static Player MostAffordable(RunSession session)
         {
             Player cheapest = null;
-            foreach (Player player in session.Market)
+            foreach (Player player in session.GetMarket())
             {
                 if (cheapest == null || session.FeeOf(player) < session.FeeOf(cheapest))
                 {
@@ -821,7 +853,7 @@ namespace Gaffer.Tests
             Assert.That(played.MoralePointsOf(wounded.Id), Is.EqualTo(-4.0).Within(1e-9), "the wound is still live at the save");
 
             Finances money = played.Finances;
-            IReadOnlyList<Player> market = played.Market;
+            IReadOnlyList<Player> market = played.GetMarket();
             LineupOutcome before = played.Lineup();
 
             // Through the real bytes: the shipped codec writes the container, the migrator gates the load.
@@ -862,7 +894,7 @@ namespace Gaffer.Tests
 
             // The signing is on the roster and off the market.
             Assert.That(resumed.Squad.Contains(signing.Id), Is.True, "the player he signed is still his");
-            Assert.That(IdsOf(resumed.Market), Is.EqualTo(IdsOf(market)), "and the shortlist he was reading is the same one");
+            Assert.That(IdsOf(resumed.GetMarket()), Is.EqualTo(IdsOf(market)), "and the shortlist he was reading is the same one");
 
             // Tactics, shape and the exact team sheet.
             LineupOutcome after = resumed.Lineup();
@@ -917,7 +949,7 @@ namespace Gaffer.Tests
             Assert.That(resumed.PlayedRounds, Is.EqualTo(1), "the season still resumes where it stopped");
             Assert.That(resumed.Finances.Cash, Is.EqualTo(3_000_000L), "the money comes from the setup");
             Assert.That(resumed.Finances.WeeklyWageBudget, Is.EqualTo(500_000L));
-            Assert.That(resumed.Market.Count, Is.EqualTo(7), "and a fresh market is generated at the setup's size");
+            Assert.That(resumed.GetMarket().Count, Is.EqualTo(7), "and a fresh market is generated at the setup's size");
             Assert.That(resumed.OriginalSeed, Is.EqualTo(saved.MatchSeed),
                 "a v5 document's match seed IS the seed its world was generated from");
         }

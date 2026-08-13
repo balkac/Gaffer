@@ -175,7 +175,7 @@ namespace Gaffer.Tests
             HashSet<int> awayIds = IdsOf(away);
 
             var strong = new TeamStrength(85, 85, 85);
-            var command = new MatchCommand(strong, strong, home, away, NormalContext());
+            var command = new MatchCommand(strong, strong, home.Players, away.Players, NormalContext());
 
             var rng = new SplitMix64RandomNumberGenerator(4);
             int goalsChecked = 0;

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Gaffer.Application.Drama;
+using Gaffer.Application.Narrative;
+using Gaffer.Application.Progression;
 using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
 using Gaffer.Application.Transfers;
@@ -129,6 +131,8 @@ namespace Gaffer.Application.Serialization
                 Market = CaptureMarket(run.Market),
                 Morale = CaptureMorale(run.Morale),
                 Drama = CaptureDrama(run),
+                Journeys = CaptureJourneys(run.Journeys),
+                Development = CaptureDevelopment(run.Development),
             };
         }
 
@@ -160,7 +164,9 @@ namespace Gaffer.Application.Serialization
                 morale: RestoreMorale(run.Morale),
                 drama: RestoreDrama(run.Drama),
                 pendingEvent: RestorePendingEvent(run.Drama),
-                pendingSubjectPlayerId: run.Drama != null ? run.Drama.PendingSubjectPlayerId : RunSaveData.NoPlayer);
+                pendingSubjectPlayerId: run.Drama != null ? run.Drama.PendingSubjectPlayerId : RunSaveData.NoPlayer,
+                journeys: RestoreJourneys(run.Journeys),
+                development: RestoreDevelopment(run.Development));
         }
 
         private static RunSetupSaveData CaptureSetup(RunSetupState setup)
@@ -634,6 +640,154 @@ namespace Gaffer.Application.Serialization
                 Kicking = d.Kicking,
                 GkPositioning = d.GkPositioning,
             };
+        }
+
+        // ----- The run's memory (v7) ----------------------------------------------------------------------
+
+        // Journeys are written whole. They are small — a few dozen careers of a few moments each, against a
+        // world of 50,000 players — and they are the one thing in the document that cannot be re-derived
+        // from anything else, because a moment is a reading of a match that has already been thrown away.
+        private static List<JourneySaveData> CaptureJourneys(IReadOnlyList<PlayerJourney> journeys)
+        {
+            if (journeys == null || journeys.Count == 0)
+            {
+                return null;
+            }
+
+            var captured = new List<JourneySaveData>(journeys.Count);
+            for (int i = 0; i < journeys.Count; i++)
+            {
+                PlayerJourney journey = journeys[i];
+                IReadOnlyList<CareerMoment> moments = journey.Moments;
+                var written = new List<MomentSaveData>(moments.Count);
+                for (int m = 0; m < moments.Count; m++)
+                {
+                    CareerMoment moment = moments[m];
+                    written.Add(new MomentSaveData
+                    {
+                        Kind = PersistedCareerMomentKind.ToName(moment.Kind),
+                        ClubIndex = moment.Club.Value,
+                        Season = moment.Season,
+                        Round = moment.Round,
+                        Minute = moment.Minute,
+                        Count = moment.Count,
+                    });
+                }
+
+                IReadOnlyList<PlayerSeason> seasons = journey.Seasons;
+                var numbers = new List<int>(seasons.Count);
+                var appearances = new List<int>(seasons.Count);
+                var goals = new List<int>(seasons.Count);
+                for (int y = 0; y < seasons.Count; y++)
+                {
+                    numbers.Add(seasons[y].Season);
+                    appearances.Add(seasons[y].Appearances);
+                    goals.Add(seasons[y].Goals);
+                }
+
+                captured.Add(new JourneySaveData
+                {
+                    PlayerId = journey.Player.Value,
+                    Name = journey.Name,
+                    Appearances = journey.Appearances,
+                    Goals = journey.Goals,
+                    Moments = written,
+                    SeasonNumbers = numbers,
+                    SeasonAppearances = appearances,
+                    SeasonGoals = goals,
+                });
+            }
+
+            return captured;
+        }
+
+        // Tolerant on the way back (ARCHITECTURE §11): a moment whose kind this build does not know is
+        // DROPPED rather than failing the load. The vocabulary is expected to grow, so a save written by a
+        // newer build is a real thing a player can have, and losing one line of a story is a better outcome
+        // than a run that cannot be opened.
+        private static List<PlayerJourney> RestoreJourneys(List<JourneySaveData> journeys)
+        {
+            if (journeys == null || journeys.Count == 0)
+            {
+                return null;
+            }
+
+            var restored = new List<PlayerJourney>(journeys.Count);
+            for (int i = 0; i < journeys.Count; i++)
+            {
+                JourneySaveData saved = journeys[i];
+                var moments = new List<CareerMoment>(saved.Moments != null ? saved.Moments.Count : 0);
+                if (saved.Moments != null)
+                {
+                    for (int m = 0; m < saved.Moments.Count; m++)
+                    {
+                        MomentSaveData moment = saved.Moments[m];
+                        if (!PersistedCareerMomentKind.TryParse(moment.Kind, out CareerMomentKind kind))
+                        {
+                            continue;
+                        }
+
+                        moments.Add(new CareerMoment(
+                            kind,
+                            new PlayerId(saved.PlayerId),
+                            new ClubId(moment.ClubIndex),
+                            moment.Season,
+                            moment.Round,
+                            moment.Minute,
+                            moment.Count));
+                    }
+                }
+
+                restored.Add(PlayerJourney.Restore(
+                    new PlayerId(saved.PlayerId), saved.Name, saved.Appearances, saved.Goals, moments,
+                    RestoreSeasons(saved)));
+            }
+
+            return restored;
+        }
+
+        // Tolerant of a shorter row than its siblings: the three lists are written together, so a mismatch
+        // means an edited file rather than a version this build should try to interpret (ARCHITECTURE §11).
+        private static List<PlayerSeason> RestoreSeasons(JourneySaveData saved)
+        {
+            List<int> numbers = saved.SeasonNumbers;
+            if (numbers == null || saved.SeasonAppearances == null || saved.SeasonGoals == null)
+            {
+                return null;
+            }
+
+            var seasons = new List<PlayerSeason>(numbers.Count);
+            for (int i = 0; i < numbers.Count && i < saved.SeasonAppearances.Count && i < saved.SeasonGoals.Count; i++)
+            {
+                seasons.Add(new PlayerSeason(numbers[i], saved.SeasonAppearances[i], saved.SeasonGoals[i]));
+            }
+
+            return seasons;
+        }
+
+        private static DevelopmentPeriodSaveData CaptureDevelopment(DevelopmentPeriod period)
+        {
+            if (period == null || period.IsEmpty)
+            {
+                return null;
+            }
+
+            return new DevelopmentPeriodSaveData
+            {
+                RoundsSinceTick = period.RoundsPlayed,
+                AppearanceIds = new List<int>(period.PlayerIds),
+                AppearanceCounts = new List<int>(period.Appearances),
+            };
+        }
+
+        private static DevelopmentPeriod RestoreDevelopment(DevelopmentPeriodSaveData period)
+        {
+            if (period == null || period.RoundsSinceTick <= 0)
+            {
+                return null;
+            }
+
+            return new DevelopmentPeriod(period.RoundsSinceTick, period.AppearanceIds, period.AppearanceCounts);
         }
     }
 }

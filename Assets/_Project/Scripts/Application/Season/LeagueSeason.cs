@@ -37,6 +37,10 @@ namespace Gaffer.Application.Season
         // restored season is a fresh LeagueSeason, so no cache survives Restore.
         private readonly Dictionary<ClubId, List<Player>> _autoElevenByClub;
 
+        // What each fixture MEANS, worked out per match rather than once per season. Without it every
+        // game in the league is identical and nothing is ever an occasion (MatchContextBuilder).
+        private MatchContextBuilder _contextBuilder = new MatchContextBuilder(RivalryTable.None);
+
         private readonly TacticsSettings _tacticsSettings;
         private readonly EffectiveStrengthBuilder _strengthBuilder;
         private readonly LineupSelector _lineupSelector;
@@ -105,6 +109,16 @@ namespace Gaffer.Application.Season
         /// </summary>
         public MoraleLedger Morale { get; }
 
+        /// <summary>
+        /// Gives the season the rivalries and the run-in balance its fixtures are read against. Run state,
+        /// not season state — a derby is the same fixture every year — so the run sets it on each season
+        /// it builds rather than the season inventing one.
+        /// </summary>
+        public void SetMatchContextBuilder(MatchContextBuilder builder)
+        {
+            _contextBuilder = builder ?? new MatchContextBuilder(RivalryTable.None);
+        }
+
         /// <summary>Sets a club's tactics; its match strength is re-derived from its lineup each round.</summary>
         public void SetTactics(ClubId club, Tactics tactics)
         {
@@ -146,6 +160,25 @@ namespace Gaffer.Application.Season
         public Squad SquadOf(ClubId club)
         {
             return _clubsById.TryGetValue(club, out Club found) ? found.Squad : null;
+        }
+
+        /// <summary>
+        /// The eleven this club is fielding — the manager's pinned lineup, or the auto-pick for its
+        /// formation — as the match itself would see it. Empty for a squad-less club.
+        ///
+        /// <para>Exposed so the run can credit playing time to the players who actually played, for EVERY
+        /// club and not just the managed one (<c>RunSession.RecordAppearances</c>). Development is weighted
+        /// by minutes now, and if only the human's squad were counted, the rest of the league would develop
+        /// as if nobody in it ever played — rivals would fall behind for a reason that is not football.</para>
+        ///
+        /// <para>A read-model query: it may auto-pick and memoise, but it changes nothing a match would
+        /// see, because it returns exactly the eleven the next round would field anyway.</para>
+        /// </summary>
+        public IReadOnlyList<Player> StartersOf(ClubId club)
+        {
+            return _clubsById.TryGetValue(club, out Club found) && found.Squad != null
+                ? StartersOf(found)
+                : Array.Empty<Player>();
         }
 
         public int CurrentRound => _currentRound;
@@ -198,16 +231,31 @@ namespace Gaffer.Application.Season
 
             List<Fixture> roundFixtures = _fixturesByRound[_currentRound];
             var matches = new List<MatchResult>(roundFixtures.Count);
+            var occasions = new List<MatchContext>(roundFixtures.Count);
+
+            // Ordered once for the whole round rather than per fixture: the table cannot move until these
+            // results are in, and sorting it ten times to get the same answer is pure waste.
+            IReadOnlyList<LeagueTableRow> standings = _table.Ordered();
+
             for (int i = 0; i < roundFixtures.Count; i++)
             {
                 Fixture fixture = roundFixtures[i];
                 Club home = _clubsById[fixture.Home];
                 Club away = _clubsById[fixture.Away];
+
+                // What this particular fixture means. The raised context feeds the strength step too, so a
+                // derby specialist actually lifts his side on the day (NON-NEGOTIABLE #7).
+                MatchContext occasion = _contextBuilder.Build(context, fixture.Home, fixture.Away, standings, _currentRound, RoundCount);
+                occasions.Add(occasion);
+
                 var command = new MatchCommand(
-                    StrengthOf(home, context), StrengthOf(away, context),
-                    home.Squad, away.Squad,
+                    StrengthOf(home, occasion), StrengthOf(away, occasion),
+                    // The ELEVEN, not the roster: a goal belongs to somebody who was on the pitch. Null
+                    // for a squad-less (strength-only) club, which is how a goal goes unattributed rather
+                    // than being credited to a roster that does not exist.
+                    ElevenOf(home), ElevenOf(away),
                     ProfileOf(home.Id), ProfileOf(away.Id),
-                    context);
+                    occasion);
 
                 // Each match gets its own rng stream, seeded from a stable function of the fixture's identity,
                 // so a change to one club's tactics only reshapes its own matches — the rest of the league's
@@ -224,7 +272,7 @@ namespace Gaffer.Application.Season
             Morale.TickWeek();
             int round = _currentRound;
             _currentRound++;
-            return new WeekResult(round, matches);
+            return new WeekResult(round, matches, occasions);
         }
 
         // Avalanche-mixes the season seed with the fixture's identity into a well-distributed per-match seed
@@ -257,6 +305,11 @@ namespace Gaffer.Application.Season
             }
 
             return _strengthBuilder.Build(StartersOf(club), TacticsOf(club.Id), context, Morale);
+        }
+
+        private IReadOnlyList<Player> ElevenOf(Club club)
+        {
+            return club.Squad != null ? StartersOf(club) : null;
         }
 
         private IReadOnlyList<Player> StartersOf(Club club)

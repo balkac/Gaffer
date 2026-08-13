@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Progression;
 using Gaffer.Application.Simulation;
-using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Leagues;
 using Gaffer.Domain.Players;
@@ -10,14 +9,18 @@ using Gaffer.Domain.Players;
 namespace Gaffer.Application.Season
 {
     /// <summary>
-    /// Rolls a league on to the next season: every club's squad ages a year and develops
-    /// (<see cref="PlayerDevelopment"/>), its veterans retire and same-role youth come through
-    /// (<see cref="SquadRenewal"/>), and each club's strength is re-derived from the renewed roster. This is
-    /// what makes the discover-grow-sell flip real in a run — a scouted teenager only pays off across seasons,
-    /// rivals age too, and rosters renew instead of ageing into the ground, so the table's spread shifts year
-    /// on year. Deterministic: each player develops and retires through his own rng seeded from the season
-    /// seed, his id, and the season number, and new youth get fresh ids past every existing one, so a run
-    /// reproduces exactly and one club's changes never perturb another's. Squad-less clubs pass through untouched.
+    /// Rolls a league on to the next season: every club's squad has a birthday, its veterans retire and
+    /// same-role youth come through (<see cref="SquadRenewal"/>), and each club's strength is re-derived
+    /// from the renewed roster. This is what makes the discover-grow-sell flip real in a run — a scouted
+    /// teenager only pays off across seasons, rivals age too, and rosters renew instead of ageing into the
+    /// ground, so the table's spread shifts year on year. Deterministic: each player retires through his
+    /// own rng seeded from the season seed, his id, and the season number, and new youth get fresh ids past
+    /// every existing one, so a run reproduces exactly and one club's changes never perturb another's.
+    /// Squad-less clubs pass through untouched.
+    ///
+    /// <para><b>Development is not here.</b> Ability now moves during the season, in ticks weighted by
+    /// playing time (<c>RunSession.DevelopSquads</c>), so the rollover's job has narrowed to the once-a-year
+    /// facts: a year of age, retirement, and intake. See <see cref="PlayerDevelopment.DevelopPeriod"/>.</para>
     /// </summary>
     public sealed class SeasonTransition
     {
@@ -25,10 +28,6 @@ namespace Gaffer.Application.Season
         private readonly EffectiveStrengthBuilder _strengthBuilder;
         private readonly SquadRenewal _renewal;
         private readonly int _gemCadenceSeasons;
-
-        // Reseeded per player instead of newed per player (PERFORMANCE §8) — the per-player streams
-        // and determinism are unchanged.
-        private readonly SplitMix64RandomNumberGenerator _playerRng = new SplitMix64RandomNumberGenerator(0);
 
         public SeasonTransition()
             : this(DevelopmentSettings.Default, RenewalSettings.Default)
@@ -60,8 +59,8 @@ namespace Gaffer.Application.Season
         }
 
         /// <summary>
-        /// Returns a new league for <paramref name="nextSeasonNumber"/> with every squad aged and developed.
-        /// The season seed and the season number keep successive rollovers distinct yet reproducible.
+        /// Returns a new league for <paramref name="nextSeasonNumber"/> with every squad a year older and
+        /// renewed. The season seed and the season number keep successive rollovers distinct yet reproducible.
         /// </summary>
         public League ToNextSeason(League league, ulong seasonSeed, int nextSeasonNumber)
         {
@@ -79,9 +78,9 @@ namespace Gaffer.Application.Season
                     continue;
                 }
 
-                Squad developed = DevelopSquad(club.Squad, seasonSeed, nextSeasonNumber);
+                Squad aged = AgeSquad(club.Squad);
                 bool seedGem = IsGemSeason(club.Id.Value, nextSeasonNumber);
-                Squad renewed = _renewal.Renew(developed, seasonSeed, nextSeasonNumber, ref nextPlayerId, seedGem);
+                Squad renewed = _renewal.Renew(aged, seasonSeed, nextSeasonNumber, ref nextPlayerId, seedGem);
                 TeamStrength strength = _strengthBuilder.Build(renewed);
                 clubs.Add(new Club(club.Id, club.Name, renewed, strength));
             }
@@ -97,6 +96,12 @@ namespace Gaffer.Application.Season
             return (seasonNumber + clubId) % _gemCadenceSeasons == 0;
         }
 
+        // The highest LEAGUE-NATIVE id on any roster — market ids are skipped on purpose. A signed free
+        // agent keeps the id the market gave him, which is far above every league id
+        // (PlayerIdSpace.MarketBase); counting him would make the next academy intake allocate inside
+        // market space, and the market allocates there too, so two players would end up sharing an id and
+        // the journey log would merge two careers. Skipping them keeps league ids where they belong and
+        // still leaves academy intake past every league id already in play (LeagueIdSpaceTests).
         private static int MaxPlayerId(League league)
         {
             int max = -1;
@@ -111,9 +116,10 @@ namespace Gaffer.Application.Season
                 IReadOnlyList<Player> squadPlayers = club.Squad.Players;
                 for (int j = 0; j < squadPlayers.Count; j++)
                 {
-                    if (squadPlayers[j].Id.Value > max)
+                    PlayerId id = squadPlayers[j].Id;
+                    if (!PlayerIdSpace.IsMarket(id) && id.Value > max)
                     {
-                        max = squadPlayers[j].Id.Value;
+                        max = id.Value;
                     }
                 }
             }
@@ -121,15 +127,21 @@ namespace Gaffer.Application.Season
             return max;
         }
 
-        private Squad DevelopSquad(Squad squad, ulong seasonSeed, int seasonNumber)
+        // A birthday for everyone, and nothing else.
+        //
+        // ABILITY IS NOT TOUCHED HERE ANY MORE. It used to be: this method ran a whole season of
+        // development in one step at the rollover, which is why a player's numbers only ever moved in the
+        // summer. Development now arrives during the season, in ticks driven by playing time
+        // (RunSession.DevelopSquads → PlayerDevelopment.DevelopPeriod), so growing them again here would
+        // hand every squad two seasons of progress a year and quietly double the pace of the whole world.
+        // What has to happen exactly once a year is the birthday, and that is what is left.
+        private Squad AgeSquad(Squad squad)
         {
             IReadOnlyList<Player> squadPlayers = squad.Players;
             var players = new List<Player>(squadPlayers.Count);
             for (int i = 0; i < squadPlayers.Count; i++)
             {
-                Player player = squadPlayers[i];
-                _playerRng.Reseed(MixSeed(seasonSeed, player.Id.Value, seasonNumber));
-                players.Add(_development.Develop(player, _playerRng));
+                players.Add(_development.AgeOneYear(squadPlayers[i]));
             }
 
             // Built here and handed over with no reference kept, so the squad takes ownership instead
@@ -137,19 +149,5 @@ namespace Gaffer.Application.Season
             return Squad.Owning(players);
         }
 
-        // A well-distributed per-player, per-season seed (SplitMix64 finalizer over the combined inputs), so
-        // each player's development is independent of the others and stable across runs.
-        private static ulong MixSeed(ulong seasonSeed, int playerId, int seasonNumber)
-        {
-            unchecked
-            {
-                ulong z = seasonSeed
-                    ^ ((ulong)(uint)playerId * 0x9E3779B97F4A7C15UL)
-                    ^ ((ulong)(uint)seasonNumber * 0xD1B54A32D192ED03UL);
-                z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
-                z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
-                return z ^ (z >> 31);
-            }
-        }
     }
 }
