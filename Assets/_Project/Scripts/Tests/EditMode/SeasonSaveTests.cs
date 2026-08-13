@@ -72,8 +72,8 @@ namespace Gaffer.Tests
             // constant Capture writes agrees with itself at every version and would go on passing through
             // a bump that shipped without a migration. Spelled out, bumping the schema is a deliberate
             // act that fails here until the number and its migration are both updated.
-            Assert.That(data.SchemaVersion, Is.EqualTo(6));
-            Assert.That(SeasonSaveData.CurrentVersion, Is.EqualTo(6),
+            Assert.That(data.SchemaVersion, Is.EqualTo(7));
+            Assert.That(SeasonSaveData.CurrentVersion, Is.EqualTo(7),
                 "The schema version moved. Add the migration step, then update this test.");
         }
 

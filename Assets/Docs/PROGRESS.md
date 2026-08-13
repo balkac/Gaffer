@@ -6,6 +6,30 @@
 
 ---
 
+## Faz 5 — hafıza ve anlatı · 2026-08-13
+
+**5.1 An tanıma.** `Application/Narrative`. Katman **tanır, üretmez**: maç bitti, goller atıldı, tablo yazıldı; buradaki hiçbir metot bir skoru oynatamaz — yani kopya, kalibre edilmiş tek bir sayıya dokunmadan istendiği kadar yeniden ayarlanabilir. Gol bir **olgu** (dakika, taraf, golcü); *"ilk derbisinde, ilk golü"* bir **an**, ve ikisini üç girdi ayırıyor: maç neydi, oyuncu kimdi, ona daha önce ne oldu. Üçüncüsü, günlüğün tanımanın **girdisi** olmasının sebebi — bir maçın hiçbir yerinde debut ile 50. maç arasında fark yok.
+
+Hangi anların var olduğu `IMomentRule`, kural başına bir sınıf (sahibinin isteği: çok çeşit an) — yeni an türü, tanıyıcıyı düzenlemek değil yeni bir sınıf. Tanıyıcının sahip olduğu tek şey **sıra**: sayaçlar hareket etmeden anlık görüntü alınır, tüm kurallara o sorulur, sonra sayaçlar artar (ARCHITECTURE §8a). En önemli test bir **olumsuzlama**: yerleşmiş bir oyuncunun sıradan golü hiçbir an üretmez — her golü kaydeden günlük listedir, listede hiçbir şey nadir hissettirmez.
+
+**5.3 Gate B aracı, kopyadan önce.** `--probe story` gerçek bir run oynayıp en güçlü kariyerleri düz metin basar. Dram metninde bu soruyu sahibi oynayarak bulmuştu; bu sefer oynamadan görülsün diye erkene alındı. **İlk çalıştırmada iki hata buldu.** (a) En güçlü üç kariyer "(left the club)" basılıyordu — ad kadroya soruluyordu, oysa okumaya değer bir kariyerin sahibi çoktan emekli ya da satılmış olur; günlük artık kendi adını taşıyor. (b) 20 sezonda **tek bir büyük-maç golü yok**.
+
+**Maç bağlamı ölüymüş — bulgu (b)'nin kökü.** Bir sezonun bütün fikstürleri **tek bir `MatchContext`** ile oynanıyordu. İki şey birden ölüydü: bağlam-duyarlı trait'lerin (derbi canavarı, büyük maçta kaybolan) tetiklenecek büyük günü yoktu — yani mekanik olması gereken trait'ler aslında flavor'dı (NON-NEGOTIABLE #7) — ve anlatının "maç neydi" girdisi işlemiyordu. `MatchContextBuilder` üç yol getirdi, hepsi sezonun zaten bildiğinden: **derbi** (run başında çekilen rakiplik, formdan bağımsız — yoksa fikstür yıldan yıla kayar ve "ilk derbi golü" anlamsızlaşır), **şampiyonluk maçı** ve **küme düşme altı puanlık maçı** (ikisi de "aynı şeyi isteyen iki takım, karara bağlanacak kadar geç"; sezon sonu koşusundan önce sıralama gürültü). Rakiplikler **orijinal seed'den** çekiliyor — resume devam seed'iyle oynar ama rakiplik dünya durumudur, gelecek değil; save alanı gerekmedi.
+
+Bağlamı canlandırmak **tek başına yetmedi**: anlatıya hâlâ sezonun *taban* bağlamı gidiyordu. Gerçek bağlam `WeekResult` üstünde sonuçla birlikte dışarı çıkınca **215 → 258 an** ve büyük-maç golleri arklarda ilk kez göründü. Gate'ler etkilenmedi ve bu tesadüf değil: `SeasonRunner` maçları kendi sabit bağlamıyla doğrudan simüle eder, `LeagueSeason`'dan geçmez.
+
+**5.2 Save v7 (şema 7, container 3).** İki grup eklendi, ikisi de bağımsız opsiyonel — v6 save'inin **yokluğu zaten doğru anlamı taşıyor**, o yüzden migration adımı gerekmedi (uydurulacak bir geçmiş yok). **(a) Yolculuk günlükleri:** oyuncu başına ad + sayaçlar + anlar; an türü **isimle** persist edilir (NON-NEGOTIABLE #9) çünkü sözlüğün *büyümesi* bekleniyor, ordinal her save'deki her anı sessizce yeniden etiketlerdi. Yükleme toleranslı (ARCH §11): bu build'in tanımadığı bir tür **düşürülür**, run açılmaz olmaz. **(b) Biriken gelişim periyodu:** tick'ten bu yana geçen haftalar ve kimin oynadığı — **tüm lig**, çünkü her kulübün gelişimi kendi dakikalarıyla ağırlıklandırılıyor.
+
+**Ve o %0.29 kapandı.** Ölçüm zinciri: başta reload biriken gelişimi **yiyordu** (her maçta kaydeden sezonda −0.407 OVR); capture'da erken ödemek kaybı durdurdu ama gelişimi daha ince taneli ödeyerek **+0.178** kazandırdı; periyodu taşımak ikisini de sıfırladı. Artık **ne zaman kaydettiğin hiçbir şeyi etkilemiyor** — testle kilitli (`Capture_EveryWeek_CostsAndGainsNothingAcrossAWholeSeason`).
+
+**Konvansiyon öz-denetimi (sahibinin isteği).** Üç dosya birden fazla public tip taşıyordu (CONV §2) — altı kural `Rules/` altına, ARCH §2 gereği **namespace segmenti eklemeden**; occasion struct'ı ve `PlayerJourney` kendi dosyalarına. `MomentOccasion` totolojiydi → `MatchOccasion`. **`RunSession.Market`** 50.000 oyuncuda 17 ms iş yapan ve market saatini ilerleten bir **isim property'siydi**; CONV §2 property'yi ucuz ve yan etkisiz değerlere ayırıp gerisini `Get`-önekli metoda yolluyor → `GetMarket()`.
+
+Test 506 → **522**. Kalibrasyon değişmedi (5 gate PASS). `dotnet format` temiz. Editör/Infrastructure/Presentation gerçek Unity assembly'lerine karşı **0 hata**.
+
+**Kalan (Faz 5):** 5.4 maç anlatısı (string table, skorun **yanına** — gerekçe: anlatı skorun yerine geçerse garip bir cümlenin anlatı hatası mı sim sonucu mu olduğu ayırt edilemez) · 5.5 satış anı + sezon özeti · sonra Faz 4'ün kalan dram kopyası ile **tek geçişte** yazılacak (aynı string table, aynı ses tonu).
+
+---
+
 ## Sezon içi gelişim + kalıcı piyasa · 2026-08-13 (Faz 3'ün açık maddesi, Faz 5'ten önce)
 
 Sahibi iki şey istedi: **sezon içinde oyuncu gelişimi görmek** ve **piyasadaki oyuncuların da gelişmesi**, FM gerçekçiliğinde. Roadmap'e bakınca bunun yeni kapsam olmadığı görüldü — Faz 3'ün hiç yapılmamış *"basit antrenman"* teslimatı bu. Faz 5'in kapsamına dokunulmadı; roadmap Faz 3 altında somutlaştırıldı (sahibinin onayıyla).

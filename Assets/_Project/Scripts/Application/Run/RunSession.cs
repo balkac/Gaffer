@@ -166,6 +166,8 @@ namespace Gaffer.Application.Run
             AutoPickAndBind();
             RestoreEleven(restored);
             RestoreDrama(restored);
+            RestoreJourneys(restored);
+            RestoreDevelopment(restored);
             CheckComplete();
         }
 
@@ -369,17 +371,15 @@ namespace Gaffer.Application.Run
         /// </summary>
         public SeasonSaveData Capture()
         {
-            // Settle everything the run has EARNED but not yet paid out, before writing it down.
+            // The market is settled here because the resumed run assumes the pool has been developed
+            // through the played rounds (see the constructor), and this makes that true whether or not
+            // anyone opened it this season.
             //
-            // Development accrues between ticks in memory — the weeks banked since the last one, and who
-            // played them — and none of that is in the document. A reload therefore starts the count at
-            // zero, so every banked week was silently dropped: measured at 0.407 squad OVR lost over one
-            // season by a manager who saved after every match, about a tenth of a season's development,
-            // compounding every year. Save-scumming stunted your squad. Paying out here makes the saved
-            // state complete instead, and costs no save-format change. The market is settled for the same
-            // reason: the resumed run assumes the pool has been developed through the played rounds (see
-            // the constructor), and this is what makes that true whether or not anyone opened it.
-            FlushDevelopment();
+            // Development is NOT settled: from v7 the banked period travels in the document instead
+            // (CaptureDevelopment). Paying it out early was the previous fix — it stopped a reload losing
+            // the weeks, but paid them in a finer grain than playing on would have, worth +0.29% of a
+            // season to a manager who saved every week. Carrying the period is what makes when you save
+            // affect nothing at all.
             CatchUpMarket(settleRemainder: true);
             SyncLeague();
             return new SeasonSaveMapper().Capture(_league, _season, _setup.Seed, _seasonNumber, CaptureRun());
@@ -409,7 +409,34 @@ namespace Gaffer.Application.Run
                 morale: _season.Morale.CaptureEntries(),
                 drama: _drama.CaptureState(),
                 pendingEvent: _pending != null ? _pending.Event.Id : default,
-                pendingSubjectPlayerId: _pending?.Subject != null ? _pending.Subject.Id.Value : RunSaveData.NoPlayer);
+                pendingSubjectPlayerId: _pending?.Subject != null ? _pending.Subject.Id.Value : RunSaveData.NoPlayer,
+                journeys: CaptureJourneys(),
+                development: CaptureDevelopment());
+        }
+
+        private List<PlayerJourney> CaptureJourneys()
+        {
+            var journeys = new List<PlayerJourney>(_journeys.Count);
+            foreach (PlayerJourney journey in _journeys.Journeys)
+            {
+                journeys.Add(journey);
+            }
+
+            return journeys;
+        }
+
+        // The part-period of development, so a resume continues it rather than starting the count at zero.
+        private DevelopmentPeriod CaptureDevelopment()
+        {
+            var ids = new List<int>(_startsSinceTick.Count);
+            var counts = new List<int>(_startsSinceTick.Count);
+            foreach (KeyValuePair<int, int> played in _startsSinceTick)
+            {
+                ids.Add(played.Key);
+                counts.Add(played.Value);
+            }
+
+            return new DevelopmentPeriod(_roundsSinceTick, ids, counts);
         }
 
         private int[] SlotIds()
@@ -1154,6 +1181,45 @@ namespace Gaffer.Application.Run
             }
 
             BindStarters();
+        }
+
+        // The run's memory. Absent means a save from before v7: nothing was recorded, so the log starts
+        // empty and the careers already played are simply not remembered — which is honest. Inventing a
+        // debut for everyone currently in the squad would put a moment in the log that never happened.
+        private void RestoreJourneys(RunState restored)
+        {
+            IReadOnlyList<PlayerJourney> journeys = restored?.Journeys;
+            if (journeys == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < journeys.Count; i++)
+            {
+                _journeys.Restore(journeys[i]);
+            }
+        }
+
+        private void RestoreDevelopment(RunState restored)
+        {
+            DevelopmentPeriod period = restored?.Development;
+            if (period == null || period.IsEmpty)
+            {
+                return;
+            }
+
+            _roundsSinceTick = period.RoundsPlayed;
+            IReadOnlyList<int> ids = period.PlayerIds;
+            IReadOnlyList<int> appearances = period.Appearances;
+            if (ids == null || appearances == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < ids.Count && i < appearances.Count; i++)
+            {
+                _startsSinceTick[ids[i]] = appearances[i];
+            }
         }
 
         private void RestoreDrama(RunState restored)

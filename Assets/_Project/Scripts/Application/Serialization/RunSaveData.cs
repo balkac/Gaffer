@@ -65,6 +65,28 @@ namespace Gaffer.Application.Serialization
         /// engine fresh — no cooldowns, nothing fired, a clean season budget.</summary>
         public DramaSaveData Drama { get; set; }
 
+        /// <summary>
+        /// The run's memory: one entry per player the manager has actually had (v7). Null is a run with
+        /// no history — which is what every save written before v7 is, and the honest reading of one: the
+        /// moments were never recorded, so there is nothing to restore and nothing to invent.
+        ///
+        /// <para>Scoped, not complete. The world holds 50,000 players and this holds the few dozen whose
+        /// careers the manager was part of, which is the difference between a save that grows with the
+        /// story and one that grows with the world.</para>
+        /// </summary>
+        public List<JourneySaveData> Journeys { get; set; }
+
+        /// <summary>
+        /// Development earned but not yet paid out (v7): the weeks banked since the last tick and who
+        /// played them.
+        ///
+        /// <para>Before this existed, Capture settled the banked period early so a reload could not lose
+        /// it — which worked, but paid development in a finer grain than playing on would have, worth
+        /// +0.29% of a season to anyone who saved every week. Carrying the period instead means a reload
+        /// continues it, and when you save stops being able to affect anything at all.</para>
+        /// </summary>
+        public DevelopmentPeriodSaveData Development { get; set; }
+
         /// <summary>The <see cref="Eleven"/> entry for an empty slot. A player id is never negative (squad
         /// ids come from generation, market ids from a positive base), so this cannot collide with one.</summary>
         public const int NoPlayer = -1;
@@ -197,5 +219,55 @@ namespace Gaffer.Application.Serialization
         public string Id { get; set; }
 
         public int LastFiredWeek { get; set; }
+    }
+}
+
+namespace Gaffer.Application.Serialization
+{
+    /// <summary>One player's history at the club, as the document carries it (v7).</summary>
+    public sealed class JourneySaveData
+    {
+        public int PlayerId { get; set; }
+
+        /// <summary>His name as the journey recorded it. Stored rather than looked up: the careers most
+        /// worth reading belong to players who have retired or been sold, and the squad no longer knows
+        /// who they were.</summary>
+        public string Name { get; set; }
+
+        public int Appearances { get; set; }
+
+        public int Goals { get; set; }
+
+        public List<MomentSaveData> Moments { get; set; }
+    }
+
+    /// <summary>One recognised moment (v7). The kind travels as a NAME, never an ordinal
+    /// (NON-NEGOTIABLE #9), so the vocabulary can be reordered or grown without rewriting anyone's past.</summary>
+    public sealed class MomentSaveData
+    {
+        public string Kind { get; set; }
+
+        public int ClubIndex { get; set; }
+
+        public int Season { get; set; }
+
+        public int Round { get; set; }
+
+        public int Minute { get; set; }
+
+        public long Count { get; set; }
+    }
+
+    /// <summary>The part-period of development a save is carrying (v7).</summary>
+    public sealed class DevelopmentPeriodSaveData
+    {
+        /// <summary>Match weeks played since the last development tick.</summary>
+        public int RoundsSinceTick { get; set; }
+
+        /// <summary>How many of those weeks each player started, as flat id/count pairs — the whole
+        /// league, because every club's development is weighted by its own minutes.</summary>
+        public List<int> AppearanceIds { get; set; }
+
+        public List<int> AppearanceCounts { get; set; }
     }
 }

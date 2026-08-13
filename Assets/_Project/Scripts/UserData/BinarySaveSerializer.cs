@@ -124,7 +124,7 @@ namespace Gaffer.UserData
         /// before, its document arrives with no run block, and the v5 → v6 migration gives it one.
         /// </para>
         /// </summary>
-        public const ushort CurrentContainerVersion = 2;
+        public const ushort CurrentContainerVersion = 3;
 
         /// <summary>The oldest container version this build will READ. With
         /// <see cref="CurrentContainerVersion"/> this is the acceptance policy, the container-level twin of
@@ -383,6 +383,69 @@ namespace Gaffer.UserData
             }
 
             WriteDrama(writer, run.Drama);
+
+            // Container v3 appends the run's memory and its banked development. Appended, never
+            // interleaved: a v2 file simply stops here, and ReadRun stops reading with it.
+            WriteJourneys(writer, run.Journeys);
+            WriteDevelopment(writer, run.Development);
+        }
+
+        // journeysTag varint 0 = null list, else journeyCount + 1; then per journey:
+        //   playerId int32, name string, appearances int32, goals int32,
+        //   momentCount varint, then per moment: kind string, clubIndex/season/round/minute int32, count int64
+        private static void WriteJourneys(SaveBinaryWriter writer, List<JourneySaveData> journeys)
+        {
+            if (journeys == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+                return;
+            }
+
+            writer.WriteVarUInt32((uint)journeys.Count + 1);
+            for (int i = 0; i < journeys.Count; i++)
+            {
+                JourneySaveData journey = journeys[i];
+                writer.WriteInt32(journey.PlayerId);
+                writer.WriteString(journey.Name);
+                writer.WriteInt32(journey.Appearances);
+                writer.WriteInt32(journey.Goals);
+
+                int moments = journey.Moments != null ? journey.Moments.Count : 0;
+                writer.WriteVarUInt32((uint)moments);
+                for (int m = 0; m < moments; m++)
+                {
+                    MomentSaveData moment = journey.Moments[m];
+                    writer.WriteString(moment.Kind);
+                    writer.WriteInt32(moment.ClubIndex);
+                    writer.WriteInt32(moment.Season);
+                    writer.WriteInt32(moment.Round);
+                    writer.WriteInt32(moment.Minute);
+                    writer.WriteInt64(moment.Count);
+                }
+            }
+        }
+
+        // developmentTag varint 0 = null, else 1; then roundsSinceTick int32 and the id/count pairs.
+        private static void WriteDevelopment(SaveBinaryWriter writer, DevelopmentPeriodSaveData development)
+        {
+            if (development == null)
+            {
+                writer.WriteVarUInt32(SaveBinaryPrimitives.NullTag);
+                return;
+            }
+
+            writer.WriteVarUInt32(1);
+            writer.WriteInt32(development.RoundsSinceTick);
+
+            int pairs = development.AppearanceIds != null ? development.AppearanceIds.Count : 0;
+            writer.WriteVarUInt32((uint)pairs);
+            for (int i = 0; i < pairs; i++)
+            {
+                writer.WriteInt32(development.AppearanceIds[i]);
+                writer.WriteInt32(development.AppearanceCounts != null && i < development.AppearanceCounts.Count
+                    ? development.AppearanceCounts[i]
+                    : 0);
+            }
         }
 
         private static void WriteTactics(SaveBinaryWriter writer, TacticsSaveData tactics)
@@ -540,7 +603,7 @@ namespace Gaffer.UserData
             // container's business and the FIELDS are the schema's (ARCHITECTURE §11).
             if (containerVersion >= 2)
             {
-                data.Run = ReadRun(reader, attributeBuffer);
+                data.Run = ReadRun(reader, attributeBuffer, containerVersion);
             }
 
             // Trailing bytes are ignored on purpose — see the strictness posture on the class: a later
@@ -549,7 +612,7 @@ namespace Gaffer.UserData
             return data;
         }
 
-        private static RunSaveData ReadRun(SaveBinaryReader reader, byte[] attributeBuffer)
+        private static RunSaveData ReadRun(SaveBinaryReader reader, byte[] attributeBuffer, ushort containerVersion)
         {
             if (reader.ReadLength("run blocks") == SaveBinaryPrimitives.NullTag)
             {
@@ -622,7 +685,78 @@ namespace Gaffer.UserData
             }
 
             run.Drama = ReadDrama(reader);
+
+            // A v2 file ends at the drama block. Reading past it would consume whatever the season
+            // document happened to leave behind, so the version gates the read exactly as it gates
+            // the write (ARCHITECTURE §11).
+            if (containerVersion >= 3)
+            {
+                run.Journeys = ReadJourneys(reader);
+                run.Development = ReadDevelopment(reader);
+            }
+
             return run;
+        }
+
+        private static List<JourneySaveData> ReadJourneys(SaveBinaryReader reader)
+        {
+            uint tag = (uint)reader.ReadLength("journeys");
+            if (tag == SaveBinaryPrimitives.NullTag)
+            {
+                return null;
+            }
+
+            int count = (int)(tag - 1);
+            var journeys = new List<JourneySaveData>(count);
+            for (int i = 0; i < count; i++)
+            {
+                var journey = new JourneySaveData
+                {
+                    PlayerId = reader.ReadInt32(),
+                    Name = reader.ReadString(),
+                    Appearances = reader.ReadInt32(),
+                    Goals = reader.ReadInt32(),
+                };
+
+                int moments = (int)reader.ReadLength("moments");
+                journey.Moments = new List<MomentSaveData>(moments);
+                for (int m = 0; m < moments; m++)
+                {
+                    journey.Moments.Add(new MomentSaveData
+                    {
+                        Kind = reader.ReadString(),
+                        ClubIndex = reader.ReadInt32(),
+                        Season = reader.ReadInt32(),
+                        Round = reader.ReadInt32(),
+                        Minute = reader.ReadInt32(),
+                        Count = reader.ReadInt64(),
+                    });
+                }
+
+                journeys.Add(journey);
+            }
+
+            return journeys;
+        }
+
+        private static DevelopmentPeriodSaveData ReadDevelopment(SaveBinaryReader reader)
+        {
+            if (reader.ReadLength("development periods") == SaveBinaryPrimitives.NullTag)
+            {
+                return null;
+            }
+
+            var development = new DevelopmentPeriodSaveData { RoundsSinceTick = reader.ReadInt32() };
+            int pairs = (int)reader.ReadLength("appearance counts");
+            development.AppearanceIds = new List<int>(pairs);
+            development.AppearanceCounts = new List<int>(pairs);
+            for (int i = 0; i < pairs; i++)
+            {
+                development.AppearanceIds.Add(reader.ReadInt32());
+                development.AppearanceCounts.Add(reader.ReadInt32());
+            }
+
+            return development;
         }
 
         private static TacticsSaveData ReadTactics(SaveBinaryReader reader)

@@ -53,6 +53,10 @@ namespace Gaffer.Application.Serialization
                 return Result<SeasonSaveData>.Failure(roles.Error);
             }
 
+            // v6 → v7 needs no step. The two groups v7 adds — the run's memory and the banked
+            // development period — are independently optional, and their absence already MEANS what a v6
+            // save is: no moments were ever recorded, and nothing is banked. Inventing either would be
+            // inventing a past (see the note at the top of RunSaveData).
             data.SchemaVersion = SeasonSaveData.CurrentVersion;
             return Result<SeasonSaveData>.Success(data);
         }

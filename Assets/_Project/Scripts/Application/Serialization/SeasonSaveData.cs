@@ -49,7 +49,7 @@ namespace Gaffer.Application.Serialization
         /// for <c>static readonly</c> across an assembly boundary. It is safe here because every consumer is
         /// compiled from source in the same pass (Unity asmdefs and the dotnet test bridge alike) — there is
         /// no pre-built consumer that could hold a stale copy.</remarks>
-        public const int CurrentVersion = 6;
+        public const int CurrentVersion = 7;
 
         /// <summary>The schema this document was written with. <see cref="SaveMigrator"/> stamps it to
         /// <see cref="CurrentVersion"/> once the migration chain has run.</summary>
