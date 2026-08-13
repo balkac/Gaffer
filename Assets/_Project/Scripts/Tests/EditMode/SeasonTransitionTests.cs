@@ -106,17 +106,44 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void ToNextSeason_YoungSquadBelowPotential_LiftsStrength()
+        public void ToNextSeason_YoungSquadBelowPotential_DoesNotDevelopThemHere()
         {
+            // This test used to assert the OPPOSITE — that the rollover lifted a young squad's strength —
+            // and it was right until 2026-08-13, when development moved into the season (it is now paid in
+            // ticks weighted by playing time, RunSession.DevelopSquads). Growing them here as well would
+            // hand every squad two seasons of progress a year.
+            //
+            // The invariant it was really protecting — "a young squad below its ceiling gets stronger over
+            // a season" — has not been dropped; it moved to the layer that now owns it, and is asserted
+            // against a season actually being PLAYED in
+            // InSeasonDevelopmentTests.AdvanceToEndOfSeason_AYoungSquad_ImprovesDuringTheSeason.
             League league = LeagueWith(ClubWithSquad(0, YoungSquad(50, 85)));
 
             League next = new SeasonTransition(DevelopmentSettings.Default, NoIntake()).ToNextSeason(league, 1234UL, 2);
 
             TeamStrength before = league.Clubs[0].Strength;
             TeamStrength after = next.Clubs[0].Strength;
-            Assert.That(after.Attack, Is.GreaterThan(before.Attack));
-            Assert.That(after.Midfield, Is.GreaterThan(before.Midfield));
-            Assert.That(after.Defence, Is.GreaterThan(before.Defence));
+            Assert.That(after.Attack, Is.EqualTo(before.Attack).Within(1e-9));
+            Assert.That(after.Midfield, Is.EqualTo(before.Midfield).Within(1e-9));
+            Assert.That(after.Defence, Is.EqualTo(before.Defence).Within(1e-9));
+        }
+
+        [Test]
+        public void ToNextSeason_EverySquad_StillHasItsBirthday()
+        {
+            // The half of the old behaviour that stayed: ability is the season's business now, but the
+            // year turning over is not, and it must still happen exactly once.
+            League league = LeagueWith(ClubWithSquad(0, YoungSquad(50, 85)));
+            IReadOnlyList<Player> before = league.Clubs[0].Squad.Players;
+
+            League next = new SeasonTransition(DevelopmentSettings.Default, NoIntake()).ToNextSeason(league, 1234UL, 2);
+
+            IReadOnlyList<Player> after = next.Clubs[0].Squad.Players;
+            Assert.That(after.Count, Is.EqualTo(before.Count));
+            for (int i = 0; i < after.Count; i++)
+            {
+                Assert.That(after[i].Age, Is.EqualTo(before[i].Age + 1), $"index {i}");
+            }
         }
 
         [Test]

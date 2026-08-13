@@ -33,7 +33,12 @@ namespace Gaffer.Application.Progression
             int maxDeclineYears = 6,
             double generalDeclineFactor = 0.6,
             byte attributeFloor = 25,
-            byte physicalFloor = 15)
+            byte physicalFloor = 15,
+            int weeksPerTick = 4,
+            int seasonWeeks = 38,
+            double starterPlayingTime = 1.0,
+            double benchPlayingTime = 0.45,
+            double unattachedPlayingTime = 0.35)
         {
             GrowthRateTo20 = growthRateTo20;
             GrowthRateTo22 = growthRateTo22;
@@ -52,6 +57,11 @@ namespace Gaffer.Application.Progression
             GeneralDeclineFactor = generalDeclineFactor;
             AttributeFloor = attributeFloor;
             PhysicalFloor = physicalFloor;
+            WeeksPerTick = weeksPerTick < 1 ? 1 : weeksPerTick;
+            SeasonWeeks = seasonWeeks < 1 ? 1 : seasonWeeks;
+            StarterPlayingTime = starterPlayingTime;
+            BenchPlayingTime = benchPlayingTime;
+            UnattachedPlayingTime = unattachedPlayingTime;
         }
 
         // Growth as a fraction of the remaining ability gap, by age band — steep for teenagers, a trickle by
@@ -98,6 +108,44 @@ namespace Gaffer.Application.Progression
 
         /// <summary>Floor for the raw physical attributes under athletic decline.</summary>
         public byte PhysicalFloor { get; }
+
+        /// <summary>
+        /// How many match weeks pass between development ticks — the resolution at which a career moves
+        /// inside a season. Development used to land in one jump at the summer rollover, which is not what
+        /// a season feels like: a teenager should be visibly better in March than he was in August (the
+        /// owner's ask, 2026-08-13).
+        ///
+        /// <para>Not one, deliberately. A week of a season's growth is roughly a fifth of an attribute
+        /// point — under the resolution of a <c>byte</c>, so it would land as noise — and every tick
+        /// rebuilds each club's roster and drops the memoised elevens
+        /// (<c>LeagueSeason._autoElevenByClub</c>). Four weeks is about nine visible steps a season, at a
+        /// ninth of the churn. Tune it here rather than in code.</para>
+        /// </summary>
+        public int WeeksPerTick { get; }
+
+        /// <summary>
+        /// The match weeks in a full season — the denominator that makes a tick a FRACTION of a season, so
+        /// the ticks over a season add up to what the old once-a-year jump delivered instead of multiplying
+        /// it. A league whose real round count differs is handled by the caller passing its own; this is the
+        /// fallback for anything that develops without a season around it (the market).
+        /// </summary>
+        public int SeasonWeeks { get; }
+
+        // What a spell of playing time is worth to a career. Football's oldest development rule and the
+        // reason squad rotation is a decision rather than a chore: minutes are what a young player grows
+        // on. A regular starter keeps the full historical rate, so the calibrated curve still describes
+        // someone who plays; anyone below that grows more slowly than he used to.
+        /// <summary>Growth multiplier for a player who started every match in the period.</summary>
+        public double StarterPlayingTime { get; }
+
+        /// <summary>Growth multiplier for a squad player who did not start — training, not matches.</summary>
+        public double BenchPlayingTime { get; }
+
+        /// <summary>
+        /// Growth multiplier for a player nobody has signed. The market is not a freezer — an unattached
+        /// teenager still develops — but he develops like someone without a first team.
+        /// </summary>
+        public double UnattachedPlayingTime { get; }
 
         /// <summary>
         /// The calibrated defaults — one cached, shared, immutable instance, the convention every

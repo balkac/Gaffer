@@ -148,6 +148,25 @@ namespace Gaffer.Application.Season
             return _clubsById.TryGetValue(club, out Club found) ? found.Squad : null;
         }
 
+        /// <summary>
+        /// The eleven this club is fielding — the manager's pinned lineup, or the auto-pick for its
+        /// formation — as the match itself would see it. Empty for a squad-less club.
+        ///
+        /// <para>Exposed so the run can credit playing time to the players who actually played, for EVERY
+        /// club and not just the managed one (<c>RunSession.RecordAppearances</c>). Development is weighted
+        /// by minutes now, and if only the human's squad were counted, the rest of the league would develop
+        /// as if nobody in it ever played — rivals would fall behind for a reason that is not football.</para>
+        ///
+        /// <para>A read-model query: it may auto-pick and memoise, but it changes nothing a match would
+        /// see, because it returns exactly the eleven the next round would field anyway.</para>
+        /// </summary>
+        public IReadOnlyList<Player> StartersOf(ClubId club)
+        {
+            return _clubsById.TryGetValue(club, out Club found) && found.Squad != null
+                ? StartersOf(found)
+                : Array.Empty<Player>();
+        }
+
         public int CurrentRound => _currentRound;
 
         public int RoundCount => _fixturesByRound.Count;

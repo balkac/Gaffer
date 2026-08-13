@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Gaffer.Application.Drama;
 using Gaffer.Application.Generation;
+using Gaffer.Application.Progression;
 using Gaffer.Application.Season;
 using Gaffer.Application.Serialization;
 using Gaffer.Application.Simulation;
@@ -42,11 +43,6 @@ namespace Gaffer.Application.Run
     /// </summary>
     public sealed class RunSession
     {
-        // The market's id space sits clear of the league's, and each season's clear of the last, so a
-        // player signed from an earlier season's market can never collide with a current one.
-        private const int MarketIdBase = 1_000_000;
-        private const int MarketIdSeasonStride = 100_000;
-
         private static readonly IReadOnlyList<Player> NoPlayers = Array.Empty<Player>();
         private static readonly IReadOnlyList<MatchResult> NoResults = Array.Empty<MatchResult>();
 
@@ -57,6 +53,9 @@ namespace Gaffer.Application.Run
         private readonly LineupSelector _lineupSelector;
         private readonly EffectiveStrengthBuilder _strengthBuilder;
         private readonly PlayerPoolGenerator _marketGenerator;
+        private readonly MarketRenewal _marketRenewal;
+        private readonly PlayerDevelopment _development;
+        private readonly SplitMix64RandomNumberGenerator _developmentRng = new SplitMix64RandomNumberGenerator(0);
         private readonly Scout _scout;
         private readonly DramaEngine _drama;
         private readonly SeasonEvaluator _evaluator = new SeasonEvaluator();
@@ -75,6 +74,21 @@ namespace Gaffer.Application.Run
         private PendingDrama _pending;
         private SeasonVerdict? _verdict;
         private int _seasonNumber;
+
+        // ----- The in-season development clock ------------------------------------------------------------
+
+        // How many times each player has been in his club's eleven since the last development tick. The
+        // whole league is counted, not just the managed club (see LeagueSeason.StartersOf). Reused and
+        // cleared per tick rather than rebuilt, and keyed by the raw int rather than PlayerId so there is
+        // no comparer to box on IL2CPP (PERFORMANCE §8).
+        private readonly Dictionary<int, int> _startsSinceTick = new Dictionary<int, int>();
+        private int _roundsSinceTick;
+
+        // The round the market has been developed through. ONE int for 50,000 players, not a clock each:
+        // nothing touches a market player between ticks, so they are all owed exactly the same weeks, and
+        // "how far behind is the pool" is a single number. Seeded from the season's played rounds at
+        // construction so a resumed run does not re-apply weeks the save already carries.
+        private int _marketDevelopedThroughRound;
 
         /// <summary>
         /// Built through <see cref="RunSessionFactory"/> only — one wiring seam for the whole graph, so
@@ -106,7 +120,10 @@ namespace Gaffer.Application.Run
             _transition = new SeasonTransition(balance.Development, balance.Renewal, balance.Traits);
             _lineupSelector = new LineupSelector();
             _strengthBuilder = new EffectiveStrengthBuilder(balance.Traits, balance.TacticsBalance);
-            _marketGenerator = new PlayerPoolGenerator(new PlayerGenerator(balance.Traits));
+            var playerGenerator = new PlayerGenerator(balance.Traits);
+            _marketGenerator = new PlayerPoolGenerator(playerGenerator);
+            _marketRenewal = new MarketRenewal(playerGenerator, balance.Development, balance.Renewal, balance.Traits);
+            _development = new PlayerDevelopment(balance.Development, balance.Traits);
             _scout = new Scout(balance.Scouting);
             _drama = new DramaEngine(balance.DramaEvents, balance.Drama, balance.Economy);
 
@@ -117,6 +134,7 @@ namespace Gaffer.Application.Run
             _tactics = restored?.Tactics ?? setup.Tactics;
 
             _season = NewSeason(league, playedRounds, playedResults);
+            _marketDevelopedThroughRound = _season.CurrentRound;
             RestoreMorale(restored);
             _finances = restored?.Finances ?? new Finances(setup.StartingCash, setup.WeeklyWageBudget, TotalWages(ManagedSquad()));
             _market = restored?.Market != null ? new List<Player>(restored.Market) : GenerateMarket();
@@ -175,8 +193,23 @@ namespace Gaffer.Application.Run
         /// <summary>The managed club's live roster — signings and sales are reflected here at once.</summary>
         public Squad Squad => ManagedSquad();
 
-        /// <summary>This season's free agents, best-effort fresh each season.</summary>
-        public IReadOnlyList<Player> Market => _market;
+        /// <summary>
+        /// The world's unattached players. Persistent: it is generated once and then carried across every
+        /// season by <see cref="RenewMarket"/>, so a prospect is still there next summer — older, better —
+        /// and so is anyone you sold.
+        ///
+        /// <para>Reading it is what brings the pool's development up to the current week
+        /// (<see cref="CatchUpMarket"/>) — the deferral that keeps a 50,000-player world off the weekly
+        /// clock. The result is the same either way; only when the arithmetic happens differs.</para>
+        /// </summary>
+        public IReadOnlyList<Player> Market
+        {
+            get
+            {
+                CatchUpMarket();
+                return _market;
+            }
+        }
 
         /// <summary>The drama waiting on an answer, or null. A raised event blocks the next week.</summary>
         public PendingDrama PendingDrama => _pending;
@@ -299,6 +332,18 @@ namespace Gaffer.Application.Run
         /// </summary>
         public SeasonSaveData Capture()
         {
+            // Settle everything the run has EARNED but not yet paid out, before writing it down.
+            //
+            // Development accrues between ticks in memory — the weeks banked since the last one, and who
+            // played them — and none of that is in the document. A reload therefore starts the count at
+            // zero, so every banked week was silently dropped: measured at 0.407 squad OVR lost over one
+            // season by a manager who saved after every match, about a tenth of a season's development,
+            // compounding every year. Save-scumming stunted your squad. Paying out here makes the saved
+            // state complete instead, and costs no save-format change. The market is settled for the same
+            // reason: the resumed run assumes the pool has been developed through the played rounds (see
+            // the constructor), and this is what makes that true whether or not anyone opened it.
+            FlushDevelopment();
+            CatchUpMarket(settleRemainder: true);
             SyncLeague();
             return new SeasonSaveMapper().Capture(_league, _season, _setup.Seed, _seasonNumber, CaptureRun());
         }
@@ -361,6 +406,11 @@ namespace Gaffer.Application.Run
                 return Result<WeekOutcome>.Failure("The season is over — start the next one.");
             }
 
+            // Credited BEFORE the round is played: the eleven that is about to take the field is the one
+            // that earns this week's minutes, and once AdvanceWeek returns the season has moved on to the
+            // next round's lineup.
+            RecordAppearances();
+
             WeekResult week = _season.AdvanceWeek(_context, _setup.Seed);
 
             // Wages bite every week (GDD §4.4): the bill leaves the transfer cash whether or not the
@@ -368,6 +418,7 @@ namespace Gaffer.Application.Run
             long wagesPaid = _finances.WeeklyWageBill;
             _finances = _finances.PayWeeklyWages();
 
+            DevelopSquadsIfDue();
             TickDrama();
             CheckComplete();
 
@@ -443,22 +494,31 @@ namespace Gaffer.Application.Run
 
             DramaOutcome outcome = resolved.Value;
 
+            // The two players this resolution writes back, resolved to their LIVE selves by id. The drama
+            // engine is handed a squad snapshot when the event is raised, and that snapshot can go out of
+            // date before the answer comes: Capture settles banked development (so saving with a decision
+            // open replaces every roster object), and a resumed run rebuilds the event against a squad that
+            // has moved on. Writing a stale object back — which is exactly what the trait grant does, by
+            // rebuilding the player and swapping him in — would silently roll that development back.
+            Player toSell = outcome.PlayerToSell != null ? FindInSquad(outcome.PlayerToSell.Id) ?? outcome.PlayerToSell : null;
+            Player traitTarget = outcome.TraitGrantTarget != null ? FindInSquad(outcome.TraitGrantTarget.Id) ?? outcome.TraitGrantTarget : null;
+
             // --- Decide everything before changing anything -------------------------------------------
             Finances finances = outcome.CashDelta == 0
                 ? _finances
                 : new Finances(_finances.Cash + outcome.CashDelta, _finances.WeeklyWageBudget, _finances.WeeklyWageBill);
 
             TransferResult sale = null;
-            if (outcome.PlayerToSell != null)
+            if (toSell != null)
             {
                 Squad squad = ManagedSquad();
                 Result<TransferResult> attempt = squad == null
                     ? Result<TransferResult>.Failure("This club has no roster to sell from.")
-                    : TransferService.Sell(finances, squad, outcome.PlayerToSell, _balance.Economy);
+                    : TransferService.Sell(finances, squad, toSell, _balance.Economy);
                 if (attempt.IsFailure)
                 {
                     return Result<DramaResolution>.Failure(
-                        "That answer forces " + outcome.PlayerToSell.Name + " out, and the sale cannot go through: " +
+                        "That answer forces " + toSell.Name + " out, and the sale cannot go through: " +
                         attempt.Error + " Nothing has been applied — answer differently.");
                 }
 
@@ -479,16 +539,16 @@ namespace Gaffer.Application.Run
             if (sale != null)
             {
                 _season.UpdateSquad(_managedClub, sale.Squad);
-                _market.Add(outcome.PlayerToSell);
+                AddToMarket(toSell);
                 squadChanged = true;
             }
 
             Player rebuilt = null;
-            if (outcome.TraitGrantTarget != null)
+            if (traitTarget != null)
             {
                 // The player is immutable — the heir is rebuilt with his new trait and swapped into the
                 // live squad, so the aura is real from the next lineup on.
-                rebuilt = WithTrait(outcome.TraitGrantTarget, outcome.GrantedTrait);
+                rebuilt = WithTrait(traitTarget, outcome.GrantedTrait);
                 Squad squad = ManagedSquad();
                 if (squad != null)
                 {
@@ -511,9 +571,9 @@ namespace Gaffer.Application.Run
                 cashDelta: outcome.CashDelta,
                 finances: _finances,
                 moraleChanges: moraleChanges,
-                soldPlayer: sale != null ? outcome.PlayerToSell : null,
+                soldPlayer: sale != null ? toSell : null,
                 saleFee: sale != null ? sale.Fee : 0L,
-                traitGrantTarget: outcome.TraitGrantTarget,
+                traitGrantTarget: traitTarget,
                 grantedTrait: outcome.GrantedTrait,
                 rebuiltPlayer: rebuilt,
                 lineup: BuildLineupOutcome()));
@@ -523,8 +583,9 @@ namespace Gaffer.Application.Run
         /// Rolls the whole league on a year and starts the next season: the managed club's live roster is
         /// folded back in first (so signings age and develop too), every squad ages, develops, retires
         /// its veterans and takes youth through, the wage bill is re-derived from the developed squad
-        /// while the cash and the wage ceiling carry over, a new market opens, the drama budget resets and
-        /// the eleven is re-picked. Fails while the season is still being played.
+        /// while the cash and the wage ceiling carry over, the market ages a year with it (it is renewed,
+        /// not rebuilt — see <see cref="RenewMarket"/>), the drama budget resets and the eleven is
+        /// re-picked. Fails while the season is still being played.
         /// </summary>
         public Result<SeasonRollover> StartNextSeason()
         {
@@ -532,6 +593,13 @@ namespace Gaffer.Application.Run
             {
                 return Result<SeasonRollover>.Failure("The season is not finished — play it out first.");
             }
+
+            // Settle the season's development before the year turns over. Ticks fire every WeeksPerTick
+            // weeks, so a season whose round count is not a multiple of that ends with a few weeks banked
+            // and unpaid — dropping them would quietly shave that share off every career, every year. The
+            // market's owed weeks are settled the same way, and must be, because MarketRenewal only ages.
+            FlushDevelopment();
+            CatchUpMarket(settleRemainder: true);
 
             SyncLeague();
             Squad before = ManagedSquad();
@@ -550,7 +618,8 @@ namespace Gaffer.Application.Run
             // season and the club prints the rate every rollover. With no shift performed the live ceiling
             // *is* the setup's, so nothing else changes.
             _finances = new Finances(_finances.Cash, _finances.WeeklyWageBudget, TotalWages(after));
-            _market = GenerateMarket();
+            _market = RenewMarket();
+            _marketDevelopedThroughRound = 0;
             _drama.StartSeason();
             _pending = null;
             _verdict = null;
@@ -588,7 +657,17 @@ namespace Gaffer.Application.Run
                 return Result<TransferOutcome>.Failure("This club has no roster to sign into.");
             }
 
-            Result<TransferResult> result = TransferService.Sign(_finances, squad, player, _balance.Economy);
+            // Sign the LIVE instance, found by id — never the object the caller happened to be holding.
+            // Two things make that necessary now. The market's development is deferred, so a catch-up
+            // replaces every player in the pool with a developed copy; and Player is a class with
+            // reference equality, so an out-of-date reference would sign the weaker, pre-development
+            // version into the squad AND leave the real one in the pool, because List.Remove would match
+            // nothing and fail silently. Both faults are invisible at the call site.
+            CatchUpMarket(settleRemainder: true);
+            int listed = IndexInMarket(player.Id);
+            Player signing = listed >= 0 ? _market[listed] : player;
+
+            Result<TransferResult> result = TransferService.Sign(_finances, squad, signing, _balance.Economy);
             if (result.IsFailure)
             {
                 return Result<TransferOutcome>.Failure(result.Error);
@@ -596,12 +675,16 @@ namespace Gaffer.Application.Run
 
             _finances = result.Value.Finances;
             _season.UpdateSquad(_managedClub, result.Value.Squad);
-            _market.Remove(player);
+            if (listed >= 0)
+            {
+                _market.RemoveAt(listed);
+            }
+
             SyncLeague();
             AutoPickAndBind();
 
             return Result<TransferOutcome>.Success(new TransferOutcome(
-                player: player,
+                player: signing,
                 isSale: false,
                 fee: result.Value.Fee,
                 weeklyWage: WeeklyWageOf(player),
@@ -628,7 +711,12 @@ namespace Gaffer.Application.Run
                 return Result<TransferOutcome>.Failure("This club has no roster to sell from.");
             }
 
-            Result<TransferResult> result = TransferService.Sell(_finances, squad, player, _balance.Economy);
+            // The live squad instance, by id — the same staleness hazard as SignPlayer, from the other
+            // direction. The tick replaces every roster object, so a caller holding a player from before
+            // the last one would put his pre-development self on the market and quote the wrong fee.
+            Player leaving = FindInSquad(player.Id) ?? player;
+
+            Result<TransferResult> result = TransferService.Sell(_finances, squad, leaving, _balance.Economy);
             if (result.IsFailure)
             {
                 return Result<TransferOutcome>.Failure(result.Error);
@@ -636,15 +724,15 @@ namespace Gaffer.Application.Run
 
             _finances = result.Value.Finances;
             _season.UpdateSquad(_managedClub, result.Value.Squad);
-            _market.Add(player);
+            AddToMarket(leaving);
             SyncLeague();
             AutoPickAndBind();
 
             return Result<TransferOutcome>.Success(new TransferOutcome(
-                player: player,
+                player: leaving,
                 isSale: true,
                 fee: result.Value.Fee,
-                weeklyWage: WeeklyWageOf(player),
+                weeklyWage: WeeklyWageOf(leaving),
                 finances: _finances,
                 lineup: BuildLineupOutcome()));
         }
@@ -813,21 +901,49 @@ namespace Gaffer.Application.Run
             return club.Value >= 0 && club.Value < _league.Clubs.Count ? _league.Clubs[club.Value].Squad : null;
         }
 
-        // Folds the managed club's live roster (after any signing, sale or drama) back into the league,
-        // re-deriving its strength through the run's own trait catalog — the windows used a default-catalog
-        // builder here, so a configured catalog produced a league whose strengths did not match its season.
+        /// <summary>
+        /// Folds every club's live roster back into the league, re-deriving strength through the run's own
+        /// trait catalog (the windows used a default-catalog builder here, so a configured catalog produced
+        /// a league whose strengths did not match its season).
+        ///
+        /// <para><b>EVERY club, not just the managed one.</b> It used to sync only the managed club,
+        /// which was correct while that was the only roster that ever changed mid-season. In-season
+        /// development changed that: the tick rewrites all twenty rosters through
+        /// <see cref="LeagueSeason.UpdateSquad"/>, and <c>_league</c> is a second copy that
+        /// <see cref="StartNextSeason"/> hands to <see cref="SeasonTransition"/>. Syncing one club meant
+        /// every rival's season of development was thrown away each summer while the manager's was kept —
+        /// measured over six seasons before the fix: the managed club's best eleven climbed 63.0 → 64.8
+        /// while the league's fell 60.6 → 59.9, a gap opening from 2.4 to 4.9 for no footballing reason.
+        /// </para>
+        ///
+        /// <para>Allocation-free when nothing moved: a club whose live squad is the very object the league
+        /// already holds is skipped, and the league is only rebuilt if at least one club changed — so the
+        /// common case (a signing, one club) no longer copies the club list either.</para>
+        /// </summary>
         private void SyncLeague()
         {
-            Squad live = ManagedSquad();
-            if (live == null)
+            List<Club> clubs = null;
+            for (int i = 0; i < _league.Clubs.Count; i++)
             {
-                return;
+                Club current = _league.Clubs[i];
+                Squad live = _season.SquadOf(current.Id);
+                if (live == null || ReferenceEquals(live, current.Squad))
+                {
+                    continue;
+                }
+
+                if (clubs == null)
+                {
+                    clubs = new List<Club>(_league.Clubs);
+                }
+
+                clubs[i] = new Club(current.Id, current.Name, live, _strengthBuilder.Build(live));
             }
 
-            var clubs = new List<Club>(_league.Clubs);
-            Club old = clubs[_managedClub.Value];
-            clubs[_managedClub.Value] = new Club(old.Id, old.Name, live, _strengthBuilder.Build(live));
-            _league = new League(_league.Name, clubs);
+            if (clubs != null)
+            {
+                _league = new League(_league.Name, clubs);
+            }
         }
 
         private long TotalWages(Squad squad)
@@ -847,29 +963,19 @@ namespace Gaffer.Application.Run
             return total;
         }
 
-        // A free-agent market to scout and sign from, with a few guaranteed gems (TDD §5). Both the
-        // generation seed and the id range shift with the season number, so each season shows a genuinely
-        // fresh set of prospects rather than the same names again.
+        // The free-agent pool a run starts with — built ONCE, at the beginning, and carried from there by
+        // RenewMarket. It is also the fallback for a save that predates a stored market (see the
+        // constructor), which is why it reads the live season number rather than assuming season one.
         private List<Player> GenerateMarket()
         {
-            var gem = new GenerationContext
-            {
-                MinAge = 16,
-                MaxAge = 19,
-                MinAbility = 35,
-                MaxAbility = 52,
-                MinPotential = 84,
-                MaxPotential = 95,
-            };
-
             IReadOnlyList<Player> pool = _marketGenerator.GeneratePool(
-                _setup.MarketSize < 1 ? 1 : _setup.MarketSize,
+                MarketTargetSize(),
                 _setup.GuaranteedGems < 0 ? 0 : _setup.GuaranteedGems,
                 new GenerationContext(),
-                gem,
+                MarketGemContext(),
                 new SplitMix64RandomNumberGenerator((_setup.Seed ^ 0xA5A5A5UL) + ((ulong)_seasonNumber * 0x9E3779B97F4A7C15UL)));
 
-            int idBase = MarketIdBase + (_seasonNumber * MarketIdSeasonStride);
+            int idBase = PlayerIdSpace.SeasonBase(_seasonNumber);
             var market = new List<Player>(pool.Count);
             for (int i = 0; i < pool.Count; i++)
             {
@@ -878,6 +984,65 @@ namespace Gaffer.Application.Run
             }
 
             return market;
+        }
+
+        /// <summary>
+        /// The market a season on. THIS REPLACED REGENERATION, and the difference is the point: the pool
+        /// used to be discarded every summer, so a prospect you had been tracking — and every player you
+        /// had ever sold, since a sale returns him here — was deleted rather than aged. Now the world's
+        /// unattached players persist, develop, grow old and retire, and only the shortfall is refilled
+        /// (<see cref="MarketRenewal"/>, PROGRESS 2026-08-13).
+        /// </summary>
+        private List<Player> RenewMarket()
+        {
+            return _marketRenewal.Renew(
+                _market,
+                MarketTargetSize(),
+                _setup.GuaranteedGems < 0 ? 0 : _setup.GuaranteedGems,
+                MarketIntakeContext(),
+                MarketGemContext(),
+                _setup.Seed,
+                _seasonNumber);
+        }
+
+        // How many unattached players the world holds. Bounded above by a season's id block: the opening
+        // pool and every season's intake are numbered from that block, and a pool larger than the stride
+        // would run into the ids the NEXT season is going to hand out — two players with one id, which is
+        // the one thing the journey log cannot survive (PlayerIdSpace). The shipped scale target, 50,000,
+        // sits at half the stride.
+        private int MarketTargetSize()
+        {
+            int size = _setup.MarketSize < 1 ? 1 : _setup.MarketSize;
+            return size > PlayerIdSpace.SeasonStride ? PlayerIdSpace.SeasonStride : size;
+        }
+
+        // The guaranteed discoverable gem (TDD §5): young, ordinary to look at, with a rare ceiling.
+        // Stated once now that both the opening pool and every season's intake draw from it.
+        private static GenerationContext MarketGemContext()
+        {
+            return new GenerationContext
+            {
+                MinAge = 16,
+                MaxAge = 19,
+                MinAbility = 35,
+                MaxAbility = 52,
+                MinPotential = 84,
+                MaxPotential = 95,
+            };
+        }
+
+        // Each summer's new generation of free agents. Only the AGE band is narrowed, to the same youth
+        // ages the academy uses (config, NON-NEGOTIABLE #3); ability and potential keep the pool's ordinary
+        // bands. That is deliberately not a new balance decision — the opening pool already generates its
+        // sixteen-year-olds on those same bands, so intake matches what the pool is made of instead of
+        // introducing a second, drifting idea of what a young free agent looks like.
+        private GenerationContext MarketIntakeContext()
+        {
+            return new GenerationContext
+            {
+                MinAge = _balance.Renewal.YouthMinAge,
+                MaxAge = _balance.Renewal.YouthMaxAge,
+            };
         }
 
         private static Player WithTrait(Player player, TraitId trait)
@@ -1092,6 +1257,256 @@ namespace Gaffer.Application.Run
                     ? _strengthBuilder.Build(starters, _tactics)
                     : _league.Clubs[_managedClub.Value].Strength,
                 chanceProfile: ChanceProfile.FromTactics(_tactics, _balance.TacticsBalance));
+        }
+
+        // ----- In-season development ----------------------------------------------------------------------
+
+        // Credits this week's appearance to everyone in every club's eleven. The whole league, on purpose:
+        // if only the managed squad were counted, every rival would develop as though nobody in it ever
+        // played, and the human's club would pull away for a reason that has nothing to do with management.
+        private void RecordAppearances()
+        {
+            for (int club = 0; club < _league.Clubs.Count; club++)
+            {
+                IReadOnlyList<Player> starters = _season.StartersOf(new ClubId(club));
+                for (int i = 0; i < starters.Count; i++)
+                {
+                    int id = starters[i].Id.Value;
+                    _startsSinceTick.TryGetValue(id, out int played);
+                    _startsSinceTick[id] = played + 1;
+                }
+            }
+
+            _roundsSinceTick++;
+        }
+
+        /// <summary>
+        /// Every <see cref="DevelopmentSettings.WeeksPerTick"/> weeks, moves the whole league's ability on
+        /// by that share of a season — weighted, per player, by how much of the period he actually played.
+        ///
+        /// <para><b>Why not every week.</b> A week of a season's growth is about a fifth of an attribute
+        /// point, under the resolution of the <c>byte</c> it would be written to, and every tick rebuilds
+        /// each club's roster and drops the memoised elevens. Four weeks is roughly nine visible steps a
+        /// season at a ninth of the churn — the manager sees a teenager improve in-season, which is the
+        /// point, without the weekly clock paying for it.</para>
+        ///
+        /// <para><b>Why it does not re-pick the eleven.</b> The roster objects are replaced, so the team
+        /// sheet has to be re-bound — but by <em>id</em>, keeping the manager's own selection. Auto-picking
+        /// here would silently undo a hand-picked lineup every fourth week, which reads as the game
+        /// overruling you.</para>
+        /// </summary>
+        private void DevelopSquadsIfDue()
+        {
+            if (_roundsSinceTick < _balance.Development.WeeksPerTick || _season.IsComplete)
+            {
+                return;
+            }
+
+            FlushDevelopment();
+        }
+
+        // Pays out whatever weeks are banked, whether or not a full tick's worth has accrued. Used at the
+        // season boundary, where the remainder would otherwise be dropped.
+        private void FlushDevelopment()
+        {
+            if (_roundsSinceTick <= 0)
+            {
+                return;
+            }
+
+            DevelopSquads(_roundsSinceTick);
+            _startsSinceTick.Clear();
+            _roundsSinceTick = 0;
+        }
+
+        private void DevelopSquads(int roundsInPeriod)
+        {
+            double fraction = (double)roundsInPeriod / SeasonWeeks();
+            for (int club = 0; club < _league.Clubs.Count; club++)
+            {
+                var clubId = new ClubId(club);
+                Squad squad = _season.SquadOf(clubId);
+                if (squad == null)
+                {
+                    continue;
+                }
+
+                IReadOnlyList<Player> players = squad.Players;
+
+                // Built straight into the list the squad will own — no scratch buffer in between. A
+                // reusable one would have to be copied out anyway (Squad.Owning takes the list), so it
+                // bought a second write of every player to save an allocation it did not save
+                // (PERFORMANCE §8: reuse a buffer to avoid an allocation, not in addition to one).
+                var developed = new List<Player>(players.Count);
+                bool changed = false;
+                for (int i = 0; i < players.Count; i++)
+                {
+                    Player player = players[i];
+                    Player after = DevelopOne(player, fraction, roundsInPeriod);
+                    developed.Add(after);
+                    changed |= !ReferenceEquals(after, player);
+                }
+
+                // Only rebuild a club whose roster actually moved: UpdateSquad drops the memoised eleven
+                // (LeagueSeason._autoElevenByClub), so rebuilding one nothing happened to would pay for a
+                // full re-pick to arrive back at the same team.
+                if (changed)
+                {
+                    _season.UpdateSquad(clubId, Squad.Owning(developed));
+                }
+            }
+
+            // The managed club's roster objects have been replaced, so the live league copy and the team
+            // sheet both point at last month's players until they are re-bound.
+            SyncLeague();
+            RebindEleven();
+        }
+
+        private Player DevelopOne(Player player, double fraction, int roundsInPeriod)
+        {
+            _startsSinceTick.TryGetValue(player.Id.Value, out int starts);
+            _developmentRng.Reseed(DevelopmentSeed(player.Id.Value));
+            return _development.DevelopPeriod(player, fraction, PlayingTime(starts, roundsInPeriod), _developmentRng);
+        }
+
+        // A spell of playing time, between the bench rate and the starter rate. Not a step: a player who
+        // started half the period lands halfway between, so rotation is a dial rather than a switch.
+        private double PlayingTime(int starts, int roundsInPeriod)
+        {
+            double share = roundsInPeriod > 0 ? (double)starts / roundsInPeriod : 0.0;
+            if (share > 1.0)
+            {
+                share = 1.0;
+            }
+
+            double bench = _balance.Development.BenchPlayingTime;
+            return bench + ((_balance.Development.StarterPlayingTime - bench) * share);
+        }
+
+        // The season's real length, so a tick is a true fraction of THIS league's season rather than of a
+        // nominal one — an eight-club league plays fourteen rounds, not thirty-eight, and its players must
+        // still gain one season's worth over one season.
+        private int SeasonWeeks()
+        {
+            return _season.RoundCount > 0 ? _season.RoundCount : _balance.Development.SeasonWeeks;
+        }
+
+        // Per player, per tick, mixed apart from the match and drama streams so development cannot perturb
+        // results and vice versa. The round is in the mix, so successive ticks in one season are genuinely
+        // independent draws rather than the same step repeated.
+        private ulong DevelopmentSeed(int playerId)
+        {
+            unchecked
+            {
+                ulong z = _setup.Seed ^ 0x4465760000000000UL;
+                z ^= (ulong)(uint)playerId * 0x9E3779B97F4A7C15UL;
+                z ^= (ulong)(uint)_seasonNumber * 0xD1B54A32D192ED03UL;
+                z ^= (ulong)(uint)_season.CurrentRound * 0x94D049BB133111EBUL;
+                z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+                z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+                return z ^ (z >> 31);
+            }
+        }
+
+        // Re-points the team sheet at the developed players, BY ID, so the manager keeps the eleven he
+        // picked. A player who has left the squad since falls out of his slot rather than lingering as a
+        // stale object.
+        private void RebindEleven()
+        {
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                if (_slots[i] != null)
+                {
+                    _slots[i] = FindInSquad(_slots[i].Id);
+                }
+            }
+
+            BindStarters();
+        }
+
+        /// <summary>
+        /// Brings the market up to the current round. Called from every read of <see cref="Market"/> and
+        /// before the pool is captured or renewed, so nobody outside this class has to remember to.
+        ///
+        /// <para>The whole reason the market is not on the weekly clock: at 50,000 players a development
+        /// pass costs ~22 ms and ~5 MB, so ticking it with the league would cost 838 ms and 190 MB a season
+        /// (measured, PROGRESS 2026-08-13) and put a hitch on every "next week". Doing it on demand puts
+        /// that cost on opening a screen instead, once, covering every week owed — and a manager who never
+        /// opens the market pays nothing at all until the summer.</para>
+        /// </summary>
+        /// <summary>
+        /// Puts a sold player back into the pool — and settles the pool's own development first.
+        ///
+        /// <para>The catch-up is the point, not a tidiness. The market's clock is one number for the whole
+        /// pool, which only holds because every player in it is owed the same weeks. A player joining
+        /// mid-season has been developed by the squad ticks, not by the market's, so dropping him in while
+        /// the pool is running behind would hand him the outstanding weeks a second time on the next read.
+        /// Settling first is what keeps "everyone here is owed the same weeks" true.</para>
+        /// </summary>
+        private void AddToMarket(Player player)
+        {
+            CatchUpMarket(settleRemainder: true);
+            _market.Add(player);
+        }
+
+        private int IndexInMarket(PlayerId id)
+        {
+            for (int i = 0; i < _market.Count; i++)
+            {
+                if (_market[i].Id == id)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private void CatchUpMarket()
+        {
+            CatchUpMarket(settleRemainder: false);
+        }
+
+        /// <summary>
+        /// <paramref name="settleRemainder"/> pays the part-period too. Left alone, the market moves in
+        /// WHOLE tick periods, on the same cadence as the squads — which is both more honest (the pool is
+        /// not on a finer clock than the league) and much cheaper downstream: every catch-up hands back a
+        /// new list of new objects, and a view watching for that (the management window sorts 50,000
+        /// prospects strongest-first when it sees the pool move) would otherwise re-sort every single week.
+        /// The remainder is settled only where a partial period must not be lost — capture and the season
+        /// rollover — which is exactly where <see cref="FlushDevelopment"/> settles the squads' remainder.
+        /// </summary>
+        private void CatchUpMarket(bool settleRemainder)
+        {
+            int owed = _season.CurrentRound - _marketDevelopedThroughRound;
+            if (owed <= 0)
+            {
+                return;
+            }
+
+            if (!settleRemainder)
+            {
+                int period = _balance.Development.WeeksPerTick;
+                owed -= owed % period;
+                if (owed <= 0)
+                {
+                    return;
+                }
+            }
+
+            if (_market == null || _market.Count == 0)
+            {
+                _marketDevelopedThroughRound += owed;
+                return;
+            }
+
+            _market = _marketRenewal.Tick(
+                _market,
+                (double)owed / SeasonWeeks(),
+                _setup.Seed,
+                _seasonNumber,
+                _marketDevelopedThroughRound + owed);
+            _marketDevelopedThroughRound += owed;
         }
 
         // ----- Drama ------------------------------------------------------------------------------------
