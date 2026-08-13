@@ -26,7 +26,19 @@ Bağlamı canlandırmak **tek başına yetmedi**: anlatıya hâlâ sezonun *taba
 
 Test 506 → **522**. Kalibrasyon değişmedi (5 gate PASS). `dotnet format` temiz. Editör/Infrastructure/Presentation gerçek Unity assembly'lerine karşı **0 hata**.
 
-**Kalan (Faz 5):** 5.4 maç anlatısı (string table, skorun **yanına** — gerekçe: anlatı skorun yerine geçerse garip bir cümlenin anlatı hatası mı sim sonucu mu olduğu ayırt edilemez) · 5.5 satış anı + sezon özeti · sonra Faz 4'ün kalan dram kopyası ile **tek geçişte** yazılacak (aynı string table, aynı ses tonu).
+**5.4 + 5.5 · ve her adımda ölçerek denetleme (sahibinin isteği).** Anlatı satırları string table'dan geçiyor (12→15 tür, EN+TR native, `MomentTextKeys`), editörde **skorun yanına** çiziliyor. `CareerSummary` bir kulüp dönemini tek şekle indiriyor (nasıl geldi, ne yaptı, nasıl gitti, kulüp ne kazandı — **`Profit` işaretli**, çünkü sıfıra kırpmak her kötü transferi başabaş gösterirdi); `SeasonRecap` bir sezonu haftaya göre sıralı veriyor ve **bilerek sıralamıyor/kırpmıyor** — dört anlık bir sezon dört an olarak okunmalı.
+
+**Bu turda ölçerek bulunan üç hata** (üçü de kod okuyarak değil, çıktı ölçülerek çıktı):
+
+1. **Her sezon bir öncekini tekrar oynuyordu.** Maç seed'i `(seed, round, home, away)`'den türüyordu, **sezon numarası yok**; aynı fikstür **altı sezon üst üste 2-2, goller 7', 30', 38', 51'**. Lig bir dünya değil döngüydü. Bu, sahibinin çok önceki *"hep aynı sonuçları alıyorum"* şikâyetinin kalan yarısı — o zaman resume için devam-seed'i eklenmişti, tek run içindeki tekrar duruyordu. Düzeltildikten sonra altı sezon: 1-2, 2-1, 0-3, 1-0, 1-3, 0-0. **Anlatı görünür yaptı**: bir döngü ancak kariyer olarak yazılınca göze batıyor.
+2. **Golleri seçtiğin ilk 11 atmıyordu.** `MatchCommand` golcü havuzu olarak **tüm kadroyu** taşıyordu; ölçülen: üç sezonda gollerin **%51.5'i oynatılmayan oyunculara** yazılıyordu. Skor tablosu sahaya çıkmamış yedeğin adını yazıyor, günlük o golü tamamen düşürüyordu (maç katılımı ilk 11'den sayılıyor, asacak ilk 11 yok). Alan **tek bir yerde** okunuyordu — golcü seçmek için — yani zaten "sahada kim var" demekti; `HomeSquad`/`AwaySquad` → **`HomeEleven`/`AwayEleven`**. Sonra: %100.
+3. **Aynı cümle bir kariyerde dört kez.** Tanıyıcı üç farklı olayı tek bool'a çöküyordu. Artık `MatchContext`'in tamamını taşıyor: **derbi / şampiyonluk maçı / küme düşme maçı** golü ayrı türler. Üç yeni tür = üç yeni kural sınıfı, tanıyıcıya dokunmadan — `IMomentRule`'un OCP yapısı ilk gerçek kullanımında işe yaradı.
+
+**Konvansiyon denetimi:** üç dosya birden fazla public tip taşıyordu → `Rules/` alt klasörü (ARCH §2, namespace segmenti eklemez) + ayrı dosyalar. `MomentOccasion` totolojiydi → `MatchOccasion`. **`RunSession.Market`** 50.000 oyuncuda 17 ms iş yapan ve market saatini ilerleten bir isim property'siydi → CONV §2 gereği **`GetMarket()`**.
+
+**Açık tasarım sorusu — çekirdek ödül döngüsü hikâye üretmiyor.** Gerçek bir run'da ölçüldü (her yaz en iyi genci al, üç sezon sonra sat, 12 sezon): flip **çalışıyor** — ~3.0M'a alınıp ~5.6M'a satılıyor, kâr 1.9M–3.2M. Ama sekiz oyuncunun sekizi de **sıfır maç, sıfır gol** ile satıldı: `LineupSelector` ilk 11'i güncel ratinge göre seçiyor, 16–19 yaşındaki bir cevher hiçbir zaman giremiyor. Yani oyunun *en çok ödüllendiren* döngüsü, günlükte yalnız "imza" ve "satış" bırakıyor — arada hiçbir şey. Üstelik oynamayan genç 0.45 oranında geliştiği için flip olması gerekenden yavaş. **Bu bir kod hatası değil, tasarım kararı** (gence otomatik süre vermek mi, yoksa bunu menajerin elle yapacağı bir karar olarak bırakmak mı) — sahibine soruldu, kararı bekliyor.
+
+**Kalan (Faz 5):** ~~5.4 maç anlatısı~~ ✅ · ~~5.5 satış anı + sezon özeti~~ ✅ · dram kopyası ile birlikte metin turu, sonra Gate B okuması. *(eski madde: 5.4 maç anlatısı)* (string table, skorun **yanına** — gerekçe: anlatı skorun yerine geçerse garip bir cümlenin anlatı hatası mı sim sonucu mu olduğu ayırt edilemez) · 5.5 satış anı + sezon özeti · sonra Faz 4'ün kalan dram kopyası ile **tek geçişte** yazılacak (aynı string table, aynı ses tonu).
 
 ---
 
