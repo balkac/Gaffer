@@ -21,8 +21,14 @@ namespace Gaffer.Application.Narrative
         /// <summary>His first goal for the club — the one everybody remembers.</summary>
         FirstGoal = 1,
 
-        /// <summary>A goal in a match that mattered but was none of the three below — the honest
-        /// fallback, so a fixture raised some other way still reads as an occasion.</summary>
+        /// <summary>
+        /// A goal in a fixture that mattered in some way not covered below. <b>Nothing recognises this
+        /// today</b>, and the rule that tried to was provably unreachable: the three kinds below are the
+        /// only ways a league fixture is raised, so "an occasion, but none of those" is a contradiction
+        /// (see <see cref="MatchOccasion.WasAnOccasion"/>). The kind stays so saves carrying one still
+        /// parse, and so a competition that raises a match some other way — a cup final, one day — has a
+        /// name waiting for it.
+        /// </summary>
         BigMatchGoal = 2,
 
         /// <summary>A goal in the derby. The fixture a club carries all run, so this one repeats — and

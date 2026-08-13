@@ -17,23 +17,33 @@ namespace Gaffer.Application.Narrative
     /// </summary>
     public sealed class JourneyLog
     {
-        // Keyed by the raw int rather than PlayerId: the id set is sparse and unbounded, so a dictionary
-        // is right, but an enum-or-struct key would drag a comparer through IL2CPP (PERFORMANCE §8).
-        private readonly Dictionary<int, PlayerJourney> _journeys = new Dictionary<int, PlayerJourney>();
+        // Two views of the same journeys, and both are needed. The dictionary answers "his history" in
+        // one step — keyed by the raw int rather than PlayerId, since an enum-or-struct key drags a
+        // comparer through IL2CPP (PERFORMANCE §8). The list is what everything ITERATES.
+        //
+        // The list is not a convenience. Dictionary enumeration order is not part of its contract, and
+        // three things walk these journeys in order: the save writes them, the season recap sorts them by
+        // week and leaves ties in whatever order it found them, and the Gate B probe ranks them. Leaning
+        // on the dictionary would make a save's byte order and a recap's tie order incidental — the shape
+        // of bug that reproduces on one machine and not another. Exposing IEnumerable also boxed the
+        // struct enumerator at every one of those call sites.
+        private readonly Dictionary<int, PlayerJourney> _byPlayer = new Dictionary<int, PlayerJourney>();
+        private readonly List<PlayerJourney> _journeys = new List<PlayerJourney>();
 
         public int Count => _journeys.Count;
 
-        public IEnumerable<PlayerJourney> Journeys => _journeys.Values;
+        /// <summary>Every journey, in the order they were opened — stable, and indexable without boxing.</summary>
+        public IReadOnlyList<PlayerJourney> Journeys => _journeys;
 
         /// <summary>His journey, or null when the manager has never had anything to do with him.</summary>
         public PlayerJourney Find(PlayerId player)
         {
-            return _journeys.TryGetValue(player.Value, out PlayerJourney journey) ? journey : null;
+            return _byPlayer.TryGetValue(player.Value, out PlayerJourney journey) ? journey : null;
         }
 
         public bool IsFollowing(PlayerId player)
         {
-            return _journeys.ContainsKey(player.Value);
+            return _byPlayer.ContainsKey(player.Value);
         }
 
         /// <summary>
@@ -43,19 +53,33 @@ namespace Gaffer.Application.Narrative
         /// </summary>
         public PlayerJourney Follow(PlayerId player, string name)
         {
-            if (_journeys.TryGetValue(player.Value, out PlayerJourney existing))
+            if (_byPlayer.TryGetValue(player.Value, out PlayerJourney existing))
             {
                 return existing;
             }
 
             var opened = new PlayerJourney(player, name);
-            _journeys.Add(player.Value, opened);
+            _byPlayer.Add(player.Value, opened);
+            _journeys.Add(opened);
             return opened;
         }
 
+        /// <summary>
+        /// Puts a journey back as a save wrote it. Replaces in place when one is already there, so a
+        /// restore cannot leave the list holding a stale copy the dictionary has already forgotten.
+        /// </summary>
         public void Restore(PlayerJourney journey)
         {
-            _journeys[journey.Player.Value] = journey;
+            if (_byPlayer.TryGetValue(journey.Player.Value, out PlayerJourney existing))
+            {
+                _journeys[_journeys.IndexOf(existing)] = journey;
+            }
+            else
+            {
+                _journeys.Add(journey);
+            }
+
+            _byPlayer[journey.Player.Value] = journey;
         }
     }
 }

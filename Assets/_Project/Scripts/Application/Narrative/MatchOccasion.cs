@@ -76,7 +76,12 @@ namespace Gaffer.Application.Narrative
         /// <summary>The fixture was a relegation six-pointer.</summary>
         public bool WasARelegationSixPointer => Context.Importance == MatchImportance.RelegationSixPointer;
 
-        /// <summary>The fixture was an occasion of some kind — the fallback when it was none of the three.</summary>
+        /// <summary>
+        /// The fixture was an occasion of some kind. Kept for a rule that wants "did this match matter at
+        /// all" without caring which way — it is NOT a fourth case, and a rule guarding on
+        /// <c>WasAnOccasion &amp;&amp; !derby &amp;&amp; !decider &amp;&amp; !sixPointer</c> is a
+        /// contradiction, since this is exactly their union. One such rule existed and could never fire.
+        /// </summary>
         public bool WasAnOccasion => WasADerby || WasATitleDecider || WasARelegationSixPointer;
 
         public int AppearancesAfter => AppearancesBefore + 1;

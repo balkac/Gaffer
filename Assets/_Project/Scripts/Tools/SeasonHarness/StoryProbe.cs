@@ -64,8 +64,10 @@ namespace Gaffer.Tools.SeasonHarness
             var arcs = new List<StoryArc>();
             int momentCount = 0;
 
-            foreach (PlayerJourney journey in session.Journeys.Journeys)
+            IReadOnlyList<PlayerJourney> journeys = session.Journeys.Journeys;
+            for (int j = 0; j < journeys.Count; j++)
             {
+                PlayerJourney journey = journeys[j];
                 IReadOnlyList<CareerMoment> moments = journey.Moments;
                 momentCount += moments.Count;
                 if (moments.Count == 0)

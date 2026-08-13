@@ -438,13 +438,7 @@ namespace Gaffer.Application.Run
 
         private List<PlayerJourney> CaptureJourneys()
         {
-            var journeys = new List<PlayerJourney>(_journeys.Count);
-            foreach (PlayerJourney journey in _journeys.Journeys)
-            {
-                journeys.Add(journey);
-            }
-
-            return journeys;
+            return new List<PlayerJourney>(_journeys.Journeys);
         }
 
         // The part-period of development, so a resume continues it rather than starting the count at zero.

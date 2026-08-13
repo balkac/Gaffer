@@ -45,7 +45,6 @@ namespace Gaffer.Application.Narrative
             new DerbyGoalRule(),
             new TitleDeciderGoalRule(),
             new RelegationGoalRule(),
-            new BigMatchGoalRule(),
             MilestoneRule.ForAppearances(100, 200, 300),
             MilestoneRule.ForGoals(10, 25, 50, 100),
         };

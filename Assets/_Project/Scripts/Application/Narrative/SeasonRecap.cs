@@ -44,9 +44,10 @@ namespace Gaffer.Application.Narrative
                 return new SeasonRecap(season, moments);
             }
 
-            foreach (PlayerJourney journey in log.Journeys)
+            IReadOnlyList<PlayerJourney> journeys = log.Journeys;
+            for (int j = 0; j < journeys.Count; j++)
             {
-                IReadOnlyList<CareerMoment> theirs = journey.Moments;
+                IReadOnlyList<CareerMoment> theirs = journeys[j].Moments;
                 for (int i = 0; i < theirs.Count; i++)
                 {
                     if (theirs[i].Season == season)
