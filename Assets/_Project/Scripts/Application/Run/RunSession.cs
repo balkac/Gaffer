@@ -475,7 +475,7 @@ namespace Gaffer.Application.Run
             // next round's lineup.
             RecordAppearances();
 
-            WeekResult week = _season.AdvanceWeek(_context, _setup.Seed);
+            WeekResult week = _season.AdvanceWeek(_context, SeasonMatchSeed);
 
             // Read what the week meant BEFORE anything else touches the roster: the development tick
             // below replaces every player object, and recognition needs the eleven that actually played.
@@ -1379,6 +1379,34 @@ namespace Gaffer.Application.Run
                     ? _strengthBuilder.Build(starters, _tactics)
                     : _league.Clubs[_managedClub.Value].Strength,
                 chanceProfile: ChanceProfile.FromTactics(_tactics, _balance.TacticsBalance));
+        }
+
+        /// <summary>
+        /// The seed this season's matches are played on: the run's seed MIXED WITH THE SEASON NUMBER.
+        ///
+        /// <para><b>The mix is the whole point.</b> A fixture's stream is derived from (seed, round, home,
+        /// away) — and without the season in it, round 5's Dungate–Ashfield draws the identical stream
+        /// every year. Measured before this existed: the same fixture finished 2–2 with goals at 7', 30',
+        /// 38' and 51' in SIX CONSECUTIVE SEASONS. The league was not a world, it was a loop, and a career
+        /// assembled out of a loop cannot read like a career — which is Faz 5's entire bet.</para>
+        ///
+        /// <para>Reproducible, not random: the season number is saved, so a resumed run derives the same
+        /// seed and replays its remaining fixtures exactly (NON-NEGOTIABLE #2). Exposed because it is the
+        /// number a bug report needs to reproduce one SEASON, and because a test that re-derived the mix
+        /// for itself would be a second copy of it waiting to drift (ARCHITECTURE §8a).</para>
+        /// </summary>
+        public ulong SeasonMatchSeed
+        {
+            get
+            {
+                unchecked
+                {
+                    ulong z = _setup.Seed ^ ((ulong)(uint)_seasonNumber * 0x9E3779B97F4A7C15UL);
+                    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+                    z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+                    return z ^ (z >> 31);
+                }
+            }
         }
 
         // ----- Narrative ------------------------------------------------------------------------------------

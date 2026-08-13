@@ -1,3 +1,4 @@
+using Gaffer.Application.Simulation;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
 
@@ -24,7 +25,7 @@ namespace Gaffer.Application.Narrative
             int goalsBefore,
             int goalsInThisMatch,
             int firstGoalMinute,
-            bool isABigMatch)
+            MatchContext context)
         {
             Player = player;
             Club = club;
@@ -34,7 +35,7 @@ namespace Gaffer.Application.Narrative
             GoalsBefore = goalsBefore;
             GoalsInThisMatch = goalsInThisMatch;
             FirstGoalMinute = firstGoalMinute;
-            IsABigMatch = isABigMatch;
+            Context = context;
         }
 
         public Player Player { get; }
@@ -58,8 +59,25 @@ namespace Gaffer.Application.Narrative
         /// <summary>The minute of his first goal today, or <see cref="CareerMoment.NoMinute"/>.</summary>
         public int FirstGoalMinute { get; }
 
-        /// <summary>Whether the fixture itself was an occasion — a rivalry, a decider, a relegation six-pointer.</summary>
-        public bool IsABigMatch { get; }
+        /// <summary>
+        /// What the fixture WAS, not merely that it was something. Carrying the whole context rather than
+        /// a single "big match" flag is what lets a derby goal, a title-decider goal and a relegation
+        /// six-pointer goal be three different stories — collapsing them to one bool printed the same
+        /// sentence four times in one career, which is a fixture list wearing prose (PROGRESS 2026-08-13).
+        /// </summary>
+        public MatchContext Context { get; }
+
+        /// <summary>The fixture was a derby: the rivalry a club carries all run.</summary>
+        public bool WasADerby => Context.IsRivalry || Context.Importance == MatchImportance.Derby;
+
+        /// <summary>The fixture was decided something at the top.</summary>
+        public bool WasATitleDecider => Context.IsTitleDecider || Context.Importance == MatchImportance.Final;
+
+        /// <summary>The fixture was a relegation six-pointer.</summary>
+        public bool WasARelegationSixPointer => Context.Importance == MatchImportance.RelegationSixPointer;
+
+        /// <summary>The fixture was an occasion of some kind — the fallback when it was none of the three.</summary>
+        public bool WasAnOccasion => WasADerby || WasATitleDecider || WasARelegationSixPointer;
 
         public int AppearancesAfter => AppearancesBefore + 1;
 

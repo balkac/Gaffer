@@ -101,7 +101,7 @@ namespace Gaffer.Tests
         }
 
         [Test]
-        public void Recognise_AGoalInAnOrdinaryMatch_IsNotABigMatchGoalButTheSameGoalInADerbyIs()
+        public void Recognise_AGoalInAnOrdinaryMatch_IsNoOccasionButTheSameGoalInADerbyIs()
         {
             // The occasion is the input: the same fact, told apart only by the fixture it happened in.
             Player player = Striker();
@@ -109,11 +109,52 @@ namespace Gaffer.Tests
 
             IReadOnlyList<CareerMoment> ordinary = new MomentRecogniser()
                 .Recognise(new JourneyLog(), Us, eleven, Match(Goal(23, player.Id)), Ordinary(), 1, 1);
-            Assert.That(Has(ordinary, CareerMomentKind.BigMatchGoal), Is.False);
+            Assert.That(Has(ordinary, CareerMomentKind.DerbyGoal), Is.False);
 
             IReadOnlyList<CareerMoment> derby = new MomentRecogniser()
                 .Recognise(new JourneyLog(), Us, eleven, Match(Goal(23, player.Id)), Derby(), 1, 1);
-            Assert.That(Has(derby, CareerMomentKind.BigMatchGoal), Is.True);
+            Assert.That(Has(derby, CareerMomentKind.DerbyGoal), Is.True);
+        }
+
+        [Test]
+        public void Recognise_EachKindOfOccasion_IsItsOwnMomentAndNotAGenericBigMatch()
+        {
+            // Why the split exists. Collapsed to one "big match" kind, a career printed the SAME sentence
+            // four times — the derby is a fixed fixture on a deterministic schedule, so it recurs every
+            // season — and four identical lines are a fixture list wearing prose. Told apart, four derby
+            // goals read as a habit, which is a story (PROGRESS 2026-08-13).
+            Player player = Striker();
+            var eleven = new List<Player> { player };
+
+            AssertGoalIn(new MatchContext(MatchImportance.Derby, 10_000, false, true), CareerMomentKind.DerbyGoal, eleven, player);
+            AssertGoalIn(new MatchContext(MatchImportance.Final, 10_000, true, false), CareerMomentKind.TitleDeciderGoal, eleven, player);
+            AssertGoalIn(new MatchContext(MatchImportance.RelegationSixPointer, 10_000, false, false), CareerMomentKind.RelegationGoal, eleven, player);
+        }
+
+        [Test]
+        public void Recognise_ADerbyThatIsAlsoATitleDecider_TellsTheBiggerStoryOnce()
+        {
+            // The occasions compose on the fixture but a goal is told once, so the strongest reading wins.
+            // Two lines for one goal would read as two goals.
+            Player player = Striker();
+            var both = new MatchContext(MatchImportance.Final, 10_000, isTitleDecider: true, isRivalry: true);
+
+            IReadOnlyList<CareerMoment> moments = new MomentRecogniser()
+                .Recognise(new JourneyLog(), Us, new List<Player> { player }, Match(Goal(70, player.Id)), both, 1, 30);
+
+            Assert.That(Has(moments, CareerMomentKind.TitleDeciderGoal), Is.True);
+            Assert.That(Has(moments, CareerMomentKind.DerbyGoal), Is.False);
+            Assert.That(Has(moments, CareerMomentKind.BigMatchGoal), Is.False);
+        }
+
+        private static void AssertGoalIn(MatchContext context, CareerMomentKind expected, List<Player> eleven, Player player)
+        {
+            IReadOnlyList<CareerMoment> moments = new MomentRecogniser()
+                .Recognise(new JourneyLog(), Us, eleven, Match(Goal(23, player.Id)), context, 1, 1);
+
+            Assert.That(Has(moments, expected), Is.True, expected.ToString());
+            Assert.That(Has(moments, CareerMomentKind.BigMatchGoal), Is.False,
+                $"{expected} also produced the generic fallback.");
         }
 
         [Test]
@@ -127,7 +168,7 @@ namespace Gaffer.Tests
 
             Assert.That(Has(moments, CareerMomentKind.Debut), Is.True);
             Assert.That(Has(moments, CareerMomentKind.FirstGoal), Is.True);
-            Assert.That(Has(moments, CareerMomentKind.BigMatchGoal), Is.True);
+            Assert.That(Has(moments, CareerMomentKind.DerbyGoal), Is.True);
             Assert.That(Only(moments, CareerMomentKind.FirstGoal).Minute, Is.EqualTo(68));
         }
 

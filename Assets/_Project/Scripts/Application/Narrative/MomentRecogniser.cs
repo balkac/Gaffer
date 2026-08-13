@@ -33,6 +33,9 @@ namespace Gaffer.Application.Narrative
             new FirstGoalRule(),
             new HattrickRule(),
             new BraceRule(),
+            new DerbyGoalRule(),
+            new TitleDeciderGoalRule(),
+            new RelegationGoalRule(),
             new BigMatchGoalRule(),
             MilestoneRule.ForAppearances(25, 50, 100, 200),
             MilestoneRule.ForGoals(10, 25, 50, 100),
@@ -83,7 +86,6 @@ namespace Gaffer.Application.Narrative
             }
 
             TallyGoalsBy(club, match);
-            bool occasion = IsAnOccasion(context);
 
             for (int i = 0; i < starters.Count; i++)
             {
@@ -100,7 +102,7 @@ namespace Gaffer.Application.Narrative
                     goalsBefore: journey.Goals,
                     goalsInThisMatch: goals,
                     firstGoalMinute: goals > 0 ? FirstGoalMinuteOf(player.Id, club, match) : CareerMoment.NoMinute,
-                    isABigMatch: occasion);
+                    context: context);
 
                 for (int rule = 0; rule < _rules.Length; rule++)
                 {
@@ -122,17 +124,6 @@ namespace Gaffer.Application.Narrative
             return _recognised;
         }
 
-        // What makes a fixture an occasion. Every importance above Normal is a match a player would
-        // remember playing in; the two context flags say the same thing per fixture rather than per
-        // competition, so either route counts.
-        private static bool IsAnOccasion(MatchContext context)
-        {
-            return context.IsRivalry
-                || context.IsTitleDecider
-                || context.Importance == MatchImportance.Derby
-                || context.Importance == MatchImportance.Final
-                || context.Importance == MatchImportance.RelegationSixPointer;
-        }
 
         // Goals by this club's players, read from the events rather than the scoreline because only the
         // events name anyone. A match played without squads carries no scorer at all (MatchEvent.Scorer

@@ -21,8 +21,19 @@ namespace Gaffer.Application.Narrative
         /// <summary>His first goal for the club — the one everybody remembers.</summary>
         FirstGoal = 1,
 
-        /// <summary>A goal in a match that mattered: a rivalry, or a title decider.</summary>
+        /// <summary>A goal in a match that mattered but was none of the three below — the honest
+        /// fallback, so a fixture raised some other way still reads as an occasion.</summary>
         BigMatchGoal = 2,
+
+        /// <summary>A goal in the derby. The fixture a club carries all run, so this one repeats — and
+        /// repeats meaningfully, which is why it is its own kind rather than "a big match".</summary>
+        DerbyGoal = 12,
+
+        /// <summary>A goal in a match that decided something at the top of the table.</summary>
+        TitleDeciderGoal = 13,
+
+        /// <summary>A goal in a relegation six-pointer — the other end, and a different story.</summary>
+        RelegationGoal = 14,
 
         /// <summary>Two in one match.</summary>
         Brace = 3,

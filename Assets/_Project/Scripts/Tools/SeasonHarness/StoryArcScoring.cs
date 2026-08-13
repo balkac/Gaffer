@@ -30,6 +30,12 @@ namespace Gaffer.Tools.SeasonHarness
                     return 2.0;
                 case CareerMomentKind.BigMatchGoal:
                     return 2.5;
+                case CareerMomentKind.DerbyGoal:
+                    return 2.5;
+                case CareerMomentKind.TitleDeciderGoal:
+                    return 3.5;
+                case CareerMomentKind.RelegationGoal:
+                    return 3.0;
                 case CareerMomentKind.Brace:
                     return 1.5;
                 case CareerMomentKind.Hattrick:

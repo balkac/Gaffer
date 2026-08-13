@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Gaffer.Application.Drama;
 using Gaffer.Application.Generation;
+using Gaffer.Application.Progression;
 using Gaffer.Application.Run;
 using Gaffer.Application.Season;
 using Gaffer.Application.Serialization;
@@ -39,6 +40,15 @@ namespace Gaffer.Tests
             return new RunBalance(drama: new DramaSettings(maxEventsPerSeason: 0));
         }
 
+        // Drama silenced (it blocks the week on an answer) and the development tick pushed past any window
+        // these tests play, so the run's loop can be compared against a bare one.
+        private static RunBalance NoDevelopment()
+        {
+            return new RunBalance(
+                drama: new DramaSettings(maxEventsPerSeason: 0),
+                development: new DevelopmentSettings(weeksPerTick: 1000));
+        }
+
         private static RunSetup Setup()
         {
             return new RunSetup(
@@ -66,7 +76,14 @@ namespace Gaffer.Tests
         public void AdvanceWeek_DrivenThroughTheSession_ReproducesTheSeasonDrivenThroughLeagueSeason()
         {
             const int weeks = 6;
-            RunSession session = StartRun(Setup(), QuietDrama());
+
+            // Development is silenced for this pin, not forgotten. The run does MORE than LeagueSeason's
+            // week loop now — every WeeksPerTick weeks it develops all twenty rosters, which changes the
+            // strengths the next round is played on — so a bare season would legitimately diverge from
+            // round five and the pin would be asserting something false. Pushing the tick past the window
+            // keeps this test measuring what it was written to measure: that the ORDER of the week loop is
+            // the same one, not that the run has stopped doing anything else.
+            RunSession session = StartRun(Setup(), NoDevelopment());
 
             var throughSession = new List<MatchResult>();
             for (int week = 0; week < weeks; week++)
@@ -76,7 +93,7 @@ namespace Gaffer.Tests
                 throughSession.AddRange(outcome.Value.Matches);
             }
 
-            IReadOnlyList<MatchResult> direct = PlayedDirectly(weeks);
+            IReadOnlyList<MatchResult> direct = PlayedDirectly(weeks, session.SeasonMatchSeed, RivalriesOf(session));
 
             Assert.That(throughSession.Count, Is.EqualTo(direct.Count));
             for (int i = 0; i < direct.Count; i++)
@@ -95,7 +112,21 @@ namespace Gaffer.Tests
 
         // The same world and the same weekly loop, wired by hand the way the editor windows used to wire
         // it. If RunSession ever stops being a pure re-expression of this, this test says so.
-        private static IReadOnlyList<MatchResult> PlayedDirectly(int weeks)
+        // The rivalry map the run drew for itself, rebuilt through the public read model. A season played
+        // without it raises no fixture into a derby, and the two loops would diverge for a reason that has
+        // nothing to do with what this test is pinning.
+        private static RivalryTable RivalriesOf(RunSession session)
+        {
+            var rivalOf = new int[session.ClubCount];
+            for (int club = 0; club < session.ClubCount; club++)
+            {
+                rivalOf[club] = session.RivalOf(new ClubId(club)).Value;
+            }
+
+            return RivalryTable.Restore(rivalOf);
+        }
+
+        private static IReadOnlyList<MatchResult> PlayedDirectly(int weeks, ulong matchSeed, RivalryTable rivalries)
         {
             var generator = new LeagueGenerator(new SquadGenerator(new PlayerGenerator(TraitCatalog.Default)), TraitCatalog.Default);
             League league = generator.Generate(ClubCount, new SplitMix64RandomNumberGenerator(Seed ^ 0x5EEDD5EEDUL));
@@ -106,6 +137,7 @@ namespace Gaffer.Tests
                 new WeightedScorerSelector(ScorerWeights.Default));
 
             var season = new LeagueSeason(league, TraitCatalog.Default, TacticsSettings.Default, MoraleSettings.Default, simulator);
+            season.SetMatchContextBuilder(new MatchContextBuilder(rivalries, MatchContextSettings.Default));
             var managed = new ClubId(ManagedIndex);
             season.SetFormation(managed, Formation.F442);
             season.SetTactics(managed, Tactics.Balanced);
@@ -114,7 +146,7 @@ namespace Gaffer.Tests
             MatchContext context = RunSetup.Default.MatchContext;
             for (int week = 0; week < weeks; week++)
             {
-                season.AdvanceWeek(context, Seed);
+                season.AdvanceWeek(context, matchSeed);
             }
 
             return season.PlayedResults;

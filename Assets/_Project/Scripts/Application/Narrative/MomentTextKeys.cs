@@ -27,6 +27,12 @@ namespace Gaffer.Application.Narrative
                     return Prefix + "first_goal";
                 case CareerMomentKind.BigMatchGoal:
                     return Prefix + "big_match_goal";
+                case CareerMomentKind.DerbyGoal:
+                    return Prefix + "derby_goal";
+                case CareerMomentKind.TitleDeciderGoal:
+                    return Prefix + "title_decider_goal";
+                case CareerMomentKind.RelegationGoal:
+                    return Prefix + "relegation_goal";
                 case CareerMomentKind.Brace:
                     return Prefix + "brace";
                 case CareerMomentKind.Hattrick:

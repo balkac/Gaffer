@@ -73,7 +73,19 @@ namespace Gaffer.Infrastructure.Localization
                     Row(
                         "moment.big_match_goal",
                         "{minute} — {player} scored on the day it mattered.",
-                        "{minute} — {player} golü tam da gereken günde attı."),
+                        "{minute} — {player} büyük maçta golünü buldu."),
+                    Row(
+                        "moment.derby_goal",
+                        "{minute} — {player} scored in the derby.",
+                        "{minute} — {player} derbide golü attı."),
+                    Row(
+                        "moment.title_decider_goal",
+                        "{minute} — {player} scored with the title on the line.",
+                        "{minute} — {player} şampiyonluk yolunda golü attı."),
+                    Row(
+                        "moment.relegation_goal",
+                        "{minute} — {player} scored in a relegation six-pointer.",
+                        "{minute} — {player} küme düşme mücadelesinde golü attı."),
                     Row(
                         "moment.brace",
                         "{player} scored twice.",
@@ -84,12 +96,12 @@ namespace Gaffer.Infrastructure.Localization
                         "{player} hat-trick yaptı."),
                     Row(
                         "moment.appearance_milestone",
-                        "{player} made appearance number {count} for the club.",
+                        "{player} reached {count} appearances for the club.",
                         "{player} kulüpteki {count}. maçına çıktı."),
                     Row(
                         "moment.goal_milestone",
                         "{player} reached {count} goals for the club.",
-                        "{player} kulüpteki gol sayısını {count} yaptı."),
+                        "{player} kulüpteki {count}. golüne ulaştı."),
                     Row(
                         "moment.signing",
                         "{player} signed for {club}.",
@@ -97,7 +109,7 @@ namespace Gaffer.Infrastructure.Localization
                     Row(
                         "moment.sale",
                         "{player} was sold.",
-                        "{player} takımdan ayrıldı, satıldı."),
+                        "{player} satıldı."),
                     Row(
                         "moment.academy_arrival",
                         "{player} came through the academy.",

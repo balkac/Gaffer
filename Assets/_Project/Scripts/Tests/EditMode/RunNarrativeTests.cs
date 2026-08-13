@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using Gaffer.Application.Drama;
 using Gaffer.Application.Narrative;
 using Gaffer.Application.Run;
+using Gaffer.Application.Season;
+using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using Gaffer.Domain.Players;
 using NUnit.Framework;
@@ -196,6 +198,76 @@ namespace Gaffer.Tests
                 Assert.That(Has(journey.Moments, CareerMomentKind.Retirement), Is.True,
                     $"Player {gone.Value} retired without his journey being closed.");
             }
+        }
+
+        [Test]
+        public void StartNextSeason_TheSameFixture_DoesNotReplayLastSeasonsMatch()
+        {
+            // The league was a loop. A fixture's rng stream is derived from (seed, round, home, away), and
+            // with no season in the mix round five played out identically every year — measured before the
+            // fix at 2-2 with goals at 7', 30', 38' and 51' in SIX CONSECUTIVE SEASONS. A career assembled
+            // out of a loop cannot read like a career, which is the whole of Faz 5's bet.
+            RunSession session = StartRun();
+            var seen = new List<string>();
+
+            for (int season = 0; season < 4; season++)
+            {
+                while (session.PlayedRounds < 3)
+                {
+                    session.AdvanceWeek();
+                }
+
+                Result<WeekOutcome> week = session.AdvanceWeek();
+                Assert.That(week.IsSuccess, Is.True, week.Error);
+                seen.Add(Describe(week.Value.Matches[0]));
+
+                Result<IReadOnlyList<WeekOutcome>> rest = session.AdvanceToEndOfSeason();
+                Assert.That(rest.IsSuccess, Is.True, rest.Error);
+                Result<SeasonRollover> rollover = session.StartNextSeason();
+                Assert.That(rollover.IsSuccess, Is.True, rollover.Error);
+            }
+
+            var distinct = new HashSet<string>(seen);
+            Assert.That(distinct.Count, Is.GreaterThan(1),
+                "The same fixture played out identically every season: " + string.Join(" | ", seen));
+        }
+
+        [Test]
+        public void StartNextSeason_TheSameSeedTwice_StillReplaysEverySeasonExactly()
+        {
+            // Mixing the season in must vary the years WITHOUT costing determinism (NON-NEGOTIABLE #2):
+            // the season number is saved, so the same run reproduces season for season.
+            RunSession first = StartRun();
+            RunSession second = StartRun();
+
+            for (int season = 0; season < 3; season++)
+            {
+                first.AdvanceToEndOfSeason();
+                second.AdvanceToEndOfSeason();
+
+                IReadOnlyList<LeagueTableRow> a = first.Standings();
+                IReadOnlyList<LeagueTableRow> b = second.Standings();
+                for (int i = 0; i < a.Count; i++)
+                {
+                    Assert.That(b[i].Club, Is.EqualTo(a[i].Club), $"season {season}, place {i + 1}");
+                    Assert.That(b[i].Points, Is.EqualTo(a[i].Points), $"season {season}, place {i + 1}");
+                }
+
+                first.StartNextSeason();
+                second.StartNextSeason();
+            }
+        }
+
+        private static string Describe(MatchResult match)
+        {
+            var built = new System.Text.StringBuilder();
+            built.Append(match.HomeGoals).Append('-').Append(match.AwayGoals);
+            for (int i = 0; i < match.Events.Count; i++)
+            {
+                built.Append(' ').Append(match.Events[i].Minute);
+            }
+
+            return built.ToString();
         }
 
         [Test]
