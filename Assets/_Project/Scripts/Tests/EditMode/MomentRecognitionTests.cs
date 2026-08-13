@@ -1,0 +1,271 @@
+using System.Collections.Generic;
+using Gaffer.Application.Narrative;
+using Gaffer.Application.Season;
+using Gaffer.Application.Simulation;
+using Gaffer.Domain.Clubs;
+using Gaffer.Domain.Players;
+using NUnit.Framework;
+
+namespace Gaffer.Tests
+{
+    /// <summary>
+    /// Faz 5's first claim: the narrative layer RECOGNISES rather than generates. A goal is a fact —
+    /// minute, side, scorer. "His first goal, in a derby, on his debut" is a moment, and the difference
+    /// is three inputs the sim already has: what the match was, who the player is, and what had already
+    /// happened to him. These pin that reading, and that recognition never touches the game.
+    /// </summary>
+    public sealed class MomentRecognitionTests
+    {
+        private static readonly ClubId Us = new ClubId(0);
+        private static readonly ClubId Them = new ClubId(1);
+
+        private static Player Striker(int id = 1)
+        {
+            return new Player(new PlayerId(id), "Ali Yilmaz", "Turkey", PlayerRole.Striker, 19, new Attributes { Finishing = 60 }, 88);
+        }
+
+        private static MatchResult Match(params MatchEvent[] events)
+        {
+            int home = 0;
+            for (int i = 0; i < events.Length; i++)
+            {
+                if (events[i].Side == TeamSide.Home && events[i].Kind == MatchEventKind.Goal)
+                {
+                    home++;
+                }
+            }
+
+            return new MatchResult(Us, Them, home, 0, home, 0, events);
+        }
+
+        private static MatchEvent Goal(int minute, PlayerId scorer)
+        {
+            return new MatchEvent(minute, TeamSide.Home, MatchEventKind.Goal, scorer);
+        }
+
+        private static MatchContext Ordinary()
+        {
+            return new MatchContext(MatchImportance.Normal, 10_000, isTitleDecider: false, isRivalry: false);
+        }
+
+        private static MatchContext Derby()
+        {
+            return new MatchContext(MatchImportance.Derby, 10_000, isTitleDecider: false, isRivalry: true);
+        }
+
+        private static bool Has(IReadOnlyList<CareerMoment> moments, CareerMomentKind kind)
+        {
+            for (int i = 0; i < moments.Count; i++)
+            {
+                if (moments[i].Kind == kind)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static CareerMoment Only(IReadOnlyList<CareerMoment> moments, CareerMomentKind kind)
+        {
+            CareerMoment found = default;
+            int count = 0;
+            for (int i = 0; i < moments.Count; i++)
+            {
+                if (moments[i].Kind == kind)
+                {
+                    found = moments[i];
+                    count++;
+                }
+            }
+
+            Assert.That(count, Is.EqualTo(1), $"Expected exactly one {kind}, found {count}.");
+            return found;
+        }
+
+        // ----- The three inputs ---------------------------------------------------------------------------
+
+        [Test]
+        public void Recognise_APlayersFirstAppearance_IsADebutAndHisSecondIsNot()
+        {
+            // History is the input. Nothing about the match itself distinguishes these two.
+            var log = new JourneyLog();
+            var recogniser = new MomentRecogniser();
+            var eleven = new List<Player> { Striker() };
+
+            IReadOnlyList<CareerMoment> first = recogniser.Recognise(log, Us, eleven, Match(), Ordinary(), 1, 1);
+            Assert.That(Has(first, CareerMomentKind.Debut), Is.True, "A first appearance was not read as a debut.");
+
+            IReadOnlyList<CareerMoment> second = recogniser.Recognise(log, Us, eleven, Match(), Ordinary(), 1, 2);
+            Assert.That(Has(second, CareerMomentKind.Debut), Is.False, "A second appearance was read as another debut.");
+        }
+
+        [Test]
+        public void Recognise_AGoalInAnOrdinaryMatch_IsNotABigMatchGoalButTheSameGoalInADerbyIs()
+        {
+            // The occasion is the input: the same fact, told apart only by the fixture it happened in.
+            Player player = Striker();
+            var eleven = new List<Player> { player };
+
+            IReadOnlyList<CareerMoment> ordinary = new MomentRecogniser()
+                .Recognise(new JourneyLog(), Us, eleven, Match(Goal(23, player.Id)), Ordinary(), 1, 1);
+            Assert.That(Has(ordinary, CareerMomentKind.BigMatchGoal), Is.False);
+
+            IReadOnlyList<CareerMoment> derby = new MomentRecogniser()
+                .Recognise(new JourneyLog(), Us, eleven, Match(Goal(23, player.Id)), Derby(), 1, 1);
+            Assert.That(Has(derby, CareerMomentKind.BigMatchGoal), Is.True);
+        }
+
+        [Test]
+        public void Recognise_TheGoalThatIsHisFirstAndInADerbyAndOnHisDebut_IsEveryOneOfThoseMoments()
+        {
+            // The GDD's worked example. Each reading is true, so each is kept: a log that recorded only
+            // the "best" one would lose the very detail that makes the line worth reading.
+            Player player = Striker();
+            IReadOnlyList<CareerMoment> moments = new MomentRecogniser()
+                .Recognise(new JourneyLog(), Us, new List<Player> { player }, Match(Goal(68, player.Id)), Derby(), 1, 11);
+
+            Assert.That(Has(moments, CareerMomentKind.Debut), Is.True);
+            Assert.That(Has(moments, CareerMomentKind.FirstGoal), Is.True);
+            Assert.That(Has(moments, CareerMomentKind.BigMatchGoal), Is.True);
+            Assert.That(Only(moments, CareerMomentKind.FirstGoal).Minute, Is.EqualTo(68));
+        }
+
+        // ----- Counting -----------------------------------------------------------------------------------
+
+        [Test]
+        public void Recognise_ThreeGoalsInOneMatch_IsAHattrickAndNotAlsoABrace()
+        {
+            Player player = Striker();
+            IReadOnlyList<CareerMoment> moments = new MomentRecogniser().Recognise(
+                new JourneyLog(), Us, new List<Player> { player },
+                Match(Goal(10, player.Id), Goal(40, player.Id), Goal(80, player.Id)), Ordinary(), 1, 1);
+
+            Assert.That(Only(moments, CareerMomentKind.Hattrick).Count, Is.EqualTo(3));
+            Assert.That(Has(moments, CareerMomentKind.Brace), Is.False, "A hat-trick was also counted as a brace.");
+        }
+
+        [Test]
+        public void Recognise_AMilestoneJumpedRatherThanLandedOn_IsStillRecognised()
+        {
+            // A brace can take a striker from 9 goals to 11. A milestone that only fired on equality would
+            // let him pass his tenth without it ever being a day.
+            Player player = Striker();
+            var log = new JourneyLog();
+            log.Restore(PlayerJourney.Restore(player.Id, appearances: 30, goals: 9, moments: null));
+
+            IReadOnlyList<CareerMoment> moments = new MomentRecogniser().Recognise(
+                log, Us, new List<Player> { player },
+                Match(Goal(12, player.Id), Goal(77, player.Id)), Ordinary(), 2, 5);
+
+            Assert.That(Only(moments, CareerMomentKind.GoalMilestone).Count, Is.EqualTo(10));
+        }
+
+        [Test]
+        public void Recognise_AnEverydayGoalByAnEstablishedPlayer_IsNoMomentAtAll()
+        {
+            // The load-bearing negative. If every goal were a moment the log would be a list, and nothing
+            // in a list feels rare — which is the whole bet Gate B is asked to settle.
+            Player player = Striker();
+            var log = new JourneyLog();
+            log.Restore(PlayerJourney.Restore(player.Id, appearances: 60, goals: 30, moments: null));
+
+            IReadOnlyList<CareerMoment> moments = new MomentRecogniser().Recognise(
+                log, Us, new List<Player> { player }, Match(Goal(55, player.Id)), Ordinary(), 3, 20);
+
+            Assert.That(moments, Is.Empty, "An ordinary goal by an established player was recorded as a moment.");
+        }
+
+        // ----- The log is input as well as output ---------------------------------------------------------
+
+        [Test]
+        public void Recognise_WritesEveryMomentIntoTheJourneyItBelongsTo()
+        {
+            // The returned list is this week's echo; the journey is the memory the NEXT recognition reads.
+            // An earlier draft only did the first, and produced a narrative that announced a debut and
+            // then had no record it had ever happened.
+            Player player = Striker();
+            var log = new JourneyLog();
+            IReadOnlyList<CareerMoment> returned = new MomentRecogniser()
+                .Recognise(log, Us, new List<Player> { player }, Match(Goal(30, player.Id)), Derby(), 1, 1);
+
+            PlayerJourney journey = log.Find(player.Id);
+            Assert.That(journey, Is.Not.Null, "The log is not following a player who just played.");
+            Assert.That(journey.Moments.Count, Is.EqualTo(returned.Count));
+            Assert.That(journey.Appearances, Is.EqualTo(1));
+            Assert.That(journey.Goals, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Recognise_AMatchWithNoNamedScorers_ProducesNoGoalMoments()
+        {
+            // A strength-only match (the harness, a restored fixture) carries no scorer, so nothing
+            // happened to anybody. Appearances still count; goals cannot be attributed to a nobody.
+            Player player = Striker();
+            var match = new MatchResult(Us, Them, 2, 0, 5, 3, new[]
+            {
+                new MatchEvent(20, TeamSide.Home, MatchEventKind.Goal),
+                new MatchEvent(70, TeamSide.Home, MatchEventKind.Goal),
+            });
+
+            var log = new JourneyLog();
+            IReadOnlyList<CareerMoment> moments = new MomentRecogniser()
+                .Recognise(log, Us, new List<Player> { player }, match, Ordinary(), 1, 1);
+
+            Assert.That(Has(moments, CareerMomentKind.FirstGoal), Is.False);
+            Assert.That(log.Find(player.Id).Goals, Is.EqualTo(0));
+            Assert.That(Has(moments, CareerMomentKind.Debut), Is.True, "He still played, so it was still his debut.");
+        }
+
+        [Test]
+        public void Recognise_AGoalForTheOtherSide_IsNotCreditedToOurPlayer()
+        {
+            Player player = Striker();
+            var match = new MatchResult(Us, Them, 0, 1, 3, 6, new[]
+            {
+                new MatchEvent(50, TeamSide.Away, MatchEventKind.Goal, new PlayerId(99)),
+            });
+
+            var log = new JourneyLog();
+            new MomentRecogniser().Recognise(log, Us, new List<Player> { player }, match, Ordinary(), 1, 1);
+
+            Assert.That(log.Find(player.Id).Goals, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void Recognise_TheSameMatchReadTwice_ReadsTheSameMoments()
+        {
+            // No randomness anywhere: a memory that changed when you looked at it twice would not be one.
+            Player player = Striker();
+            var first = new JourneyLog();
+            var second = new JourneyLog();
+            MatchResult match = Match(Goal(68, player.Id));
+
+            IReadOnlyList<CareerMoment> a = new MomentRecogniser().Recognise(first, Us, new List<Player> { player }, match, Derby(), 1, 11);
+            var copied = new List<CareerMoment>(a);
+            IReadOnlyList<CareerMoment> b = new MomentRecogniser().Recognise(second, Us, new List<Player> { player }, match, Derby(), 1, 11);
+
+            Assert.That(b.Count, Is.EqualTo(copied.Count));
+            for (int i = 0; i < copied.Count; i++)
+            {
+                Assert.That(b[i].Kind, Is.EqualTo(copied[i].Kind), $"index {i}");
+                Assert.That(b[i].Minute, Is.EqualTo(copied[i].Minute), $"index {i}");
+                Assert.That(b[i].Count, Is.EqualTo(copied[i].Count), $"index {i}");
+            }
+        }
+
+        [Test]
+        public void JourneyLog_FollowsOnlyThePlayersItHasBeenAskedAbout()
+        {
+            // The 50,000-player constraint: a journey each would be memory and save weight spent on
+            // careers nobody will ever read.
+            var log = new JourneyLog();
+            Player played = Striker(1);
+            new MomentRecogniser().Recognise(log, Us, new List<Player> { played }, Match(), Ordinary(), 1, 1);
+
+            Assert.That(log.IsFollowing(played.Id), Is.True);
+            Assert.That(log.IsFollowing(new PlayerId(4127)), Is.False);
+            Assert.That(log.Count, Is.EqualTo(1));
+        }
+    }
+}
