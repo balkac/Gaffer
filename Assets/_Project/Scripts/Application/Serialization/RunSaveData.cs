@@ -239,6 +239,15 @@ namespace Gaffer.Application.Serialization
         public int Goals { get; set; }
 
         public List<MomentSaveData> Moments { get; set; }
+
+        /// <summary>His seasons, as flat parallel rows. A career is told season by season, and a year in
+        /// which nothing worth a MOMENT happened is exactly the year this preserves — without it a quiet
+        /// season would come back as a gap.</summary>
+        public List<int> SeasonNumbers { get; set; }
+
+        public List<int> SeasonAppearances { get; set; }
+
+        public List<int> SeasonGoals { get; set; }
     }
 
     /// <summary>One recognised moment (v7). The kind travels as a NAME, never an ordinal

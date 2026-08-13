@@ -13,6 +13,11 @@ namespace Gaffer.Application.Narrative
     {
         private readonly List<CareerMoment> _moments = new List<CareerMoment>();
 
+        // Season by season, in the order they were played. A list rather than a dictionary: it is short
+        // (one entry a year), it is always read in order, and the season being appended to is almost
+        // always the last one (PERFORMANCE §8).
+        private readonly List<PlayerSeason> _seasons = new List<PlayerSeason>();
+
         public PlayerJourney(PlayerId player, string name)
         {
             Player = player;
@@ -36,16 +41,42 @@ namespace Gaffer.Application.Narrative
 
         public IReadOnlyList<CareerMoment> Moments => _moments;
 
+        /// <summary>
+        /// His seasons, earliest first — the unit a career is actually told in. A year in which nothing
+        /// worth a MOMENT happened still has a row here, with the games and the goals in it, which is the
+        /// difference between "he had a quiet season" and a gap in the story.
+        /// </summary>
+        public IReadOnlyList<PlayerSeason> Seasons => _seasons;
+
         public bool HasPlayed => Appearances > 0;
 
-        public void RecordAppearance()
+        /// <summary>Credits a game in a given season, to the lifetime total and to that year's row.</summary>
+        public void RecordAppearance(int season)
         {
             Appearances++;
+            Add(season, appearances: 1, goals: 0);
         }
 
-        public void RecordGoals(int goals)
+        public void RecordGoals(int season, int goals)
         {
             Goals += goals;
+            Add(season, appearances: 0, goals: goals);
+        }
+
+        private void Add(int season, int appearances, int goals)
+        {
+            // Almost always the last row, because a career is played in order; the scan behind it is for
+            // the restore path and for anything that reads a season out of turn.
+            for (int i = _seasons.Count - 1; i >= 0; i--)
+            {
+                if (_seasons[i].Season == season)
+                {
+                    _seasons[i] = _seasons[i].Plus(appearances, goals);
+                    return;
+                }
+            }
+
+            _seasons.Add(new PlayerSeason(season, appearances, goals));
         }
 
         public void Add(CareerMoment moment)
@@ -58,9 +89,17 @@ namespace Gaffer.Application.Narrative
         /// moments, because they were never derivable from them — a player's fiftieth appearance is a
         /// moment, his forty-ninth is not, and the counter is the only thing that knew.
         /// </summary>
-        public static PlayerJourney Restore(PlayerId player, string name, int appearances, int goals, IReadOnlyList<CareerMoment> moments)
+        public static PlayerJourney Restore(PlayerId player, string name, int appearances, int goals, IReadOnlyList<CareerMoment> moments, IReadOnlyList<PlayerSeason> seasons = null)
         {
             var journey = new PlayerJourney(player, name) { Appearances = appearances, Goals = goals };
+            if (seasons != null)
+            {
+                for (int i = 0; i < seasons.Count; i++)
+                {
+                    journey._seasons.Add(seasons[i]);
+                }
+            }
+
             if (moments != null)
             {
                 for (int i = 0; i < moments.Count; i++)

@@ -123,10 +123,10 @@ namespace Gaffer.Application.Narrative
                 }
 
                 // The counters move only once every rule has seen the "before" picture.
-                journey.RecordAppearance();
+                journey.RecordAppearance(season);
                 if (goals > 0)
                 {
-                    journey.RecordGoals(goals);
+                    journey.RecordGoals(season, goals);
                 }
             }
 

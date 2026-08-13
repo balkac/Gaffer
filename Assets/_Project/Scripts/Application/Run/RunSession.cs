@@ -365,6 +365,12 @@ namespace Gaffer.Application.Run
             return CareerSummary.Create(_journeys.Find(player));
         }
 
+        /// <summary>His career told season by season — the read model a career page is written from.</summary>
+        public CareerChronicle ChronicleOf(PlayerId player)
+        {
+            return CareerChronicle.Create(_journeys.Find(player));
+        }
+
         /// <summary>Everything a season is remembered for, earliest week first. Empty is a real answer.</summary>
         public SeasonRecap RecapOf(int season)
         {

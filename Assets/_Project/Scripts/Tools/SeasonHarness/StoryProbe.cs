@@ -102,7 +102,7 @@ namespace Gaffer.Tools.SeasonHarness
             }
 
             arcs.Sort(ByScoreDescending);
-            return new StoryReport(session.ManagedClubName, seasons, momentCount, arcs);
+            return new StoryReport(session.ManagedClubName, seasons, momentCount, arcs, session.Journeys);
         }
 
         // A cached comparison delegate rather than a comparer object or a lambda per call — the

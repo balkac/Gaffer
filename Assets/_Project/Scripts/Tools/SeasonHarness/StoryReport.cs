@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using Gaffer.Application.Narrative;
+using Gaffer.Domain.Players;
 
 namespace Gaffer.Tools.SeasonHarness
 {
@@ -13,12 +15,22 @@ namespace Gaffer.Tools.SeasonHarness
     /// </summary>
     public sealed class StoryReport
     {
-        public StoryReport(string club, int seasons, int momentCount, IReadOnlyList<StoryArc> arcs)
+        private readonly JourneyLog _log;
+
+        public StoryReport(string club, int seasons, int momentCount, IReadOnlyList<StoryArc> arcs, JourneyLog log = null)
         {
             Club = club;
             Seasons = seasons;
             MomentCount = momentCount;
             Arcs = arcs;
+            _log = log;
+        }
+
+        /// <summary>A career told season by season — what the probe prints, since a flat stream of
+        /// moments reads as a list rather than a career.</summary>
+        public CareerChronicle ChronicleOf(PlayerId player)
+        {
+            return CareerChronicle.Create(_log != null ? _log.Find(player) : null);
         }
 
         public string Club { get; }

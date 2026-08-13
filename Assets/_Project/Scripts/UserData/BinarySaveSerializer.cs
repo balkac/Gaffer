@@ -422,6 +422,21 @@ namespace Gaffer.UserData
                     writer.WriteInt32(moment.Minute);
                     writer.WriteInt64(moment.Count);
                 }
+
+                WriteSeasons(writer, journey);
+            }
+        }
+
+        // seasonCount varint, then per season: number, appearances, goals — all int32.
+        private static void WriteSeasons(SaveBinaryWriter writer, JourneySaveData journey)
+        {
+            int seasons = journey.SeasonNumbers != null ? journey.SeasonNumbers.Count : 0;
+            writer.WriteVarUInt32((uint)seasons);
+            for (int i = 0; i < seasons; i++)
+            {
+                writer.WriteInt32(journey.SeasonNumbers[i]);
+                writer.WriteInt32(journey.SeasonAppearances != null && i < journey.SeasonAppearances.Count ? journey.SeasonAppearances[i] : 0);
+                writer.WriteInt32(journey.SeasonGoals != null && i < journey.SeasonGoals.Count ? journey.SeasonGoals[i] : 0);
             }
         }
 
@@ -731,6 +746,17 @@ namespace Gaffer.UserData
                         Minute = reader.ReadInt32(),
                         Count = reader.ReadInt64(),
                     });
+                }
+
+                int seasons = (int)reader.ReadLength("journey seasons");
+                journey.SeasonNumbers = new List<int>(seasons);
+                journey.SeasonAppearances = new List<int>(seasons);
+                journey.SeasonGoals = new List<int>(seasons);
+                for (int y = 0; y < seasons; y++)
+                {
+                    journey.SeasonNumbers.Add(reader.ReadInt32());
+                    journey.SeasonAppearances.Add(reader.ReadInt32());
+                    journey.SeasonGoals.Add(reader.ReadInt32());
                 }
 
                 journeys.Add(journey);

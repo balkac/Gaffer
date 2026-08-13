@@ -178,24 +178,69 @@ namespace Gaffer.Tools.SeasonHarness.Cli
             int show = report.Arcs.Count < 5 ? report.Arcs.Count : 5;
             for (int i = 0; i < show; i++)
             {
-                PrintArc(report.Arcs[i], i + 1);
+                PrintArc(report.Arcs[i], i + 1, report);
             }
 
             Console.WriteLine("Read the top arc and ask the only question that matters:");
             Console.WriteLine("does it read like a career, or like a list of things that happened?");
         }
 
-        private static void PrintArc(StoryArc arc, int rank)
+        // Told season by season, because that is how a career is told — the owner's reading of the first
+        // Gate B output was that a flat stream of moments is a LIST, and he was right. A year he simply
+        // played has a row of its own here; without one it would read as a gap rather than a quiet season.
+        private static void PrintArc(StoryArc arc, int rank, StoryReport report)
         {
             string name = string.IsNullOrEmpty(arc.Name) ? "(left the club)" : arc.Name;
-            Console.WriteLine($"  {rank}. {name} — {arc.Moments.Count} moments over {arc.SeasonsSpanned} season(s), score {arc.Score:F1}");
-            for (int i = 0; i < arc.Moments.Count; i++)
+            CareerChronicle chronicle = report.ChronicleOf(arc.Player);
+            CareerSummary summary = chronicle.Summary;
+
+            Console.WriteLine($"  {rank}. {name.ToUpperInvariant()}");
+            Console.WriteLine($"      {summary.SeasonsAtTheClub} seasons · {summary.Appearances} games · {summary.Goals} goals{Fees(summary)}");
+
+            for (int i = 0; i < chronicle.Seasons.Count; i++)
             {
-                CareerMoment moment = arc.Moments[i];
-                Console.WriteLine($"       S{moment.Season} w{moment.Round,-2} {Describe(moment)}");
+                ChronicleSeason season = chronicle.Seasons[i];
+                Console.WriteLine($"      S{season.Season,-3} {season.Played.Appearances,3} games {season.Played.Goals,3} goals{Standout(season)}");
             }
 
             Console.WriteLine();
+        }
+
+        // What is remembered of a season, on the season's own line — never a bullet list underneath it.
+        private static string Standout(ChronicleSeason season)
+        {
+            if (season.Moments.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var built = new System.Text.StringBuilder("   ");
+            for (int i = 0; i < season.Moments.Count; i++)
+            {
+                if (i > 0)
+                {
+                    built.Append("; ");
+                }
+
+                built.Append(Describe(season.Moments[i]));
+            }
+
+            return built.ToString();
+        }
+
+        private static string Fees(CareerSummary summary)
+        {
+            if (summary.CameThroughTheAcademy && summary.DepartureFee > 0)
+            {
+                return $"  ·  academy, sold for {summary.DepartureFee:N0}";
+            }
+
+            if (summary.ArrivalFee > 0 && summary.DepartureFee > 0)
+            {
+                return $"  ·  {summary.ArrivalFee:N0} in, {summary.DepartureFee:N0} out ({summary.Profit:+#,0;-#,0}) ";
+            }
+
+            return summary.CameThroughTheAcademy ? "  ·  academy" : string.Empty;
         }
 
         // Dev-tool English (NON-NEGOTIABLE #8 exemption: this assembly cannot enter a build). The shipped

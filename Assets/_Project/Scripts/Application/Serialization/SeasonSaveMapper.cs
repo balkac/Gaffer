@@ -674,6 +674,17 @@ namespace Gaffer.Application.Serialization
                     });
                 }
 
+                IReadOnlyList<PlayerSeason> seasons = journey.Seasons;
+                var numbers = new List<int>(seasons.Count);
+                var appearances = new List<int>(seasons.Count);
+                var goals = new List<int>(seasons.Count);
+                for (int y = 0; y < seasons.Count; y++)
+                {
+                    numbers.Add(seasons[y].Season);
+                    appearances.Add(seasons[y].Appearances);
+                    goals.Add(seasons[y].Goals);
+                }
+
                 captured.Add(new JourneySaveData
                 {
                     PlayerId = journey.Player.Value,
@@ -681,6 +692,9 @@ namespace Gaffer.Application.Serialization
                     Appearances = journey.Appearances,
                     Goals = journey.Goals,
                     Moments = written,
+                    SeasonNumbers = numbers,
+                    SeasonAppearances = appearances,
+                    SeasonGoals = goals,
                 });
             }
 
@@ -725,10 +739,30 @@ namespace Gaffer.Application.Serialization
                 }
 
                 restored.Add(PlayerJourney.Restore(
-                    new PlayerId(saved.PlayerId), saved.Name, saved.Appearances, saved.Goals, moments));
+                    new PlayerId(saved.PlayerId), saved.Name, saved.Appearances, saved.Goals, moments,
+                    RestoreSeasons(saved)));
             }
 
             return restored;
+        }
+
+        // Tolerant of a shorter row than its siblings: the three lists are written together, so a mismatch
+        // means an edited file rather than a version this build should try to interpret (ARCHITECTURE §11).
+        private static List<PlayerSeason> RestoreSeasons(JourneySaveData saved)
+        {
+            List<int> numbers = saved.SeasonNumbers;
+            if (numbers == null || saved.SeasonAppearances == null || saved.SeasonGoals == null)
+            {
+                return null;
+            }
+
+            var seasons = new List<PlayerSeason>(numbers.Count);
+            for (int i = 0; i < numbers.Count && i < saved.SeasonAppearances.Count && i < saved.SeasonGoals.Count; i++)
+            {
+                seasons.Add(new PlayerSeason(numbers[i], saved.SeasonAppearances[i], saved.SeasonGoals[i]));
+            }
+
+            return seasons;
         }
 
         private static DevelopmentPeriodSaveData CaptureDevelopment(DevelopmentPeriod period)
