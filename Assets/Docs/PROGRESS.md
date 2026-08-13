@@ -46,7 +46,11 @@ Test 506 → **522**. Kalibrasyon değişmedi (5 gate PASS). `dotnet format` tem
 
 *(Okumada görülen ve karar A'nın bilinen sonucu: bir akademi oyuncusu S9'da geliyor ama S18'e kadar debüt yapamıyor — auto-pick onu asla seçmiyor. Beklenen; çözümü kupa/rezerv maçları, MVP sonrası ufukta.)*
 
-**Kalan (Faz 5):** ~~5.4 maç anlatısı~~ ✅ · ~~5.5 satış anı + sezon özeti~~ ✅ · ~~dram kopyası~~ ✅ (zaten kapalıydı) · **Gate B sahibinin okumasını bekliyor** (string table, skorun **yanına** — gerekçe: anlatı skorun yerine geçerse garip bir cümlenin anlatı hatası mı sim sonucu mu olduğu ayırt edilemez) · 5.5 satış anı + sezon özeti · sonra Faz 4'ün kalan dram kopyası ile **tek geçişte** yazılacak (aynı string table, aynı ses tonu).
+**Gate B geçti · 2026-08-13 (sahibinin okuması).** İki tur düzeltme gerekti ve ikisini de sahibinin okuması tetikledi. **Tur 1 — sözlük fazla cömertti:** ikili gol anların %20.2'siydi (kaldırıldı), maç kilometre taşları %24.6 (25/50 → 100'den başlatıldı); kariyer başına 6.5 → 4.6. **Tur 2 — yapı yanlıştı:** sahibi *"bu bir liste gibi duruyor, kariyer sezonlarını ve başarılarını anlatır"* dedi ve haklıydı — düz bir an akışının, oyuncunun *sadece iyi oynadığı* bir yılı koyacak yeri yok, o yıllar kayboluyor ve boşluklar sessizlik değil eksiklik gibi okunuyordu. Sezon bir kariyerin anlatım birimidir ve anlardan **türetilemez**; `PlayerJourney` artık sezon başına satır tutuyor (o yılın maçı + golü), `CareerChronicle` ikisini birleştiriyor. Satırlar save v7'ye yazıldı — mecburen: sessiz bir yılı koruyan tam olarak o satır.
+
+**Kabul edilen çekince (kapatılmadı, biliniyor).** Her sezon **tam 38 maç**: 17 yıllık kariyerde tek sakatlık, tek rotasyon, tek düşüş yok — yani kariyerlerde **hiç kötü haber yok**. Bu **katman 5**'in (yorgunluk/sakatlık/kart/maç-içi karar) yokluğu, MVP sonrası ufukta duruyor. Gate B bu çekinceyle geçirildi çünkü hafıza+anlatı bahsi kendi başına tuttu; kariyerlere gerçeklik katacak asıl şey katman 5 geldiğinde eklenecek.
+
+**Faz 5 kapandı.** Sıradaki: Faz 7 (UI + art + localization) — sahibinin önceliği mobilde oynamak. (string table, skorun **yanına** — gerekçe: anlatı skorun yerine geçerse garip bir cümlenin anlatı hatası mı sim sonucu mu olduğu ayırt edilemez) · 5.5 satış anı + sezon özeti · sonra Faz 4'ün kalan dram kopyası ile **tek geçişte** yazılacak (aynı string table, aynı ses tonu).
 
 ---
 

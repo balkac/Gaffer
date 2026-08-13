@@ -30,7 +30,7 @@
 | 2 | Sezon İskeleti | 🟡 Çekirdek bitti · JSON adapter kaldı | M | |
 | 3 | Yönetim Sistemleri | 🟡 Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO + **birleşik yönetim (canlı transfer + haftalık maaş gideri + transfer dönemleri)** ✅ · **sezon-içi gelişim + oynama süresi + kalıcı piyasa** ✅ · devam (rakip menajer AI'ı) | **L** | |
 | 4 | Karakter + Dram | 🟡 Çekirdek bitti (trait + dram + moral; karar #31) · playtest kalibrasyonu kaldı (dram frekans-normalizasyonu + kart etki-önizlemesi + olay kopyası — PROGRESS "Kalan") + Unity-doğrulaması | **L** | |
-| 5 | Hafıza + Anlatı | ⬜ | M | ★ Gate B |
+| 5 | Hafıza + Anlatı | ✅ Tamam (★ Gate B geçildi 2026-08-13) | M | ★ Gate B |
 | 6 | Meta / Roguelike | ⬜ | M | |
 | 7 | UI + Art + Localization | ⬜ | **L** | |
 | 8 | MVP Ship | ⬜ | M | ★ Gate C |
@@ -178,7 +178,7 @@ Dar ama kapalı.
 
 - **★ Gate A (Faz 1 sonu):** ✅ **GEÇILDI (2026-07-07)** — gol 2.69/maç, favori %51.6 kazanır, ev > deplasman, şampiyon dağılımı sağlıklı; regresyon testleriyle kilitli. *En ucuz iptal/pivot noktası olmaktan çıktı.*
   - *2026-08-06 notu:* kapı geçerli, ama **ev-avantajı kanıtı sanıldığından zayıfmış** — tek tohuma dayanıyordu ve 5 tohumluk süpürmede biri (`20250101`) tersine dönüyor (ev %36.3 < deplasman %36.8). Bir sezon 380 maç, SE ≈ 2.5 puan; ~3 puanlık fark tek örneklemde inversiyona açık. İddia havuzlanmış 1.900 maça taşındı (%41.7 vs %34.2, >3 puan marj). Gol ve favori bantları beş tohumda da tutuyor. Ayrıntı: [`PROGRESS.md`](PROGRESS.md).
-- **★ Gate B (Faz 5 sonu):** Hikaye kendiliğinden beliriyor mu? Bu emergent dram bahsinin tutup tutmadığı an.
+- **★ Gate B (Faz 5 sonu):** ✅ **GEÇILDI (2026-08-13)** — sahibinin okumasıyla. Kendiliğinden 17 sezonluk bir kulüp efsanesi belirdi (646 maç, 211 gol, hat-trick'ler, derbi golleri, şampiyonluk maçı golleri) ve sezonlarıyla okunduğunda kariyer gibi durdu. *İlk okuma geçmemişti* ve iki tur düzeltme gerekti: sözlük fazla cömetti (ikili gol anların %20'siydi → kaldırıldı), ve çıktı düz bir an akışıydı → **sezon katmanı** eklendi ("kariyer sezonlarını ve başarılarını anlatır"). **Kabul edilen çekince:** her sezon tam 38 maç — sakatlık, yorgunluk ve düşüş yok, yani kariyerlerde kötü haber hiç yok. Bu **katman 5**'in yokluğu (MVP sonrası ufuk); geldiğinde kariyerlere gerçeklik katacak asıl şey odur.
 - **★ Gate C (Faz 8):** MVP Definition of Done karşılandı mı? Ship kararı.
 
 ---
