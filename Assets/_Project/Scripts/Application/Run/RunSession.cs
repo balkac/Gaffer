@@ -355,6 +355,22 @@ namespace Gaffer.Application.Run
             return _rivalries.RivalOf(club);
         }
 
+        /// <summary>
+        /// A player's whole spell at the club, read out of his journey — how he arrived, what he did, how
+        /// he left, and what the club made on him. What the sale moment is written from (Faz 5.5); an
+        /// empty summary for a player the manager never had.
+        /// </summary>
+        public CareerSummary CareerOf(PlayerId player)
+        {
+            return CareerSummary.Create(_journeys.Find(player));
+        }
+
+        /// <summary>Everything a season is remembered for, earliest week first. Empty is a real answer.</summary>
+        public SeasonRecap RecapOf(int season)
+        {
+            return SeasonRecap.Create(_journeys, season);
+        }
+
         /// <summary>Every journey the run is keeping — the Gate B instrument reads this.</summary>
         public JourneyLog Journeys => _journeys;
 
