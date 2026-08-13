@@ -66,8 +66,8 @@ namespace Gaffer.Application.Simulation
                     continue;
                 }
 
-                Squad scoringSquad = chance.Side == TeamSide.Home ? command.HomeSquad : command.AwaySquad;
-                PlayerId? scorer = scoringSquad != null ? _scorerSelector.SelectScorer(scoringSquad, rng) : null;
+                IReadOnlyList<Player> onThePitch = chance.Side == TeamSide.Home ? command.HomeEleven : command.AwayEleven;
+                PlayerId? scorer = onThePitch != null ? _scorerSelector.SelectScorer(onThePitch, rng) : null;
 
                 goals.Add(new MatchEvent(chance.Minute, chance.Side, MatchEventKind.Goal, scorer));
                 if (chance.Side == TeamSide.Home)

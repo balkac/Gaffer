@@ -5,6 +5,7 @@ using Gaffer.Application.Run;
 using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
+using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
 using NUnit.Framework;
 
@@ -198,6 +199,52 @@ namespace Gaffer.Tests
                 Assert.That(Has(journey.Moments, CareerMomentKind.Retirement), Is.True,
                     $"Player {gone.Value} retired without his journey being closed.");
             }
+        }
+
+        [Test]
+        public void AdvanceWeek_EveryGoal_IsScoredBySomebodyWhoWasActuallyPlaying()
+        {
+            // Measured before the fix: 51.5% of the club's goals over three seasons went to players the
+            // manager had LEFT OUT. The command carried the whole squad as the scoring pool, so picking a
+            // team meant nothing to who scored — the scoreline named a substitute who never came on, and
+            // the narrative dropped the goal entirely, because it credits appearances from the eleven and
+            // found no eleven to hang it on.
+            RunSession session = StartRun();
+            int goals = 0;
+
+            for (int week = 0; week < 10; week++)
+            {
+                var eleven = new HashSet<int>();
+                IReadOnlyList<Player> starters = session.Lineup().Starters;
+                for (int i = 0; i < starters.Count; i++)
+                {
+                    eleven.Add(starters[i].Id.Value);
+                }
+
+                Result<WeekOutcome> played = session.AdvanceWeek();
+                Assert.That(played.IsSuccess, Is.True, played.Error);
+                if (played.Value.ManagedMatch == null)
+                {
+                    continue;
+                }
+
+                MatchResult match = played.Value.ManagedMatch.Value;
+                TeamSide ours = match.Home == session.ManagedClub ? TeamSide.Home : TeamSide.Away;
+                for (int i = 0; i < match.Events.Count; i++)
+                {
+                    MatchEvent scored = match.Events[i];
+                    if (scored.Kind != MatchEventKind.Goal || scored.Side != ours || !scored.Scorer.HasValue)
+                    {
+                        continue;
+                    }
+
+                    goals++;
+                    Assert.That(eleven.Contains(scored.Scorer.Value.Value), Is.True,
+                        $"week {week}: {scored.Minute}' was credited to somebody who was not on the pitch.");
+                }
+            }
+
+            Assert.That(goals, Is.GreaterThan(0), "Nobody scored in ten weeks, so this test proves nothing.");
         }
 
         [Test]

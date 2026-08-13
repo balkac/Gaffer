@@ -22,7 +22,7 @@ namespace Gaffer.Tests
             int hits = 0;
             for (int i = 0; i < draws; i++)
             {
-                if (selector.SelectScorer(squad, rng)?.Value == wantedId)
+                if (selector.SelectScorer(squad.Players, rng)?.Value == wantedId)
                 {
                     hits++;
                 }
@@ -38,7 +38,7 @@ namespace Gaffer.Tests
             var rng = new SplitMix64RandomNumberGenerator(1);
 
             Assert.That(selector.SelectScorer(null, rng), Is.Null);
-            Assert.That(selector.SelectScorer(new Squad(new List<Player>()), rng), Is.Null);
+            Assert.That(selector.SelectScorer(new List<Player>(), rng), Is.Null);
         }
 
         [Test]
@@ -55,7 +55,7 @@ namespace Gaffer.Tests
 
             for (int i = 0; i < 200; i++)
             {
-                PlayerId? scorer = selector.SelectScorer(squad, rng);
+                PlayerId? scorer = selector.SelectScorer(squad.Players, rng);
                 Assert.That(scorer, Is.Not.Null);
                 Assert.That(new[] { 3, 7, 9 }, Contains.Item(scorer.Value.Value));
             }
@@ -71,8 +71,8 @@ namespace Gaffer.Tests
                 PlayerAt(2, Position.Defender, 44),
             });
 
-            var first = new WeightedScorerSelector().SelectScorer(squad, new SplitMix64RandomNumberGenerator(2026));
-            var second = new WeightedScorerSelector().SelectScorer(squad, new SplitMix64RandomNumberGenerator(2026));
+            var first = new WeightedScorerSelector().SelectScorer(squad.Players, new SplitMix64RandomNumberGenerator(2026));
+            var second = new WeightedScorerSelector().SelectScorer(squad.Players, new SplitMix64RandomNumberGenerator(2026));
 
             Assert.That(first.Value, Is.EqualTo(second.Value));
         }

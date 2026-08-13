@@ -250,7 +250,10 @@ namespace Gaffer.Application.Season
 
                 var command = new MatchCommand(
                     StrengthOf(home, occasion), StrengthOf(away, occasion),
-                    home.Squad, away.Squad,
+                    // The ELEVEN, not the roster: a goal belongs to somebody who was on the pitch. Null
+                    // for a squad-less (strength-only) club, which is how a goal goes unattributed rather
+                    // than being credited to a roster that does not exist.
+                    ElevenOf(home), ElevenOf(away),
                     ProfileOf(home.Id), ProfileOf(away.Id),
                     occasion);
 
@@ -302,6 +305,11 @@ namespace Gaffer.Application.Season
             }
 
             return _strengthBuilder.Build(StartersOf(club), TacticsOf(club.Id), context, Morale);
+        }
+
+        private IReadOnlyList<Player> ElevenOf(Club club)
+        {
+            return club.Squad != null ? StartersOf(club) : null;
         }
 
         private IReadOnlyList<Player> StartersOf(Club club)

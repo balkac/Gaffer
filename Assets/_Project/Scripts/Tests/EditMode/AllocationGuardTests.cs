@@ -200,7 +200,7 @@ namespace Gaffer.Tests
             var chanceGenerator = new PoissonChanceGenerator(MatchSimulationSettings.Default);
             var command = new MatchCommand(
                 league.Clubs[0].Strength, league.Clubs[1].Strength,
-                squad, league.Clubs[1].Squad,
+                squad.Players, league.Clubs[1].Squad.Players,
                 ChanceProfile.Neutral, ChanceProfile.Neutral,
                 NormalContext());
             Assert.That(BytesFor(calls, () => chanceGenerator.GenerateChances(command, rng)), Is.Zero,
@@ -212,7 +212,7 @@ namespace Gaffer.Tests
                 "The chance port must not allocate to answer one shot.");
 
             var scorerSelector = new WeightedScorerSelector();
-            Assert.That(BytesFor(calls, () => scorerSelector.SelectScorer(squad, rng)), Is.Zero,
+            Assert.That(BytesFor(calls, () => scorerSelector.SelectScorer(squad.Players, rng)), Is.Zero,
                 "The scorer port must serve a scorer from its memoised weight vectors.");
 
             var strengthBuilder = new EffectiveStrengthBuilder();

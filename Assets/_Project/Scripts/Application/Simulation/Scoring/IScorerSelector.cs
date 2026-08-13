@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Gaffer.Common;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
@@ -21,6 +22,6 @@ namespace Gaffer.Application.Simulation
         /// <see cref="Squad"/> instance whose roster will never change, and a changed roster as a new
         /// instance.</para>
         /// </summary>
-        PlayerId? SelectScorer(Squad squad, IRandom rng);
+        PlayerId? SelectScorer(IReadOnlyList<Player> onThePitch, IRandom rng);
     }
 }
