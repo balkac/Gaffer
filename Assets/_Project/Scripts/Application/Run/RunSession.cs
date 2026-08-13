@@ -59,6 +59,11 @@ namespace Gaffer.Application.Run
         private readonly SplitMix64RandomNumberGenerator _developmentRng = new SplitMix64RandomNumberGenerator(0);
         private readonly Scout _scout;
 
+        // Who hates whom, drawn once from the run's seed and kept for the whole run: a derby has to be the
+        // same fixture next season or "his first derby goal" means nothing (RivalryTable).
+        private readonly MatchContextBuilder _contextBuilder;
+        private readonly RivalryTable _rivalries;
+
         // The run's memory (Faz 5). Journeys open for players the manager actually has, never for the
         // 50,000 he does not — see JourneyLog. The recogniser is stateless between calls; the log is the
         // state, and it is both what recognition reads and what it writes.
@@ -133,6 +138,13 @@ namespace Gaffer.Application.Run
             _marketRenewal = new MarketRenewal(playerGenerator, balance.Development, balance.Renewal, balance.Traits);
             _development = new PlayerDevelopment(balance.Development, balance.Traits);
             _scout = new Scout(balance.Scouting);
+            // Drawn from the ORIGINAL seed, not the run's current one. A resume plays on a continuation
+            // seed so the future re-rolls, but the rivalries are world state, not future: they must be the
+            // same map after a reload as before it, or "his first derby goal" would change fixture. The
+            // original seed is the one thing that survives every resume unchanged, so this needs no save
+            // field of its own.
+            _rivalries = RivalryTable.Draw(league.Clubs.Count, new SplitMix64RandomNumberGenerator(_originalSeed ^ 0x52495641_4C535942UL));
+            _contextBuilder = new MatchContextBuilder(_rivalries, balance.MatchContexts);
             _drama = new DramaEngine(balance.DramaEvents, balance.Drama, balance.Economy);
 
             _context = setup.MatchContext;
@@ -333,6 +345,12 @@ namespace Gaffer.Application.Run
         public PlayerJourney JourneyOf(PlayerId player)
         {
             return _journeys.Find(player);
+        }
+
+        /// <summary>This club's derby, or a club id of -1 when the league left it without one.</summary>
+        public ClubId RivalOf(ClubId club)
+        {
+            return _rivalries.RivalOf(club);
         }
 
         /// <summary>Every journey the run is keeping — the Gate B instrument reads this.</summary>
@@ -915,7 +933,7 @@ namespace Gaffer.Application.Run
         // playing on different rules than the run it continues.
         private LeagueSeason NewSeason(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults)
         {
-            return LeagueSeason.Restore(
+            var season = LeagueSeason.Restore(
                 league,
                 playedRounds,
                 playedResults ?? NoResults,
@@ -923,6 +941,10 @@ namespace Gaffer.Application.Run
                 _balance.TacticsBalance,
                 _balance.Morale,
                 _simulator);
+
+            // The rivalries outlive the season, so every season the run builds is handed the same map.
+            season.SetMatchContextBuilder(_contextBuilder);
+            return season;
         }
 
         private Squad ManagedSquad()
@@ -1310,8 +1332,11 @@ namespace Gaffer.Application.Run
 
             // Copied out of the recogniser's reusable buffer, whose documented lifetime ends at the next
             // call — the outcome below outlives it.
+            // The occasion the match was ACTUALLY played on, not the season's base context. Reading the
+            // base one is why no goal was ever recognised as having mattered: every fixture starts from it.
             IReadOnlyList<CareerMoment> recognised = _recogniser.Recognise(
-                _journeys, _managedClub, StartersList(), played.Value, _context, _seasonNumber, week.Round);
+                _journeys, _managedClub, StartersList(), played.Value,
+                week.ContextFor(_managedClub, _context), _seasonNumber, week.Round);
             for (int i = 0; i < recognised.Count; i++)
             {
                 _weekMoments.Add(recognised[i]);
