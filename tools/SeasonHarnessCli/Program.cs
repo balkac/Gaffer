@@ -210,6 +210,12 @@ namespace Gaffer.Tools.SeasonHarness.Cli
                     return $"scored his first goal ({moment.Minute}')";
                 case CareerMomentKind.BigMatchGoal:
                     return $"scored in a match that mattered ({moment.Minute}')";
+                case CareerMomentKind.DerbyGoal:
+                    return $"scored in the derby ({moment.Minute}')";
+                case CareerMomentKind.TitleDeciderGoal:
+                    return $"scored with the title on the line ({moment.Minute}')";
+                case CareerMomentKind.RelegationGoal:
+                    return $"scored in a relegation six-pointer ({moment.Minute}')";
                 case CareerMomentKind.Brace:
                     return "scored twice";
                 case CareerMomentKind.Hattrick:
