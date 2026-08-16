@@ -31,7 +31,7 @@
 | 3 | Yönetim Sistemleri | ✅ Tamam | **L** | |
 | 4 | Karakter + Dram | ✅ Tamam (trait + dram + moral; karar #31) · frekans normalize edildi, kart etki-önizlemesi ve olay kopyası yazıldı, Unity doğrulandı | **L** | |
 | 5 | Hafıza + Anlatı | ✅ Tamam (★ Gate B geçildi 2026-08-13) | M | ★ Gate B |
-| 6 | Meta / Roguelike | ⬜ | M | |
+| 6 | Meta / Roguelike | ⬜ **Faz 7'den sonraya alındı** (sahibinin kararı 2026-08-16) | M | |
 | 7 | UI + Art + Localization | ⬜ | **L** | |
 | 8 | MVP Ship | ⬜ | M | ★ Gate C |
 
@@ -126,8 +126,14 @@ Simülasyonu hikayeye çevir. (GDD 4.8)
 
 ---
 
-## Faz 6 — Meta / Roguelike · **M**
+## Faz 6 — Meta / Roguelike · **M** · ⏸️ Faz 7'den SONRA
 Run'ları birbirine bağla. (GDD 4.9, 4.10)
+
+> **Neden ertelendi (sahibinin kararı, 2026-08-16).** Öncelik telefonda oynamak, ve ilk oturumda hissedilmesi gereken şeyler — maç, kadro, transfer, hikâye — Faz 5 sonunda hazır. Meta ikinci oturumda önem kazanır: *tekrar* oynatan şeydir, ilk kez oynatan değil.
+>
+> **Bedeli bilinerek kabul edildi:** roguelike döngüsü kapanmaz. `CLAUDE.md`'nin tek cümlesi *"her sezon bir run, her kovulma bir sonraki denemenin yakıtı"* diyor — Faz 6 olmadan kovulma yalnızca **son** olur, yakıt olmaz. MVP'nin bu haliyle ship edilemeyeceği anlamına gelir; Faz 8'den önce dönülecek.
+>
+> **Ucuzlamış olarak dönülecek:** Efsaneler Salonu'nun altyapısı Faz 5'te zaten kuruldu — yolculuk günlükleri kalıcı (save v7), satılan oyuncular takip ediliyor, `CareerChronicle` bir kariyeri sezonlarıyla okuyor. Kalan iş kalıcılığı **run'lar arasına** taşımak.
 
 **Teslimatlar:**
 - Menajer: **isim + milliyet** (minimal; portre yok).
