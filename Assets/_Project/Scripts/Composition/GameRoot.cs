@@ -1,6 +1,9 @@
 using Gaffer.Application.Run;
 using Gaffer.Common;
+using Gaffer.Common.Localization;
+using Gaffer.Infrastructure.Localization;
 using Gaffer.Infrastructure.Configuration;
+using Gaffer.Presentation;
 using Gaffer.Presentation.Squad;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -45,6 +48,14 @@ namespace Gaffer.Composition
                  "screen falls back to Unity's default runtime look (a blue panel and black text).")]
         [SerializeField] private StyleSheet _theme;
 
+        [Tooltip("Which language the screens speak. Leave as the reference locale while iterating; " +
+                 "switching it is how the Turkish copy gets reviewed without a code change.")]
+        [SerializeField] private string _locale = Locales.Reference;
+
+        [Tooltip("Authored string table. Empty falls back to the built-in copy, which is the floor rather " +
+                 "than a sync source (ContentAssets).")]
+        [SerializeField] private StringTableSO _strings;
+
         [Header("Balance (optional — empty boots on the calibrated defaults)")]
         [SerializeField] private SimulationBalanceSO _simulation;
         [SerializeField] private DevelopmentBalanceSO _development;
@@ -84,7 +95,15 @@ namespace Gaffer.Composition
                     + "onto the Theme field, or the screen will draw in Unity's default runtime look.");
             }
 
-            new SquadScreen(started.Value, root).Build();
+            new SquadScreen(started.Value, root, BuildText()).Build();
+        }
+
+        // The words, bound to one locale. Composition's job precisely: Presentation may not see the
+        // string table's assembly, and a screen that chose its own locale could not be switched from here.
+        private LocalizedStrings BuildText()
+        {
+            StringTable table = _strings != null ? _strings.ToTable(UiTextKeys.All) : GameStrings.Default;
+            return new LocalizedStrings(table, string.IsNullOrEmpty(_locale) ? Locales.Reference : _locale);
         }
 
         private RunSetup BuildSetup()

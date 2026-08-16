@@ -3,6 +3,7 @@ using Gaffer.Application.Run;
 using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
+using Gaffer.Common.Localization;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
 using UnityEngine;
@@ -35,6 +36,11 @@ namespace Gaffer.Presentation.Squad
         private readonly RunSession _session;
         private readonly VisualElement _root;
 
+        // The words. Injected rather than reached for: Presentation may not see the string table's
+        // assembly (NON-NEGOTIABLE #8's layer half), and Composition is what binds a locale to a screen —
+        // which is also what lets the language change without this class knowing there are languages.
+        private readonly LocalizedStrings _text;
+
         private readonly Label _clubName = new Label();
         private readonly Label _standing = new Label();
         private readonly Label _shape = new Label();
@@ -47,10 +53,11 @@ namespace Gaffer.Presentation.Squad
         private readonly List<Player> _starters = new List<Player>();
         private readonly List<Player> _benched = new List<Player>();
 
-        public SquadScreen(RunSession session, VisualElement root)
+        public SquadScreen(RunSession session, VisualElement root, LocalizedStrings text)
         {
             _session = session;
             _root = root;
+            _text = text;
         }
 
         /// <summary>Builds the screen once and draws the run's current state into it.</summary>
@@ -65,8 +72,8 @@ namespace Gaffer.Presentation.Squad
             _root.AddToClassList("screen");
 
             _root.Add(BuildHeader());
-            _root.Add(BuildList("THE ELEVEN", _eleven, _starters, OnStarterTapped));
-            _root.Add(BuildList("BENCH", _bench, _benched, OnBenchTapped));
+            _root.Add(BuildList(Say(UiTextKeys.SquadEleven), _eleven, _starters, OnStarterTapped));
+            _root.Add(BuildList(Say(UiTextKeys.SquadBench), _bench, _benched, OnBenchTapped));
             _root.Add(BuildActions());
 
             _message.AddToClassList("body");
@@ -82,15 +89,16 @@ namespace Gaffer.Presentation.Squad
         private void Draw(LineupOutcome lineup)
         {
             _clubName.text = _session.ManagedClubName;
+            string week = Say(UiTextKeys.SquadWeek) + " " + _session.PlayedRounds + "/" + _session.RoundCount;
             _standing.text = _session.TablePosition > 0
-                ? "POSITION " + _session.TablePosition + "  ·  WEEK " + _session.PlayedRounds + " OF " + _session.RoundCount
-                : "WEEK " + _session.PlayedRounds + " OF " + _session.RoundCount;
+                ? Say(UiTextKeys.SquadPosition) + " " + _session.TablePosition + "  ·  " + week
+                : week;
 
             TeamStrength strength = lineup.Strength;
             _shape.text = lineup.Formation.Name
-                + "   ATK " + Rounded(strength.Attack)
-                + "   MID " + Rounded(strength.Midfield)
-                + "   DEF " + Rounded(strength.Defence);
+                + "   " + Say(UiTextKeys.SquadAttack) + " " + Rounded(strength.Attack)
+                + "   " + Say(UiTextKeys.SquadMidfield) + " " + Rounded(strength.Midfield)
+                + "   " + Say(UiTextKeys.SquadDefence) + " " + Rounded(strength.Defence);
 
             Refill(_starters, lineup.Starters);
             Refill(_benched, lineup.Bench);
@@ -219,12 +227,12 @@ namespace Gaffer.Presentation.Squad
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
 
-            var autoPick = new Button(OnAutoPick) { text = "Auto-pick" };
+            var autoPick = new Button(OnAutoPick) { text = Say(UiTextKeys.ActionAutoPick) };
             autoPick.AddToClassList("button");
             autoPick.style.flexGrow = 1;
             autoPick.style.marginRight = 8;
 
-            var advance = new Button(OnAdvanceWeek) { text = "Play the week" };
+            var advance = new Button(OnAdvanceWeek) { text = Say(UiTextKeys.ActionPlayWeek) };
             advance.AddToClassList("button");
             advance.AddToClassList("button--primary");
             advance.style.flexGrow = 1;
@@ -265,11 +273,11 @@ namespace Gaffer.Presentation.Squad
             Result<WeekOutcome> week = _session.AdvanceWeek();
             if (week.IsFailure)
             {
-                Say(week.Error);
+                ShowMessage(week.Error);
                 return;
             }
 
-            Say(Describe(week.Value));
+            ShowMessage(Describe(week.Value));
             Draw(_session.Lineup());
         }
 
@@ -277,15 +285,24 @@ namespace Gaffer.Presentation.Squad
         {
             if (result.IsFailure)
             {
-                Say(result.Error);
+                ShowMessage(result.Error);
                 return;
             }
 
-            Say(string.Empty);
+            ShowMessage(string.Empty);
             Draw(result.Value);
         }
 
-        private void Say(string message)
+        // A key's words, or the key itself when the table has no row for it. Visible-but-wrong beats blank:
+        // a missing line shows up as "ui.squad.bench" on screen, which names its own fix, where an empty
+        // label just looks like a layout bug.
+        private string Say(string key)
+        {
+            string words = _text.IsBound ? _text.Find(key) : null;
+            return string.IsNullOrEmpty(words) ? key : words;
+        }
+
+        private void ShowMessage(string message)
         {
             _message.text = message;
             _message.style.display = string.IsNullOrEmpty(message) ? DisplayStyle.None : DisplayStyle.Flex;
@@ -295,7 +312,7 @@ namespace Gaffer.Presentation.Squad
         {
             if (week.ManagedMatch == null)
             {
-                return "No fixture this week.";
+                return Say(UiTextKeys.MessageNoFixture);
             }
 
             MatchResult match = week.ManagedMatch.Value;

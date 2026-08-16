@@ -40,6 +40,7 @@
          anything. Named file by file, NOT a wildcard, for exactly the reason GameStrings is: adding
          `using UnityEngine` to it is meant to break this build loudly. -->
     <Compile Include="../Assets/_Project/Scripts/Presentation/Squad/AbilityBand.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Presentation/UiTextKeys.cs" />
     <Compile Include="../Assets/_Project/Scripts/Tests/EditMode/**/*.cs" />
   </ItemGroup>
 

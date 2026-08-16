@@ -43,6 +43,51 @@ namespace Gaffer.Infrastructure.Localization
                 Locales.Shipped,
                 new[]
                 {
+                    // --- the screens (Faz 7) ---------------------------------------------------------
+                    // Interface copy, not narrative: a label names what a thing IS, in as few words as it
+                    // takes, and a button names the ACTION rather than its result. Turkish is written
+                    // native — the shortest natural phrase, not the English one rendered word for word.
+                    Row(
+                        "ui.squad.eleven",
+                        "THE ELEVEN",
+                        "İLK 11"),
+                    Row(
+                        "ui.squad.bench",
+                        "BENCH",
+                        "YEDEKLER"),
+                    Row(
+                        "ui.squad.position",
+                        "POSITION",
+                        "SIRA"),
+                    Row(
+                        "ui.squad.week",
+                        "WEEK",
+                        "HAFTA"),
+                    Row(
+                        "ui.squad.attack",
+                        "ATK",
+                        "HÜC"),
+                    Row(
+                        "ui.squad.midfield",
+                        "MID",
+                        "ORT"),
+                    Row(
+                        "ui.squad.defence",
+                        "DEF",
+                        "SAV"),
+                    Row(
+                        "ui.action.auto_pick",
+                        "Auto-pick",
+                        "Otomatik seç"),
+                    Row(
+                        "ui.action.play_week",
+                        "Play the week",
+                        "Haftayı oyna"),
+                    Row(
+                        "ui.message.no_fixture",
+                        "No fixture this week.",
+                        "Bu hafta maç yok."),
+
                     // --- the narrative layer (Faz 5.4) -----------------------------------------------
                     // One line per kind of career moment. House rules on top of the ones above, and they
                     // are what keep a journey readable rather than a fixture list:
