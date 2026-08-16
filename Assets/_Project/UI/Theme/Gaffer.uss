@@ -107,6 +107,39 @@
     border-bottom-color: var(--pitch-line);
 }
 
+/* Press feedback. A tap with no acknowledgement reads as a tap that did not register — the player
+   presses again, and now the game has heard two. The row lifts its ground and settles back a hair,
+   fast enough to feel like a button and slow enough to see: 90ms is about the shortest a change can be
+   and still be noticed. */
+.row:hover {
+    background-color: rgba(234, 242, 238, 0.04);
+}
+
+.row:active {
+    background-color: rgba(255, 46, 126, 0.14);
+    scale: 0.985 0.985;
+}
+
+.row {
+    transition-property: background-color, scale;
+    transition-duration: 90ms, 90ms;
+    transition-timing-function: ease-out, ease-out;
+}
+
+.button:hover {
+    background-color: var(--pitch-line);
+}
+
+.button:active {
+    scale: 0.97 0.97;
+}
+
+.button {
+    transition-property: background-color, scale;
+    transition-duration: 90ms, 90ms;
+    transition-timing-function: ease-out, ease-out;
+}
+
 .row__name {
     flex-grow: 1;
     color: var(--chalk);

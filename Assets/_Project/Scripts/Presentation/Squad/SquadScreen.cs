@@ -151,41 +151,51 @@ namespace Gaffer.Presentation.Squad
             // makeItem/bindItem are the recycling contract: makeItem runs once per VISIBLE row and
             // bindItem every time one is reused, so bindItem must set every property it ever sets —
             // a class added on one row and not removed on the next is the classic ListView bug.
-            view.makeItem = MakePlayerRow;
+            view.makeItem = () => MakePlayerRow(onTapped);
             view.bindItem = (element, index) => BindPlayerRow(element, source, index);
 
             card.Add(view);
-
-            // Rows report a tap through the row itself rather than through selection, so the screen never
-            // has to hold "which row is selected" — the tap IS the command.
-            view.RegisterCallback<ClickEvent>(evt =>
-            {
-                if (evt.target is VisualElement tapped && tapped.userData is int index)
-                {
-                    onTapped(index);
-                }
-            });
-
             return card;
         }
 
         // Layout and look both come from the stylesheet; this only says what the parts ARE. Inline styles
         // here would be the palette leaking into C# one property at a time.
-        private static VisualElement MakePlayerRow()
+        private static VisualElement MakePlayerRow(System.Action<int> onTapped)
         {
             var row = new VisualElement();
             row.AddToClassList("row");
 
+            // The click is registered on the ROW, and the row reads its own index.
+            //
+            // It used to be one handler on the ListView reading evt.target, and that was a real bug: the
+            // target is the DEEPEST element under the finger, so tapping a player's NAME delivered the
+            // Label — which carries no index — and the tap was swallowed. Only the gaps between the labels
+            // worked, which reads as "it misses about half my taps".
+            //
+            // The children are picking-disabled as well, so the row is one target rather than four. Both
+            // halves are needed: without the first the row never hears the tap, without the second the
+            // label eats it before the row can.
+            row.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.currentTarget is VisualElement tapped && tapped.userData is int index)
+                {
+                    onTapped(index);
+                }
+            });
+
             var name = new Label();
             name.AddToClassList("row__name");
+            name.pickingMode = PickingMode.Ignore;
             row.Add(name);
 
             var role = new Label();
             role.AddToClassList("row__role");
+            role.pickingMode = PickingMode.Ignore;
             row.Add(role);
 
             var rating = new Label();
             rating.AddToClassList("row__rating");
+            rating.pickingMode = PickingMode.Ignore;
             row.Add(rating);
 
             return row;
