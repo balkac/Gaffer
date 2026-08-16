@@ -8,6 +8,7 @@
         "Gaffer.UserData",
         "Gaffer.Tools.SeasonHarness",
         "Gaffer.Infrastructure",
+        "Gaffer.Presentation",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
