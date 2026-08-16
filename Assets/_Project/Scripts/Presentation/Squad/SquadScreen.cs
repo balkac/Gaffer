@@ -1,0 +1,307 @@
+using System.Collections.Generic;
+using Gaffer.Application.Run;
+using Gaffer.Application.Season;
+using Gaffer.Application.Simulation;
+using Gaffer.Common;
+using Gaffer.Domain.Clubs;
+using Gaffer.Domain.Players;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace Gaffer.Presentation.Squad
+{
+    /// <summary>
+    /// The squad and tactics screen — the first of the five, and the one the manager touches most.
+    ///
+    /// <para><b>A view over outcomes, not a second copy of the game.</b> It renders
+    /// <see cref="LineupOutcome"/> and sends commands back; it never reaches into the run to diff state
+    /// (NON-NEGOTIABLE #4). Every command it issues returns the outcome it should draw next, so the screen
+    /// has no idea what changed and does not need one — which is what stops a UI drifting away from the
+    /// simulation, the exact failure the two editor windows had before <c>RunSession</c> existed.</para>
+    ///
+    /// <para><b>Built in C# rather than UXML</b>, like the editor windows: the layout is entirely
+    /// data-driven, so a markup file would be a near-empty shell plus a second place to keep names in
+    /// step. The look is not here either — every colour and size comes from <c>Gaffer.uss</c>, and the
+    /// only styling decision this file makes is which CLASS a thing wears.</para>
+    ///
+    /// <para><b>Mobile first.</b> The eleven and the bench are <see cref="ListView"/>s, so rows are
+    /// recycled rather than built per player — a squad grows without bound (contracts are not written
+    /// yet) and a market list will do the same. Every row is a 44px tap target.</para>
+    /// </summary>
+    public sealed class SquadScreen
+    {
+        private const int RowHeight = 56;
+
+        private readonly RunSession _session;
+        private readonly VisualElement _root;
+
+        private readonly Label _clubName = new Label();
+        private readonly Label _standing = new Label();
+        private readonly Label _shape = new Label();
+        private readonly ListView _eleven = new ListView();
+        private readonly ListView _bench = new ListView();
+        private readonly Label _message = new Label();
+
+        // The lists ListView binds against. Held and refilled rather than replaced, so a rebind does not
+        // hand the view a different collection every time (PERFORMANCE §8).
+        private readonly List<Player> _starters = new List<Player>();
+        private readonly List<Player> _benched = new List<Player>();
+
+        public SquadScreen(RunSession session, VisualElement root)
+        {
+            _session = session;
+            _root = root;
+        }
+
+        /// <summary>Builds the screen once and draws the run's current state into it.</summary>
+        public void Build()
+        {
+            _root.Clear();
+            _root.AddToClassList("screen");
+
+            _root.Add(BuildHeader());
+            _root.Add(BuildList("THE ELEVEN", _eleven, _starters, OnStarterTapped));
+            _root.Add(BuildList("BENCH", _bench, _benched, OnBenchTapped));
+            _root.Add(BuildActions());
+
+            _message.AddToClassList("body");
+            _root.Add(_message);
+
+            Draw(_session.Lineup());
+        }
+
+        // ----- Drawing ------------------------------------------------------------------------------------
+
+        // Everything the screen shows, from one outcome. There is no other path in: a command's result
+        // comes back through here too, so "what does the screen show" has one answer.
+        private void Draw(LineupOutcome lineup)
+        {
+            _clubName.text = _session.ManagedClubName;
+            _standing.text = _session.TablePosition > 0
+                ? "POSITION " + _session.TablePosition + "  ·  WEEK " + _session.PlayedRounds + " OF " + _session.RoundCount
+                : "WEEK " + _session.PlayedRounds + " OF " + _session.RoundCount;
+
+            TeamStrength strength = lineup.Strength;
+            _shape.text = lineup.Formation.Name
+                + "   ATK " + Rounded(strength.Attack)
+                + "   MID " + Rounded(strength.Midfield)
+                + "   DEF " + Rounded(strength.Defence);
+
+            Refill(_starters, lineup.Starters);
+            Refill(_benched, lineup.Bench);
+            _eleven.Rebuild();
+            _bench.Rebuild();
+        }
+
+        private static void Refill(List<Player> into, IReadOnlyList<Player> from)
+        {
+            into.Clear();
+            for (int i = 0; i < from.Count; i++)
+            {
+                into.Add(from[i]);
+            }
+        }
+
+        // ----- Layout -------------------------------------------------------------------------------------
+
+        private VisualElement BuildHeader()
+        {
+            var card = new VisualElement();
+            card.AddToClassList("card");
+
+            _clubName.AddToClassList("headline");
+            _standing.AddToClassList("label");
+            _shape.AddToClassList("body");
+
+            card.Add(_clubName);
+            card.Add(_standing);
+            card.Add(_shape);
+            return card;
+        }
+
+        private VisualElement BuildList(string heading, ListView view, List<Player> source, System.Action<int> onTapped)
+        {
+            var card = new VisualElement();
+            card.AddToClassList("card");
+
+            var title = new Label(heading);
+            title.AddToClassList("label");
+            card.Add(title);
+
+            view.itemsSource = source;
+            view.fixedItemHeight = RowHeight;
+            view.selectionType = SelectionType.None;
+            view.style.minHeight = RowHeight * 3;
+            view.style.flexGrow = 1;
+
+            // makeItem/bindItem are the recycling contract: makeItem runs once per VISIBLE row and
+            // bindItem every time one is reused, so bindItem must set every property it ever sets —
+            // a class added on one row and not removed on the next is the classic ListView bug.
+            view.makeItem = MakePlayerRow;
+            view.bindItem = (element, index) => BindPlayerRow(element, source, index);
+
+            card.Add(view);
+
+            // Rows report a tap through the row itself rather than through selection, so the screen never
+            // has to hold "which row is selected" — the tap IS the command.
+            view.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.target is VisualElement tapped && tapped.userData is int index)
+                {
+                    onTapped(index);
+                }
+            });
+
+            return card;
+        }
+
+        private static VisualElement MakePlayerRow()
+        {
+            var row = new VisualElement();
+            row.AddToClassList("tappable");
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+
+            var name = new Label();
+            name.AddToClassList("body");
+            name.style.flexGrow = 1;
+            row.Add(name);
+
+            var role = new Label();
+            role.AddToClassList("label");
+            role.style.width = 44;
+            row.Add(role);
+
+            var rating = new Label();
+            rating.AddToClassList("numeric");
+            rating.style.width = 40;
+            row.Add(rating);
+
+            return row;
+        }
+
+        private static void BindPlayerRow(VisualElement element, List<Player> source, int index)
+        {
+            if (index < 0 || index >= source.Count)
+            {
+                return;
+            }
+
+            Player player = source[index];
+            element.userData = index;
+
+            var name = (Label)element[0];
+            var role = (Label)element[1];
+            var rating = (Label)element[2];
+
+            name.text = player.Name;
+            role.text = player.Role.ToString().Substring(0, 3).ToUpperInvariant();
+
+            double value = PlayerRatings.ForRole(player);
+            rating.text = Rounded(value);
+
+            // EVERY band class is removed before the right one is added. A reused row carries whatever the
+            // last player left on it otherwise, and the bug shows up as one row in a scrolled list wearing
+            // somebody else's brightness.
+            foreach (AbilityBand band in (AbilityBand[])System.Enum.GetValues(typeof(AbilityBand)))
+            {
+                rating.RemoveFromClassList(AbilityBands.ClassOf(band));
+            }
+
+            rating.AddToClassList(AbilityBands.ClassOf(AbilityBands.Of(value)));
+        }
+
+        private VisualElement BuildActions()
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+
+            var autoPick = new Button(OnAutoPick) { text = "Auto-pick" };
+            autoPick.AddToClassList("button");
+            autoPick.style.flexGrow = 1;
+            autoPick.style.marginRight = 8;
+
+            var advance = new Button(OnAdvanceWeek) { text = "Play the week" };
+            advance.AddToClassList("button");
+            advance.AddToClassList("button--primary");
+            advance.style.flexGrow = 1;
+
+            row.Add(autoPick);
+            row.Add(advance);
+            return row;
+        }
+
+        // ----- Commands -----------------------------------------------------------------------------------
+
+        // Every one of these does the same thing: issue a command, draw what it returns, and say so when
+        // it refuses. A refusal is a sentence the core wrote, not a code the screen interprets.
+
+        private void OnStarterTapped(int index)
+        {
+            if (index >= 0 && index < _starters.Count)
+            {
+                Apply(_session.ToggleStarter(_starters[index].Id));
+            }
+        }
+
+        private void OnBenchTapped(int index)
+        {
+            if (index >= 0 && index < _benched.Count)
+            {
+                Apply(_session.ToggleStarter(_benched[index].Id));
+            }
+        }
+
+        private void OnAutoPick()
+        {
+            Apply(_session.AutoPickLineup());
+        }
+
+        private void OnAdvanceWeek()
+        {
+            Result<WeekOutcome> week = _session.AdvanceWeek();
+            if (week.IsFailure)
+            {
+                Say(week.Error);
+                return;
+            }
+
+            Say(Describe(week.Value));
+            Draw(_session.Lineup());
+        }
+
+        private void Apply(Result<LineupOutcome> result)
+        {
+            if (result.IsFailure)
+            {
+                Say(result.Error);
+                return;
+            }
+
+            Say(string.Empty);
+            Draw(result.Value);
+        }
+
+        private void Say(string message)
+        {
+            _message.text = message;
+            _message.style.display = string.IsNullOrEmpty(message) ? DisplayStyle.None : DisplayStyle.Flex;
+        }
+
+        private string Describe(WeekOutcome week)
+        {
+            if (week.ManagedMatch == null)
+            {
+                return "No fixture this week.";
+            }
+
+            MatchResult match = week.ManagedMatch.Value;
+            return _session.ClubName(match.Home) + " " + match.HomeGoals + "-" + match.AwayGoals + " " + _session.ClubName(match.Away);
+        }
+
+        private static string Rounded(double value)
+        {
+            return Mathf.RoundToInt((float)value).ToString();
+        }
+    }
+}
