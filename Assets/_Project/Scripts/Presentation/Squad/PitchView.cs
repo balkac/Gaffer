@@ -25,7 +25,14 @@ namespace Gaffer.Presentation.Squad
         private readonly List<VisualElement> _slotCards = new List<VisualElement>();
         private readonly Action<int, int> _onSwapRequested;
 
+        // A press this far from where it started is a drag rather than a tap. Generous, because it is in
+        // reference pixels on a 1080-wide board and because a thumb is not a mouse.
+        private const float DragThreshold = 24f;
+
         private int _selected = -1;
+        private int _pressedSlot = -1;
+        private bool _dragging;
+        private UnityEngine.Vector2 _pressOrigin;
 
         public PitchView(Action<int, int> onSwapRequested)
         {
@@ -124,9 +131,102 @@ namespace Gaffer.Presentation.Squad
 
             card.Add(rating);
 
-            card.RegisterCallback<ClickEvent>(_ => OnSlotTapped(slot));
+            RegisterGestures(card, slot);
             _slotCards.Add(card);
             return card;
+        }
+
+        /// <summary>
+        /// Both gestures on one card, because a manager will try both and neither should be the only way.
+        ///
+        /// <para><b>Drag</b> is the one that feels like a tactics board: press, move, release over another
+        /// slot. It commits on release over a target and is cancelled by releasing anywhere else, so a drag
+        /// begun by accident costs nothing.</para>
+        ///
+        /// <para><b>Tap</b> survives alongside it, and not as a fallback: on a phone held one-handed a drag
+        /// across the board is genuinely awkward, and two taps are not. The two share one selection, so
+        /// picking up by tap and putting down by drag works without either knowing about the other.</para>
+        ///
+        /// <para>A press only becomes a DRAG after the finger has travelled far enough
+        /// (<see cref="DragThreshold"/>). Without that, every tap is a zero-length drag and the tap gesture
+        /// never fires at all — fingers move a few pixels on the way up.</para>
+        /// </summary>
+        private void RegisterGestures(VisualElement card, int slot)
+        {
+            card.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                _pressedSlot = slot;
+                _pressOrigin = evt.position;
+                _dragging = false;
+                card.CapturePointer(evt.pointerId);
+            });
+
+            card.RegisterCallback<PointerMoveEvent>(evt =>
+            {
+                if (_pressedSlot < 0 || !card.HasPointerCapture(evt.pointerId))
+                {
+                    return;
+                }
+
+                if (!_dragging && Distance(evt.position, _pressOrigin) >= DragThreshold)
+                {
+                    _dragging = true;
+                    _selected = _pressedSlot;
+                    Restyle();
+                }
+            });
+
+            card.RegisterCallback<PointerUpEvent>(evt =>
+            {
+                if (card.HasPointerCapture(evt.pointerId))
+                {
+                    card.ReleasePointer(evt.pointerId);
+                }
+
+                int from = _pressedSlot;
+                _pressedSlot = -1;
+
+                if (!_dragging)
+                {
+                    OnSlotTapped(slot);
+                    return;
+                }
+
+                _dragging = false;
+                int target = SlotUnder(evt.position);
+                _selected = -1;
+                Restyle();
+
+                // Released over nothing, or back where it started: the drag is simply abandoned. A gesture
+                // that committed to the nearest slot instead would move players the manager never aimed at.
+                if (target >= 0 && target != from)
+                {
+                    _onSwapRequested(from, target);
+                }
+            });
+        }
+
+        // Which slot is under a screen point, or -1. The pick lands on whichever label happens to be
+        // there, so it walks up until it finds the card that carries a slot index.
+        private int SlotUnder(UnityEngine.Vector2 position)
+        {
+            VisualElement picked = _root.panel?.Pick(position);
+            while (picked != null)
+            {
+                if (picked.userData is int slot)
+                {
+                    return slot;
+                }
+
+                picked = picked.parent;
+            }
+
+            return -1;
+        }
+
+        private static float Distance(UnityEngine.Vector2 one, UnityEngine.Vector2 other)
+        {
+            return (one - other).magnitude;
         }
 
         // Tap to pick up, tap again to put down. Tapping the same slot twice puts it back rather than

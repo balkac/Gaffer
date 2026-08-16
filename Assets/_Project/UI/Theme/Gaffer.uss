@@ -47,15 +47,31 @@
     --value-weak: #7C938C;
     --value-negligible: #46564F;
 
-    /* --- spacing: a 4px rhythm under a 24px icon grid ---------------------------------------------- */
-    --space-xs: 4px;
-    --space-s: 8px;
-    --space-m: 16px;
-    --space-l: 24px;
-    --space-xl: 40px;
+    /* --- size ---------------------------------------------------------------------------------------
+       EVERYTHING HERE IS IN REFERENCE PIXELS, and the reference is a 1080x1920 phone. That is the trap
+       this design system fell into once and must not again: 1080 physical pixels is about 400 logical
+       points, so a 15px font — a perfectly ordinary desktop size — renders at roughly 6pt in the hand
+       and cannot be read. The rule of thumb is that a number which looks right on a monitor is between
+       two and three times too small here.
 
-    /* --- touch: mobile first. 44px is the smallest target a thumb hits reliably. ------------------- */
-    --tap-min: 44px;
+       So: body text is 30, not 12. A tap target is 110, not 44 — 44 is the guideline in POINTS, and at
+       this reference that is 110 pixels. If these are ever retuned, retune them together: the ramp only
+       reads as a hierarchy while the steps keep their ratios. */
+    --text-headline: 52px;
+    --text-title: 34px;
+    --text-body: 30px;
+    --text-label: 22px;
+    --text-small: 20px;
+
+    --space-xs: 8px;
+    --space-s: 16px;
+    --space-m: 32px;
+    --space-l: 48px;
+    --space-xl: 80px;
+
+    --tap-min: 110px;
+    --row-height: 120px;
+    --slot-width: 165px;
 }
 
 /* ----- ground --------------------------------------------------------------------------------------- */
@@ -77,14 +93,14 @@
     border-right-color: var(--pitch-line);
     border-top-color: var(--pitch-line);
     border-bottom-color: var(--pitch-line);
-    border-left-width: 1px;
-    border-right-width: 1px;
-    border-top-width: 1px;
-    border-bottom-width: 1px;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
-    border-bottom-left-radius: 6px;
-    border-bottom-right-radius: 6px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
     padding-top: var(--space-m);
     padding-bottom: var(--space-m);
     padding-left: var(--space-m);
@@ -100,10 +116,10 @@
 .row {
     flex-direction: row;
     align-items: center;
-    min-height: var(--tap-min);
+    min-height: var(--row-height);
     padding-left: var(--space-s);
     padding-right: var(--space-s);
-    border-bottom-width: 1px;
+    border-bottom-width: 2px;
     border-bottom-color: var(--pitch-line);
 }
 
@@ -143,22 +159,22 @@
 .row__name {
     flex-grow: 1;
     color: var(--chalk);
-    font-size: 15px;
+    font-size: var(--text-body);
     -unity-text-align: middle-left;
 }
 
 .row__role {
-    width: 46px;
+    width: 100px;
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--text-label);
     -unity-font-style: bold;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
     -unity-text-align: middle-left;
 }
 
 .row__rating {
-    width: 40px;
-    font-size: 16px;
+    width: 90px;
+    font-size: var(--text-title);
     -unity-font-style: bold;
     -unity-text-align: middle-right;
 }
@@ -174,14 +190,14 @@
     border-right-color: var(--pitch-line);
     border-top-color: var(--pitch-line);
     border-bottom-color: var(--pitch-line);
-    border-left-width: 1px;
-    border-right-width: 1px;
-    border-top-width: 1px;
-    border-bottom-width: 1px;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
-    border-bottom-left-radius: 6px;
-    border-bottom-right-radius: 6px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
     padding-top: var(--space-m);
     padding-bottom: var(--space-m);
 }
@@ -195,7 +211,7 @@
 }
 
 .slot {
-    width: 68px;
+    width: var(--slot-width);
     min-height: var(--tap-min);
     align-items: center;
     justify-content: center;
@@ -204,14 +220,14 @@
     border-right-color: var(--pitch-line);
     border-top-color: var(--pitch-line);
     border-bottom-color: var(--pitch-line);
-    border-left-width: 1px;
-    border-right-width: 1px;
-    border-top-width: 1px;
-    border-bottom-width: 1px;
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
-    border-bottom-left-radius: 4px;
-    border-bottom-right-radius: 4px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
     padding-top: var(--space-xs);
     padding-bottom: var(--space-xs);
     transition-property: background-color, scale;
@@ -239,19 +255,23 @@
 
 .slot__role {
     color: var(--muted);
-    font-size: 9px;
+    font-size: var(--text-small);
     -unity-font-style: bold;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
 }
 
 .slot__name {
     color: var(--chalk);
-    font-size: 12px;
+    font-size: var(--text-label);
     -unity-text-align: middle-center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 100%;
 }
 
 .slot__rating {
-    font-size: 14px;
+    font-size: var(--text-title);
     -unity-font-style: bold;
 }
 
@@ -260,28 +280,28 @@
 
 .headline {
     color: var(--chalk);
-    font-size: 22px;
+    font-size: var(--text-headline);
     -unity-font-style: bold;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
 }
 
 .label {
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--text-label);
     -unity-font-style: bold;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
 }
 
 .body {
     color: var(--chalk);
-    font-size: 14px;
+    font-size: var(--text-body);
     white-space: normal;
 }
 
 /* Numbers are tabular so columns line up down a squad list. */
 .numeric {
     color: var(--chalk);
-    font-size: 14px;
+    font-size: var(--text-body);
     -unity-text-align: middle-right;
 }
 
@@ -315,7 +335,7 @@
 .row--key {
     background-color: rgba(255, 46, 126, 0.09);
     border-left-color: var(--accent);
-    border-left-width: 2px;
+    border-left-width: 5px;
 }
 
 /* ----- touch ------------------------------------------------------------------------------------------ */
@@ -332,12 +352,14 @@
     border-right-color: var(--pitch-line);
     border-top-color: var(--pitch-line);
     border-bottom-color: var(--pitch-line);
-    border-left-width: 1px;
-    border-right-width: 1px;
-    border-top-width: 1px;
-    border-bottom-width: 1px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
     color: var(--chalk);
-    font-size: 14px;
+    font-size: var(--text-body);
+    padding-left: var(--space-m);
+    padding-right: var(--space-m);
 }
 
 .button--primary {
