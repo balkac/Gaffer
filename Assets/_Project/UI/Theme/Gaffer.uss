@@ -1,0 +1,190 @@
+/*
+    GAFFER — the theme. ART_STYLE §2 and §4.1, and the only place a colour is written down.
+
+    "Matchday Broadcast Graphics": the interface is the broadcast package of a match you manage but never
+    watch. Night-pitch teal ground, one broadcast-magenta accent, condensed sporting type.
+
+    THE RULE THAT MATTERS MOST: one accent, and no second bright colour (semantics excepted). Everything
+    else is built out of a rich neutral base — depth comes from borders and space, never from gradients or
+    a pile of shadows. Adding a second bright hue here is the change that would make this look like every
+    other dark-mode game, and it is the one thing ART_STYLE forbids by name.
+
+    Nothing outside this file writes a hex. The C# side names BANDS (Presentation/Squad/AbilityBand.cs)
+    and the classes below give them their brightness, so retuning the palette never touches code.
+*/
+
+:root {
+    /* --- ground ------------------------------------------------------------------------------------ */
+    --pitch: #0C1B1A;
+    --pitch-raised: #122624;
+    --pitch-line: #1E3733;
+
+    /* --- ink --------------------------------------------------------------------------------------- */
+    --chalk: #EAF2EE;
+    --muted: #7C938C;
+
+    /* --- the signature ----------------------------------------------------------------------------- */
+    --accent: #FF2E7E;
+
+    /* --- semantics: the ONLY sanctioned second colours, and only in a result context ---------------- */
+    --win: #2FD48A;
+    --loss: #FF5A4D;
+    --draw: #E7B84B;
+
+    /* --- the brightness ramp (ART_STYLE §4.1) ------------------------------------------------------
+       Value magnitude reads as BRIGHTNESS against the single accent — the job FM does with a second
+       green, done here without one. Only the top band burns accent, which is what keeps it meaning
+       something. The bands themselves are decided in C# so every screen agrees; these are their looks. */
+    --value-elite: #FF2E7E;
+    --value-strong: #EAF2EE;
+    --value-fair: #9DAAA4;
+    --value-weak: #7C938C;
+    --value-negligible: #46564F;
+
+    /* --- spacing: a 4px rhythm under a 24px icon grid ---------------------------------------------- */
+    --space-xs: 4px;
+    --space-s: 8px;
+    --space-m: 16px;
+    --space-l: 24px;
+    --space-xl: 40px;
+
+    /* --- touch: mobile first. 44px is the smallest target a thumb hits reliably. ------------------- */
+    --tap-min: 44px;
+}
+
+/* ----- ground --------------------------------------------------------------------------------------- */
+
+.screen {
+    flex-grow: 1;
+    background-color: var(--pitch);
+    padding-top: var(--space-m);
+    padding-bottom: var(--space-m);
+    padding-left: var(--space-m);
+    padding-right: var(--space-m);
+}
+
+.card {
+    background-color: var(--pitch-raised);
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    padding-top: var(--space-m);
+    padding-bottom: var(--space-m);
+    padding-left: var(--space-m);
+    padding-right: var(--space-m);
+    margin-bottom: var(--space-m);
+}
+
+/* ----- type ------------------------------------------------------------------------------------------
+   Hierarchy is built from size and weight, not from spending colour (ART_STYLE §3). */
+
+.headline {
+    color: var(--chalk);
+    font-size: 22px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+}
+
+.label {
+    color: var(--muted);
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+}
+
+.body {
+    color: var(--chalk);
+    font-size: 14px;
+    white-space: normal;
+}
+
+/* Numbers are tabular so columns line up down a squad list. */
+.numeric {
+    color: var(--chalk);
+    font-size: 14px;
+    -unity-text-align: middle-right;
+}
+
+/* ----- the brightness ramp -------------------------------------------------------------------------- */
+
+.value--elite {
+    color: var(--value-elite);
+    -unity-font-style: bold;
+}
+
+.value--strong {
+    color: var(--value-strong);
+    -unity-font-style: bold;
+}
+
+.value--fair {
+    color: var(--value-fair);
+}
+
+.value--weak {
+    color: var(--value-weak);
+}
+
+.value--negligible {
+    color: var(--value-negligible);
+}
+
+/* ----- role emphasis (ART_STYLE §4.1/2) ---------------------------------------------------------------
+   A row the role is scored on is WASHED, not recoloured: importance is marked, never value. */
+
+.row--key {
+    background-color: rgba(255, 46, 126, 0.09);
+    border-left-color: var(--accent);
+    border-left-width: 2px;
+}
+
+/* ----- touch ------------------------------------------------------------------------------------------ */
+
+.tappable {
+    min-height: var(--tap-min);
+    justify-content: center;
+}
+
+.button {
+    min-height: var(--tap-min);
+    background-color: var(--pitch-raised);
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    color: var(--chalk);
+    font-size: 14px;
+}
+
+.button--primary {
+    background-color: var(--accent);
+    color: var(--pitch);
+    -unity-font-style: bold;
+}
+
+/* ----- results: the one place a second colour is allowed --------------------------------------------- */
+
+.result--win {
+    color: var(--win);
+}
+
+.result--loss {
+    color: var(--loss);
+}
+
+.result--draw {
+    color: var(--draw);
+}

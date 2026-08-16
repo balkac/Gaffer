@@ -34,6 +34,12 @@
          rest of Infrastructure touches UnityEngine and must stay out, and adding `using UnityEngine`
          to this one is meant to break this build loudly. -->
     <Compile Include="../Assets/_Project/Scripts/Infrastructure/Localization/GameStrings.cs" />
+    <!-- Same rule, other side of the line: Presentation references UnityEngine and stays out, but this
+         file does not, and the rule it holds — ART_STYLE §4.1's brightness ramp, which every screen bands
+         numbers by — has to agree with itself across screens or the eye stops trusting brightness to mean
+         anything. Named file by file, NOT a wildcard, for exactly the reason GameStrings is: adding
+         `using UnityEngine` to it is meant to break this build loudly. -->
+    <Compile Include="../Assets/_Project/Scripts/Presentation/Squad/AbilityBand.cs" />
     <Compile Include="../Assets/_Project/Scripts/Tests/EditMode/**/*.cs" />
   </ItemGroup>
 
