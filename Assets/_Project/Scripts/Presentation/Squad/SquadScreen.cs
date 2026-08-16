@@ -55,6 +55,9 @@ namespace Gaffer.Presentation.Squad
         private readonly List<Player> _benched = new List<Player>();
 
         private bool _showingPitch = true;
+        private int _benchPressed = -1;
+        private bool _benchDragging;
+        private UnityEngine.Vector2 _benchOrigin;
 
         public SquadScreen(RunSession session, VisualElement root, LocalizedStrings text)
         {
@@ -122,7 +125,7 @@ namespace Gaffer.Presentation.Squad
             Refill(_starters, lineup.Starters);
             Refill(_benched, lineup.Bench);
             FillList(_eleven, _starters, OnStarterTapped);
-            FillList(_bench, _benched, OnBenchTapped);
+            FillList(_bench, _benched, OnBenchTapped, draggableOntoPitch: true);
             _pitch.Draw(lineup.Formation, lineup.Slots);
         }
 
@@ -200,19 +203,98 @@ namespace Gaffer.Presentation.Squad
         /// and a scrollbar nobody asked for. The market screen will still use one — this is the same
         /// decision made honestly for a different number.</para>
         /// </summary>
-        private static void FillList(VisualElement list, List<Player> source, System.Action<int> onTapped)
+        private void FillList(VisualElement list, List<Player> source, System.Action<int> onTapped, bool draggableOntoPitch = false)
         {
             list.Clear();
             for (int i = 0; i < source.Count; i++)
             {
-                VisualElement row = MakePlayerRow(onTapped);
+                // A draggable row gets NO tap handler of its own: its own PointerUp already decides
+                // between a tap and a drop, and a second handler would fire the tap again on every drop.
+                VisualElement row = MakePlayerRow(draggableOntoPitch ? null : onTapped);
                 BindPlayerRow(row, source, i);
+                if (draggableOntoPitch)
+                {
+                    RegisterBenchDrag(row, i);
+                }
+
                 list.Add(row);
             }
         }
 
         // Layout and look both come from the stylesheet; this only says what the parts ARE. Inline styles
         // here would be the palette leaking into C# one property at a time.
+        // A bench row can be dragged onto the board, which is the gesture a manager reaches for first:
+        // pick a substitute up and drop him where he should play. The row reports the gesture and the
+        // BOARD decides where it landed — it owns the slots, so it owns the hit-testing.
+        private void RegisterBenchDrag(VisualElement row, int index)
+        {
+            row.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                _benchPressed = index;
+                _benchOrigin = evt.position;
+                _benchDragging = false;
+                row.CapturePointer(evt.pointerId);
+                evt.StopPropagation();
+            });
+
+            row.RegisterCallback<PointerMoveEvent>(evt =>
+            {
+                if (_benchPressed < 0 || !row.HasPointerCapture(evt.pointerId))
+                {
+                    return;
+                }
+
+                if (!_benchDragging && (evt.position - (UnityEngine.Vector3)_benchOrigin).magnitude >= 24f)
+                {
+                    _benchDragging = true;
+                    _pitch.BeginDragFromOutside(index < _benched.Count ? _benched[index].Name : string.Empty);
+                }
+
+                if (_benchDragging)
+                {
+                    _pitch.MoveDragGhost(evt.position);
+                    evt.StopPropagation();
+                }
+            });
+
+            row.RegisterCallback<PointerUpEvent>(evt =>
+            {
+                evt.StopPropagation();
+                if (row.HasPointerCapture(evt.pointerId))
+                {
+                    row.ReleasePointer(evt.pointerId);
+                }
+
+                int player = _benchPressed;
+                _benchPressed = -1;
+                if (!_benchDragging)
+                {
+                    OnBenchTapped(player);
+                    return;
+                }
+
+                _benchDragging = false;
+                _pitch.EndDragFromOutside();
+
+                int slot = _pitch.SlotUnder(evt.position);
+                if (slot >= 0 && player >= 0 && player < _benched.Count)
+                {
+                    Apply(_session.PlaceInSlot(slot, _benched[player].Id));
+                }
+            });
+
+            row.RegisterCallback<PointerCaptureOutEvent>(_ =>
+            {
+                if (_benchDragging)
+                {
+                    _benchDragging = false;
+                    _pitch.EndDragFromOutside();
+                }
+
+                _benchPressed = -1;
+            });
+        }
+
         private static VisualElement MakePlayerRow(System.Action<int> onTapped)
         {
             var row = new VisualElement();
@@ -228,13 +310,16 @@ namespace Gaffer.Presentation.Squad
             // The children are picking-disabled as well, so the row is one target rather than four. Both
             // halves are needed: without the first the row never hears the tap, without the second the
             // label eats it before the row can.
-            row.RegisterCallback<ClickEvent>(evt =>
+            if (onTapped != null)
             {
-                if (evt.currentTarget is VisualElement tapped && tapped.userData is int index)
+                row.RegisterCallback<ClickEvent>(evt =>
                 {
-                    onTapped(index);
-                }
-            });
+                    if (evt.currentTarget is VisualElement tapped && tapped.userData is int index)
+                    {
+                        onTapped(index);
+                    }
+                });
+            }
 
             var name = new Label();
             name.AddToClassList("row__name");

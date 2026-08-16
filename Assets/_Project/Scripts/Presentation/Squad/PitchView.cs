@@ -175,6 +175,33 @@ namespace Gaffer.Presentation.Squad
                 _pressOrigin = evt.position;
                 _dragging = false;
                 card.CapturePointer(evt.pointerId);
+
+                // THE line that makes dragging work at all inside a scrolling page.
+                //
+                // Capture alone is not enough: the event still bubbles to the ScrollView, which treats the
+                // same press-and-move as a scroll, takes the capture back, and the card's move handler then
+                // sees HasPointerCapture return false and never starts a drag. From the outside that looks
+                // exactly like drag being unimplemented — which is how it was reported, twice.
+                //
+                // The cost is deliberate and small: a drag begun ON a slot no longer scrolls the page.
+                // There is room either side of the board to scroll from, and a board whose players cannot
+                // be picked up is worse than one you cannot flick.
+                evt.StopPropagation();
+            });
+
+            // The scroller can still take the capture in cases this does not foresee. Rather than leave a
+            // half-finished drag on the board, treat losing it as the gesture being abandoned.
+            card.RegisterCallback<PointerCaptureOutEvent>(_ =>
+            {
+                if (_dragging)
+                {
+                    _dragging = false;
+                    HideGhost();
+                    _selected = -1;
+                    Restyle();
+                }
+
+                _pressedSlot = -1;
             });
 
             card.RegisterCallback<PointerMoveEvent>(evt =>
@@ -195,11 +222,13 @@ namespace Gaffer.Presentation.Squad
                 if (_dragging)
                 {
                     MoveGhost(evt.position);
+                    evt.StopPropagation();
                 }
             });
 
             card.RegisterCallback<PointerUpEvent>(evt =>
             {
+                evt.StopPropagation();
                 if (card.HasPointerCapture(evt.pointerId))
                 {
                     card.ReleasePointer(evt.pointerId);
@@ -216,7 +245,7 @@ namespace Gaffer.Presentation.Squad
 
                 _dragging = false;
                 HideGhost();
-                int target = SlotUnder(evt.position);
+                int target = SlotUnderInternal(evt.position);
                 _selected = -1;
                 Restyle();
 
@@ -275,9 +304,49 @@ namespace Gaffer.Presentation.Squad
             return string.Empty;
         }
 
+        /// <summary>
+        /// Starts a drag that began somewhere else — a bench row. The board owns the ghost and the
+        /// hit-testing because it owns the slots; the bench only reports the gesture. Two ghosts, one per
+        /// source, would be two things to keep looking the same.
+        /// </summary>
+        public void BeginDragFromOutside(string label)
+        {
+            VisualElement layer = _root.panel?.visualTree;
+            if (layer == null)
+            {
+                return;
+            }
+
+            if (_ghost.parent != layer)
+            {
+                layer.Add(_ghost);
+            }
+
+            _ghostName.text = label;
+            _ghost.style.display = DisplayStyle.Flex;
+            _ghost.BringToFront();
+        }
+
+        public void MoveDragGhost(UnityEngine.Vector2 position)
+        {
+            MoveGhost(position);
+        }
+
+        public void EndDragFromOutside()
+        {
+            HideGhost();
+        }
+
+        /// <summary>Which slot is under a screen point, or -1. Public so a bench drag can ask where it
+        /// was released.</summary>
+        public int SlotUnder(UnityEngine.Vector2 position)
+        {
+            return SlotUnderInternal(position);
+        }
+
         // Which slot is under a screen point, or -1. The pick lands on whichever label happens to be
         // there, so it walks up until it finds the card that carries a slot index.
-        private int SlotUnder(UnityEngine.Vector2 position)
+        private int SlotUnderInternal(UnityEngine.Vector2 position)
         {
             VisualElement picked = _root.panel?.Pick(position);
             while (picked != null)
