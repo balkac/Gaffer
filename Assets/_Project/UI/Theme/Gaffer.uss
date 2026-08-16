@@ -275,6 +275,66 @@
     -unity-font-style: bold;
 }
 
+/* The card in your hand while you drag. Positioned absolutely against the panel so it draws over
+   everything, and deliberately unmistakable: this is the element that tells the manager the gesture
+   was heard at all. */
+.slot--ghost {
+    position: absolute;
+    background-color: var(--accent);
+    border-left-color: var(--accent);
+    border-right-color: var(--accent);
+    border-top-color: var(--accent);
+    border-bottom-color: var(--accent);
+    opacity: 0.92;
+}
+
+.slot--ghost .slot__name {
+    color: var(--pitch);
+    -unity-font-style: bold;
+}
+
+/* The slot a dragged card came from: emptied-looking, so the board shows where it will go back to. */
+.slot--source {
+    opacity: 0.35;
+}
+
+/* ----- the page --------------------------------------------------------------------------------------
+   One scroller for the whole screen. The scrollbar is a hairline rather than a control: on a phone the
+   drag IS the scroll, and a chrome-heavy bar spends attention on something nobody presses. */
+
+.page {
+    flex-grow: 1;
+}
+
+.page .unity-scroller--vertical {
+    width: 10px;
+}
+
+.page .unity-scroller--vertical .unity-base-slider__dragger {
+    background-color: var(--pitch-line);
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+.page .unity-scroller--vertical .unity-base-slider__tracker {
+    background-color: rgba(0, 0, 0, 0);
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+}
+
+.page .unity-scroller__low-button,
+.page .unity-scroller__high-button {
+    display: none;
+}
+
 /* ----- type ------------------------------------------------------------------------------------------
    Hierarchy is built from size and weight, not from spending colour (ART_STYLE §3). */
 

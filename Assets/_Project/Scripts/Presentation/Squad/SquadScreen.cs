@@ -31,8 +31,6 @@ namespace Gaffer.Presentation.Squad
     /// </summary>
     public sealed class SquadScreen
     {
-        private const int RowHeight = 56;
-
         private readonly RunSession _session;
         private readonly VisualElement _root;
 
@@ -45,9 +43,10 @@ namespace Gaffer.Presentation.Squad
         private readonly Label _standing = new Label();
         private readonly Label _shape = new Label();
         private readonly PitchView _pitch;
+        private readonly ScrollView _page = new ScrollView(ScrollViewMode.Vertical);
         private readonly VisualElement _elevenCard = new VisualElement();
-        private readonly ListView _eleven = new ListView();
-        private readonly ListView _bench = new ListView();
+        private readonly VisualElement _eleven = new VisualElement();
+        private readonly VisualElement _bench = new VisualElement();
         private readonly Label _message = new Label();
 
         // The lists ListView binds against. Held and refilled rather than replaced, so a rebind does not
@@ -76,20 +75,28 @@ namespace Gaffer.Presentation.Squad
             _root.AddToClassList("theme");
             _root.AddToClassList("screen");
 
-            _root.Add(BuildHeader());
-            _root.Add(BuildEleven());
+            // ONE scroller, and it owns the page.
+            //
+            // Everything used to sit in a plain container that could not scroll, so the content simply ran
+            // off the bottom, and the squad lists each brought a scroller of their own to compensate. That
+            // is the worst of both: a phone-sized page you cannot reach the end of, and lists that fight
+            // the page for the same drag. A screen scrolls; the things on it do not.
+            _page.AddToClassList("page");
+            _root.Add(_page);
+
+            _page.Add(BuildHeader());
+            _page.Add(BuildEleven());
             var benchCard = new VisualElement();
             benchCard.AddToClassList("card");
             var benchTitle = new Label(Say(UiTextKeys.SquadBench));
             benchTitle.AddToClassList("label");
             benchCard.Add(benchTitle);
-            BuildList(_bench, _benched, OnBenchTapped);
             benchCard.Add(_bench);
-            _root.Add(benchCard);
-            _root.Add(BuildActions());
+            _page.Add(benchCard);
+            _page.Add(BuildActions());
 
             _message.AddToClassList("body");
-            _root.Add(_message);
+            _page.Add(_message);
 
             Draw(_session.Lineup());
         }
@@ -114,8 +121,8 @@ namespace Gaffer.Presentation.Squad
 
             Refill(_starters, lineup.Starters);
             Refill(_benched, lineup.Bench);
-            _eleven.Rebuild();
-            _bench.Rebuild();
+            FillList(_eleven, _starters, OnStarterTapped);
+            FillList(_bench, _benched, OnBenchTapped);
             _pitch.Draw(lineup.Formation, lineup.Slots);
         }
 
@@ -152,7 +159,6 @@ namespace Gaffer.Presentation.Squad
             _elevenCard.Add(head);
             _elevenCard.Add(_pitch.Root);
 
-            BuildList(_eleven, _starters, OnStarterTapped);
             _eleven.style.display = DisplayStyle.None;
             _elevenCard.Add(_eleven);
 
@@ -185,20 +191,24 @@ namespace Gaffer.Presentation.Squad
             return card;
         }
 
-        private void BuildList(ListView view, List<Player> source, System.Action<int> onTapped)
+        /// <summary>
+        /// Fills a list with one row per player, rebuilt whole.
+        ///
+        /// <para><b>Plain rows rather than a ListView, and that is a size judgement rather than a
+        /// principle.</b> A ListView earns its recycling on the transfer market's fifty thousand; a squad
+        /// is twenty-five, and there the virtualisation only bought a nested scroller that fought the page
+        /// and a scrollbar nobody asked for. The market screen will still use one — this is the same
+        /// decision made honestly for a different number.</para>
+        /// </summary>
+        private static void FillList(VisualElement list, List<Player> source, System.Action<int> onTapped)
         {
-            view.itemsSource = source;
-            view.fixedItemHeight = RowHeight;
-            view.selectionType = SelectionType.None;
-            view.style.minHeight = RowHeight * 3;
-            view.style.flexGrow = 1;
-            view.showBorder = false;
-
-            // makeItem/bindItem are the recycling contract: makeItem runs once per VISIBLE row and
-            // bindItem every time one is reused, so bindItem must set every property it ever sets —
-            // a class added on one row and not removed on the next is the classic ListView bug.
-            view.makeItem = () => MakePlayerRow(onTapped);
-            view.bindItem = (element, index) => BindPlayerRow(element, source, index);
+            list.Clear();
+            for (int i = 0; i < source.Count; i++)
+            {
+                VisualElement row = MakePlayerRow(onTapped);
+                BindPlayerRow(row, source, i);
+                list.Add(row);
+            }
         }
 
         // Layout and look both come from the stylesheet; this only says what the parts ARE. Inline styles

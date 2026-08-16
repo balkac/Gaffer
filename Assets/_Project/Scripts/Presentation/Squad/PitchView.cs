@@ -28,16 +28,32 @@ namespace Gaffer.Presentation.Squad
         // A press this far from where it started is a drag rather than a tap. Generous, because it is in
         // reference pixels on a 1080-wide board and because a thumb is not a mouse.
         private const float DragThreshold = 24f;
+        private const float GhostWidth = 165f;
+        private const float GhostLift = 140f;
 
         private int _selected = -1;
         private int _pressedSlot = -1;
         private bool _dragging;
         private UnityEngine.Vector2 _pressOrigin;
 
+        // The card that follows the finger. One instance, moved and hidden rather than built per drag,
+        // and parented to the panel root so it draws OVER the board instead of being clipped by the band
+        // it started in.
+        private readonly VisualElement _ghost = new VisualElement();
+        private readonly Label _ghostName = new Label();
+
         public PitchView(Action<int, int> onSwapRequested)
         {
             _onSwapRequested = onSwapRequested;
             _root.AddToClassList("pitch");
+
+            _ghost.AddToClassList("slot");
+            _ghost.AddToClassList("slot--ghost");
+            _ghost.pickingMode = PickingMode.Ignore;
+            _ghostName.AddToClassList("slot__name");
+            _ghostName.pickingMode = PickingMode.Ignore;
+            _ghost.Add(_ghostName);
+            _ghost.style.display = DisplayStyle.None;
         }
 
         public VisualElement Root => _root;
@@ -173,6 +189,12 @@ namespace Gaffer.Presentation.Squad
                     _dragging = true;
                     _selected = _pressedSlot;
                     Restyle();
+                    ShowGhost(card);
+                }
+
+                if (_dragging)
+                {
+                    MoveGhost(evt.position);
                 }
             });
 
@@ -193,6 +215,7 @@ namespace Gaffer.Presentation.Squad
                 }
 
                 _dragging = false;
+                HideGhost();
                 int target = SlotUnder(evt.position);
                 _selected = -1;
                 Restyle();
@@ -204,6 +227,52 @@ namespace Gaffer.Presentation.Squad
                     _onSwapRequested(from, target);
                 }
             });
+        }
+
+        // The ghost is what makes a drag READABLE. Without something under the finger a drag is
+        // indistinguishable from a tap that did nothing — which is exactly how it was reported.
+        private void ShowGhost(VisualElement card)
+        {
+            VisualElement layer = _root.panel?.visualTree;
+            if (layer == null)
+            {
+                return;
+            }
+
+            if (_ghost.parent != layer)
+            {
+                layer.Add(_ghost);
+            }
+
+            _ghostName.text = NameIn(card);
+            _ghost.style.display = DisplayStyle.Flex;
+            _ghost.BringToFront();
+        }
+
+        private void MoveGhost(UnityEngine.Vector2 position)
+        {
+            // Centred on the finger and lifted clear of it, so the card being moved is not under the thumb
+            // that is moving it.
+            _ghost.style.left = position.x - (GhostWidth / 2f);
+            _ghost.style.top = position.y - GhostLift;
+        }
+
+        private void HideGhost()
+        {
+            _ghost.style.display = DisplayStyle.None;
+        }
+
+        private static string NameIn(VisualElement card)
+        {
+            for (int i = 0; i < card.childCount; i++)
+            {
+                if (card[i] is Label label && label.ClassListContains("slot__name"))
+                {
+                    return label.text;
+                }
+            }
+
+            return string.Empty;
         }
 
         // Which slot is under a screen point, or -1. The pick lands on whichever label happens to be
@@ -256,8 +325,13 @@ namespace Gaffer.Presentation.Squad
             for (int i = 0; i < _slotCards.Count; i++)
             {
                 VisualElement card = _slotCards[i];
-                bool selected = card.userData is int slot && slot == _selected;
-                card.EnableInClassList("slot--selected", selected);
+                bool held = card.userData is int slot && slot == _selected;
+
+                // Held by a tap reads as SELECTED (accent border, still solid); held by a drag reads as
+                // SOURCE (faded), because the card itself is under the finger. Same state, two pictures,
+                // and the difference is what stops a drag looking like a selection that got stuck.
+                card.EnableInClassList("slot--selected", held && !_dragging);
+                card.EnableInClassList("slot--source", held && _dragging);
             }
         }
 
