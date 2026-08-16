@@ -27,9 +27,9 @@
 |---|---|---|---|---|
 | 0 | Kurulum + İnandırıcılık Çekirdeği | ✅ Tamam | **L** | ★ Gate A |
 | 1 | Tuning + Test Ağı | ✅ Tamam (Gate A geçildi) | M | ★ Gate A |
-| 2 | Sezon İskeleti | 🟡 Çekirdek bitti · JSON adapter kaldı | M | |
-| 3 | Yönetim Sistemleri | 🟡 Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO + **birleşik yönetim (canlı transfer + haftalık maaş gideri + transfer dönemleri)** ✅ · **sezon-içi gelişim + oynama süresi + kalıcı piyasa** ✅ · devam (rakip menajer AI'ı) | **L** | |
-| 4 | Karakter + Dram | 🟡 Çekirdek bitti (trait + dram + moral; karar #31) · playtest kalibrasyonu kaldı (dram frekans-normalizasyonu + kart etki-önizlemesi + olay kopyası — PROGRESS "Kalan") + Unity-doğrulaması | **L** | |
+| 2 | Sezon İskeleti | ✅ Tamam | M | |
+| 3 | Yönetim Sistemleri | 🟡 **tek açık madde: rakip menajer AI'ı** · Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO + **birleşik yönetim (canlı transfer + haftalık maaş gideri + transfer dönemleri)** ✅ · **sezon-içi gelişim + oynama süresi + kalıcı piyasa** ✅ · devam (rakip menajer AI'ı) | **L** | |
+| 4 | Karakter + Dram | ✅ Tamam (trait + dram + moral; karar #31) · frekans normalize edildi, kart etki-önizlemesi ve olay kopyası yazıldı, Unity doğrulandı | **L** | |
 | 5 | Hafıza + Anlatı | ✅ Tamam (★ Gate B geçildi 2026-08-13) | M | ★ Gate B |
 | 6 | Meta / Roguelike | ⬜ | M | |
 | 7 | UI + Art + Localization | ⬜ | **L** | |

@@ -6,6 +6,18 @@
 
 ---
 
+## Faz 2 ve Faz 4 yeşile alındı · 2026-08-16 (bayat kayıt düzeltmesi, yeni iş değil)
+
+Sahibi sordu: *"Faz 2 ve Faz 4 neden sarı?"* Cevap: **değiller — tablo bayattı.** Aynı desen bu oturumda üçüncü kez çıktı (dram kopyası, akademi tavanı, şimdi bunlar): iş yapılıyor, PROGRESS'e yazılıyor, ROADMAP'in **durum sütunu güncellenmiyor**. Her madde koda karşı tek tek doğrulandı, doküman okunarak değil:
+
+**Faz 2 — "JSON adapter kaldı".** `NewtonsoftJsonSerializer` + `JsonSaveStore` yerinde, **70 save testi yeşil**. Not yazıldığından beri üstüne binary serializer, container v3, şema v7 ve migration zinciri de geldi; not kendisinden çok sonra yapılmış işi bekliyordu.
+
+**Faz 4 — dört madde, dördü de kapalı.** Dram frekansı **yeniden ölçüldü: 2.30 olay/sezon, sezonların %20'si tavanda** (eskiden 3.94 ve %94) · karar kartı etki-önizlemesi `HarnessDrama.Preview` olarak var · 10 olayın kopyası EN+TR ve kapsam testte kilitli · Unity doğrulaması sahibi tarafından yapıldı. Ayrıca Faz 4'ün *ertelenenler* listesindeki iki madde de kapandı: moral+dram durumunun save kalıcılığı (v6) ve **`MatchImportance`'ın fikstürden türetilmesi** — ki notu "Faz 5 anlatı işiyle doğal gelir" diyordu ve tam olarak öyle geldi (`MatchContextBuilder`).
+
+**Ders:** durum sütunu tek yazılıp bırakılan bir alan değil. Bir faz maddesi kapandığında ROADMAP tablosu aynı commit'te güncellenmeli.
+
+---
+
 ## Faz 5 — hafıza ve anlatı · 2026-08-13
 
 **5.1 An tanıma.** `Application/Narrative`. Katman **tanır, üretmez**: maç bitti, goller atıldı, tablo yazıldı; buradaki hiçbir metot bir skoru oynatamaz — yani kopya, kalibre edilmiş tek bir sayıya dokunmadan istendiği kadar yeniden ayarlanabilir. Gol bir **olgu** (dakika, taraf, golcü); *"ilk derbisinde, ilk golü"* bir **an**, ve ikisini üç girdi ayırıyor: maç neydi, oyuncu kimdi, ona daha önce ne oldu. Üçüncüsü, günlüğün tanımanın **girdisi** olmasının sebebi — bir maçın hiçbir yerinde debut ile 50. maç arasında fark yok.
