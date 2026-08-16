@@ -6,6 +6,20 @@
 
 ---
 
+## Faz 3 kapandı — rakip menajer AI'ı · 2026-08-16
+
+Faz 3'ün son açık maddesi, ve Faz 7'den **önce** yapıldı: Faz 7 simülasyonun üstüne arayüz, ve hareketsiz bir dünyanın ekranı sonradan iki kez yapılır. Oyun açısından eksik olan da buydu — **yetenek için rekabet yok**: market yalnız oyuncunun aldıklarıyla küçülüyordu, yani her cevherde ilk seçim sonsuza dek onundu.
+
+**Ekonomi kararı: türetilmiş bütçe (A).** Sahibinin seçimi. Kulüp bütçesi gücünden türer, defter yok — çünkü ekonomi (maaş/sözleşme/gelir) **bilinçle** birlikte tasarlanmak üzere ertelendi ve rakiplere şimdi gerçek bilanço vermek o tasarımı yarım yaptırırdı. Gerçek ekonomi geldiğinde `RivalSettings.TransferBudgetPerStrengthPoint` onun yerini bırakacağı dikiş.
+
+**Ölçüm bir tasarım hatası yakaladı.** İlk sürüm marketten **rastgele örnek** alıyordu (maliyet gerekçesiyle). 50.000'de ölçüldü: rakipler 30 oyuncu alıyor (%0.06), **marketin en iyisine hiç dokunmuyor** (70 → 73 çıkıyor), ve 1.500+ yüksek potansiyelli genç her sezon el değmeden kalıyordu. **Kimsenin hissedemediği rekabet, rekabet değildir.**
+
+**Düzeltme, ve oyunun kalbine oturan ayrım.** Rakipler artık marketin **görünen yeteneğe göre en iyilerinden** alıyor (pencere başına tek kısmi geçiş, tüm kulüpler paylaşıyor — kulüp başına tarama 50.000'de bir milyon değerlendirme olurdu). Ve **potansiyeli kovalamıyorlar**: o scout-maskeli, ve onların göremediğini görmek keşfet-büyüt-sat fantezisinin tamamı. *Sonra (50.000 havuz, 8 sezon):* marketin en iyisi 73 → **71**'e iniyor (tepe yeniyor), lig ilk 11'i 61.7 → **66.4** çıkıyor ve hiç transfer yapmayan menajeri **geçiyor** (+1.8 → −1.6) — yani transfer yapmamak artık bedelli. Buna karşılık **~1.700 yüksek-potansiyelli genç her sezon el değmeden** duruyor: ucuz 16'lık cevher sana kalır, cilalı 26'lık kalmaz.
+
+Sıra **güçlüden zayıfa** ve **senin pencerenden önce**: büyük kulüpler ilk bakışı alır, sen kalanı görürsün. Kaybedebileceğin bir rekabet, seni bekleyen bir market değil. Test 542 → **554**; kalibrasyon değişmedi (5 gate PASS).
+
+---
+
 ## Faz 2 ve Faz 4 yeşile alındı · 2026-08-16 (bayat kayıt düzeltmesi, yeni iş değil)
 
 Sahibi sordu: *"Faz 2 ve Faz 4 neden sarı?"* Cevap: **değiller — tablo bayattı.** Aynı desen bu oturumda üçüncü kez çıktı (dram kopyası, akademi tavanı, şimdi bunlar): iş yapılıyor, PROGRESS'e yazılıyor, ROADMAP'in **durum sütunu güncellenmiyor**. Her madde koda karşı tek tek doğrulandı, doküman okunarak değil:

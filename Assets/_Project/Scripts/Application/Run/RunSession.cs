@@ -4,6 +4,7 @@ using Gaffer.Application.Drama;
 using Gaffer.Application.Generation;
 using Gaffer.Application.Narrative;
 using Gaffer.Application.Progression;
+using Gaffer.Application.Rivals;
 using Gaffer.Application.Season;
 using Gaffer.Application.Serialization;
 using Gaffer.Application.Simulation;
@@ -56,6 +57,7 @@ namespace Gaffer.Application.Run
         private readonly PlayerPoolGenerator _marketGenerator;
         private readonly MarketRenewal _marketRenewal;
         private readonly PlayerDevelopment _development;
+        private readonly RivalManager _rivals;
         private readonly SplitMix64RandomNumberGenerator _developmentRng = new SplitMix64RandomNumberGenerator(0);
         private readonly Scout _scout;
 
@@ -137,6 +139,7 @@ namespace Gaffer.Application.Run
             _marketGenerator = new PlayerPoolGenerator(playerGenerator);
             _marketRenewal = new MarketRenewal(playerGenerator, balance.Development, balance.Renewal, balance.Traits);
             _development = new PlayerDevelopment(balance.Development, balance.Traits);
+            _rivals = new RivalManager(balance.Rivals, balance.Economy);
             _scout = new Scout(balance.Scouting);
             // Drawn from the ORIGINAL seed, not the run's current one. A resume plays on a continuation
             // seed so the future re-rolls, but the rivalries are world state, not future: they must be the
@@ -709,6 +712,7 @@ namespace Gaffer.Application.Run
             _finances = new Finances(_finances.Cash, _finances.WeeklyWageBudget, TotalWages(after));
             _market = RenewMarket();
             _marketDevelopedThroughRound = 0;
+            RunRivalWindow();
             _drama.StartSeason();
             _pending = null;
             _verdict = null;
@@ -1425,6 +1429,103 @@ namespace Gaffer.Application.Run
             }
         }
 
+        // ----- The clubs you are not managing ---------------------------------------------------------------
+
+        /// <summary>
+        /// The rivals' summer: every other club shops the new market, strongest first, and sets its
+        /// tactics for the league it finds itself in.
+        ///
+        /// <para><b>Strongest first is the rule, not an implementation detail.</b> The big clubs get the
+        /// first look, which is what makes finishing above them worth something and what makes a gem you
+        /// spotted early feel like yours. It also runs BEFORE the manager's summer window opens, so what
+        /// he sees is what is left — competition he can lose rather than a market that waits for him.</para>
+        ///
+        /// <para>Deterministic: each club draws on its own stream, seeded from the run seed, its id and
+        /// the season, so one club's window cannot perturb another's and the whole summer reproduces.</para>
+        /// </summary>
+        private void RunRivalWindow()
+        {
+            double leagueMean = MeanLeagueStrength();
+
+            // One shortlist for the whole window: the market's best by visible ability, shared by every
+            // club. Built once rather than per club — at 50,000 players a pass each would be a million
+            // evaluations — and emptied as it is shopped, so two clubs cannot sign the same man.
+            List<Player> shortlist = _rivals.BuildShortlist(_market);
+
+            // Strongest first. The order is decided up front from the strengths as they stand, so a club
+            // that signs somebody does not jump the queue it is already in.
+            var order = new List<ClubId>(_league.Clubs.Count);
+            for (int i = 0; i < _league.Clubs.Count; i++)
+            {
+                order.Add(_league.Clubs[i].Id);
+            }
+
+            order.Sort(CompareByStrengthDescending);
+
+            for (int i = 0; i < order.Count; i++)
+            {
+                ClubId club = order[i];
+                if (club == _managedClub)
+                {
+                    continue;
+                }
+
+                Squad squad = _season.SquadOf(club);
+                if (squad == null)
+                {
+                    continue;
+                }
+
+                TeamStrength strength = _league.Clubs[club.Value].Strength;
+                _season.SetTactics(club, _rivals.TacticsFor(strength, leagueMean));
+
+                IReadOnlyList<Player> signed = _rivals.Shop(
+                    squad, strength, shortlist, new SplitMix64RandomNumberGenerator(RivalSeed(club.Value)));
+                if (signed.Count == 0)
+                {
+                    continue;
+                }
+
+                Squad after = squad;
+                for (int s = 0; s < signed.Count; s++)
+                {
+                    after = after.Add(signed[s]);
+                    _market.Remove(signed[s]);
+                }
+
+                _season.UpdateSquad(club, after);
+            }
+
+            // The rosters moved, so the league copy has to follow them (see SyncLeague).
+            SyncLeague();
+        }
+
+        private double MeanLeagueStrength()
+        {
+            double total = 0.0;
+            int counted = 0;
+            for (int i = 0; i < _league.Clubs.Count; i++)
+            {
+                TeamStrength strength = _league.Clubs[i].Strength;
+                total += (strength.Attack + strength.Midfield + strength.Defence) / 3.0;
+                counted++;
+            }
+
+            return counted == 0 ? 0.0 : total / counted;
+        }
+
+        private ulong RivalSeed(int clubIndex)
+        {
+            unchecked
+            {
+                ulong z = _setup.Seed ^ 0x52495641_4C000000UL;
+                z ^= (ulong)(uint)clubIndex * 0x9E3779B97F4A7C15UL;
+                z ^= (ulong)(uint)_seasonNumber * 0xD1B54A32D192ED03UL;
+                z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+                return z ^ (z >> 31);
+            }
+        }
+
         // ----- Narrative ------------------------------------------------------------------------------------
 
         // Reads the managed club's match for the moments it produced. Only the managed club: a journey is
@@ -1896,6 +1997,19 @@ namespace Gaffer.Application.Run
             }
 
             return missing;
+        }
+
+        // A cached comparison rather than a lambda per sort (PERFORMANCE §8). Captures nothing: the
+        // strengths are read through the field the instance already holds.
+        private int CompareByStrengthDescending(ClubId left, ClubId right)
+        {
+            return StrengthMeanOf(right).CompareTo(StrengthMeanOf(left));
+        }
+
+        private double StrengthMeanOf(ClubId club)
+        {
+            TeamStrength strength = _league.Clubs[club.Value].Strength;
+            return (strength.Attack + strength.Midfield + strength.Defence) / 3.0;
         }
 
         private static int Clamp(int value, int min, int max)

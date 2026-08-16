@@ -1,5 +1,6 @@
 using Gaffer.Application.Drama;
 using Gaffer.Application.Progression;
+using Gaffer.Application.Rivals;
 using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
 using Gaffer.Application.Transfers;
@@ -34,6 +35,7 @@ namespace Gaffer.Application.Run
             DramaSettings drama = null,
             MoraleSettings morale = null,
             MatchContextSettings matchContexts = null,
+            RivalSettings rivals = null,
             EconomySettings economy = null,
             ScoutingSettings scouting = null,
             Gaffer.Domain.Traits.TraitCatalog traits = null,
@@ -47,6 +49,7 @@ namespace Gaffer.Application.Run
             Drama = drama ?? DramaSettings.Default;
             Morale = morale ?? MoraleSettings.Default;
             MatchContexts = matchContexts ?? MatchContextSettings.Default;
+            Rivals = rivals ?? RivalSettings.Default;
             Economy = economy ?? EconomySettings.Default;
             Scouting = scouting ?? ScoutingSettings.Default;
             Traits = traits ?? Gaffer.Domain.Traits.TraitCatalog.Default;
@@ -70,6 +73,9 @@ namespace Gaffer.Application.Run
         /// <summary>When a league fixture stops being just another game — the run-in, the places that
         /// count as a title race or a relegation fight (<see cref="MatchContextBuilder"/>).</summary>
         public MatchContextSettings MatchContexts { get; }
+
+        /// <summary>How the clubs the manager does not run behave in the market and on the pitch.</summary>
+        public RivalSettings Rivals { get; }
 
         public EconomySettings Economy { get; }
 
