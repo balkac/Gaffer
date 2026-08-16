@@ -57,6 +57,11 @@ namespace Gaffer.Presentation.Squad
         public void Build()
         {
             _root.Clear();
+
+            // .theme carries the palette, .screen the ground it paints. Both, because a screen that wore
+            // only the second would resolve every var() to nothing and fall back to Unity's default
+            // runtime theme — which is exactly what a missing stylesheet looks like on a device.
+            _root.AddToClassList("theme");
             _root.AddToClassList("screen");
 
             _root.Add(BuildHeader());
@@ -133,6 +138,7 @@ namespace Gaffer.Presentation.Squad
             view.selectionType = SelectionType.None;
             view.style.minHeight = RowHeight * 3;
             view.style.flexGrow = 1;
+            view.showBorder = false;
 
             // makeItem/bindItem are the recycling contract: makeItem runs once per VISIBLE row and
             // bindItem every time one is reused, so bindItem must set every property it ever sets —
@@ -155,26 +161,23 @@ namespace Gaffer.Presentation.Squad
             return card;
         }
 
+        // Layout and look both come from the stylesheet; this only says what the parts ARE. Inline styles
+        // here would be the palette leaking into C# one property at a time.
         private static VisualElement MakePlayerRow()
         {
             var row = new VisualElement();
-            row.AddToClassList("tappable");
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.alignItems = Align.Center;
+            row.AddToClassList("row");
 
             var name = new Label();
-            name.AddToClassList("body");
-            name.style.flexGrow = 1;
+            name.AddToClassList("row__name");
             row.Add(name);
 
             var role = new Label();
-            role.AddToClassList("label");
-            role.style.width = 44;
+            role.AddToClassList("row__role");
             row.Add(role);
 
             var rating = new Label();
-            rating.AddToClassList("numeric");
-            rating.style.width = 40;
+            rating.AddToClassList("row__rating");
             row.Add(rating);
 
             return row;

@@ -13,7 +13,13 @@
     and the classes below give them their brightness, so retuning the palette never touches code.
 */
 
-:root {
+/*
+    The tokens hang off .theme rather than :root, and that is deliberate. :root resolves only if the
+    sheet is attached to the panel's own root; a class travels with whatever element wears it, so a
+    screen hosted inside an editor window, a nested panel or a test harness gets the same palette
+    without anyone remembering where to attach the sheet. SquadScreen adds .theme next to .screen.
+*/
+.theme {
     /* --- ground ------------------------------------------------------------------------------------ */
     --pitch: #0C1B1A;
     --pitch-raised: #122624;
@@ -57,6 +63,8 @@
 .screen {
     flex-grow: 1;
     background-color: var(--pitch);
+    /* The panel is a phone held upright: the screen fills it, and the content scrolls inside. */
+    height: 100%;
     padding-top: var(--space-m);
     padding-bottom: var(--space-m);
     padding-left: var(--space-m);
@@ -82,6 +90,44 @@
     padding-left: var(--space-m);
     padding-right: var(--space-m);
     margin-bottom: var(--space-m);
+}
+
+/* ----- lists -----------------------------------------------------------------------------------------
+   A row is a tap target first and a line of data second. 56px clears the 44px minimum with room for the
+   separator, and the separator is a hairline of --pitch-line rather than a box: depth from lines and
+   space, never from shadows (ART_STYLE §5). */
+
+.row {
+    flex-direction: row;
+    align-items: center;
+    min-height: var(--tap-min);
+    padding-left: var(--space-s);
+    padding-right: var(--space-s);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--pitch-line);
+}
+
+.row__name {
+    flex-grow: 1;
+    color: var(--chalk);
+    font-size: 15px;
+    -unity-text-align: middle-left;
+}
+
+.row__role {
+    width: 46px;
+    color: var(--muted);
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    -unity-text-align: middle-left;
+}
+
+.row__rating {
+    width: 40px;
+    font-size: 16px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
 }
 
 /* ----- type ------------------------------------------------------------------------------------------

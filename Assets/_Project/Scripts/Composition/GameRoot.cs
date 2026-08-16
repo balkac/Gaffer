@@ -40,6 +40,11 @@ namespace Gaffer.Composition
         [SerializeField] private long _startingCash = 20_000_000L;
         [SerializeField] private long _weeklyWageBudget = 900_000L;
 
+        [Header("Look")]
+        [Tooltip("Gaffer.uss — the theme. REQUIRED: without it every var() resolves to nothing and the " +
+                 "screen falls back to Unity's default runtime look (a blue panel and black text).")]
+        [SerializeField] private StyleSheet _theme;
+
         [Header("Balance (optional — empty boots on the calibrated defaults)")]
         [SerializeField] private SimulationBalanceSO _simulation;
         [SerializeField] private DevelopmentBalanceSO _development;
@@ -63,7 +68,23 @@ namespace Gaffer.Composition
                 return;
             }
 
-            new SquadScreen(started.Value, document.rootVisualElement).Build();
+            // The sheet is attached HERE rather than inside the screen: which stylesheet is in force is a
+            // wiring fact, and Presentation deciding it for itself would make the look impossible to swap
+            // from the composition root (ARCHITECTURE §6).
+            VisualElement root = document.rootVisualElement;
+            if (_theme != null)
+            {
+                root.styleSheets.Add(_theme);
+            }
+            else
+            {
+                // Loud, because the failure is silent otherwise: everything still draws, just in Unity's
+                // default theme, which reads as "the art is wrong" rather than "the sheet is missing".
+                Debug.LogError("GameRoot: no theme stylesheet assigned. Drag Assets/_Project/UI/Theme/Gaffer.uss "
+                    + "onto the Theme field, or the screen will draw in Unity's default runtime look.");
+            }
+
+            new SquadScreen(started.Value, root).Build();
         }
 
         private RunSetup BuildSetup()
