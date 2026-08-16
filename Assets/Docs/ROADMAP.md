@@ -27,9 +27,9 @@
 |---|---|---|---|---|
 | 0 | Kurulum + İnandırıcılık Çekirdeği | ✅ Tamam | **L** | ★ Gate A |
 | 1 | Tuning + Test Ağı | ✅ Tamam (Gate A geçildi) | M | ★ Gate A |
-| 2 | Sezon İskeleti | 🟡 Çekirdek bitti · JSON adapter kaldı | M | |
-| 3 | Yönetim Sistemleri | 🟡 Üreteç + wonderkid + kadro→güç + attribute + rol-özel rating + gelişim + sezon-entegrasyonu + kadro-yenilenmesi + kulüp-üreteci + balans-SO + **birleşik yönetim (canlı transfer + haftalık maaş gideri + transfer dönemleri)** ✅ · **sezon-içi gelişim + oynama süresi + kalıcı piyasa** ✅ · devam (rakip menajer AI'ı) | **L** | |
-| 4 | Karakter + Dram | 🟡 Çekirdek bitti (trait + dram + moral; karar #31) · playtest kalibrasyonu kaldı (dram frekans-normalizasyonu + kart etki-önizlemesi + olay kopyası — PROGRESS "Kalan") + Unity-doğrulaması | **L** | |
+| 2 | Sezon İskeleti | ✅ Tamam | M | |
+| 3 | Yönetim Sistemleri | ✅ Tamam | **L** | |
+| 4 | Karakter + Dram | ✅ Tamam (trait + dram + moral; karar #31) · frekans normalize edildi, kart etki-önizlemesi ve olay kopyası yazıldı, Unity doğrulandı | **L** | |
 | 5 | Hafıza + Anlatı | ✅ Tamam (★ Gate B geçildi 2026-08-13) | M | ★ Gate B |
 | 6 | Meta / Roguelike | ⬜ | M | |
 | 7 | UI + Art + Localization | ⬜ | **L** | |
@@ -94,7 +94,8 @@ Karar döngüsünü tamamla.
 - **Sezon içi gelişim** (eski "basit antrenman" maddesinin yerini alır): oyuncular sezon başında bir sıçramayla değil, **haftalık** gelişir; oynama süresi gelişimi sürükler (ilk 11 tam, yedek kısmi, hiç oynamayan çok az) — rotasyon böylece gerçek bir karar olur.
 - **Kalıcı transfer piyasası:** havuz her yaz silinip yeniden üretilmez; sezonlar arası **yaşar, yaşlanır, gelişir**, ve **satılan oyuncu takip edilebilir kalır** (Faz 5'in yolculuk günlüğü buna dayanır). Havuzun tazelenmesi emeklilik ↔ yeni nesil dengesiyle olur, boyut sabit kalır.
 - *Ölçek kısıtı (50.000 oyunculuk havuz):* gelişim **tembel değerlendirilir** — sürekli okunanlar (yönetilen kadro + lig kulüpleri, ~500 oyuncu) haftalık gerçekten geliştirilir, geri kalan havuz **bakıldığı an** son geliştirildiği haftadan bugüne getirilir. Haftalık maliyet O(havuz) değil **O(görünen)**. Determinizm korunur: gelişim `(oyuncu, sezon, hafta)` seed'inden türer, ne zaman bakıldığı sonucu değiştirmez (NON-NEGOTIABLE #2). Ölçüm ve gerekçe: PROGRESS, 2026-08-13.
-- Rakip menajer AI'ı: kural tabanlı transfer/taktik.
+- **Rakip menajer AI'ı (kural tabanlı transfer + taktik).** Her yaz, yönetmediğin kulüpler **güçlüden zayıfa** sırayla market'in **görünen yeteneğe göre en iyilerinden** alır — ve senin penceren açılmadan önce, yani gördüğün şey *kalanı* olur. Bütçe kulüp gücünden **türetilir** (defter değil: ekonomi bilinçle ertelendi, bu onun yerini tutan tek sayıdır). Taktik lige göre: ligden iyi olan baskı+topa sahip olma, kötü olan derin+kontra.
+- *Tasarımın kalbi — rakipler POTANSİYELİ kovalamaz.* Yalnız görünen yeteneğe bakarlar; potansiyel scout-maskelidir (TDD §5) ve onların göremediğini görmek keşfet-büyüt-sat fantezisinin tamamıdır (GDD §4.4). Ucuz 16'lık cevher sana kalır, cilalı 26'lık kalmaz. *Ölçüldü (50.000 havuz, 8 sezon):* rakipler tepeden alıyor (marketin en iyisi 73 → 71'e iniyor), lig ilk 11'i 61.7 → **66.4** çıkıyor ve hiç transfer yapmayan menajeri **geçiyor** (+1.8 → −1.6); buna karşılık her sezon **~1.700 yüksek-potansiyelli genç el değmeden** duruyor.
 
 **Çıkış kriteri:** Kadro, taktik, transfer, antrenman kararları anlamlı ve sonuçlu; oyuncular üretiliyor (elle karakter yok); **keşif fantezisi gerçek** — ara sıra düşük-görünür genç patlıyor, garanti cevher cevhere dönüşüyor (TDD §11 keşif doğrulaması).
 

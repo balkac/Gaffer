@@ -6,6 +6,32 @@
 
 ---
 
+## Faz 3 kapandı — rakip menajer AI'ı · 2026-08-16
+
+Faz 3'ün son açık maddesi, ve Faz 7'den **önce** yapıldı: Faz 7 simülasyonun üstüne arayüz, ve hareketsiz bir dünyanın ekranı sonradan iki kez yapılır. Oyun açısından eksik olan da buydu — **yetenek için rekabet yok**: market yalnız oyuncunun aldıklarıyla küçülüyordu, yani her cevherde ilk seçim sonsuza dek onundu.
+
+**Ekonomi kararı: türetilmiş bütçe (A).** Sahibinin seçimi. Kulüp bütçesi gücünden türer, defter yok — çünkü ekonomi (maaş/sözleşme/gelir) **bilinçle** birlikte tasarlanmak üzere ertelendi ve rakiplere şimdi gerçek bilanço vermek o tasarımı yarım yaptırırdı. Gerçek ekonomi geldiğinde `RivalSettings.TransferBudgetPerStrengthPoint` onun yerini bırakacağı dikiş.
+
+**Ölçüm bir tasarım hatası yakaladı.** İlk sürüm marketten **rastgele örnek** alıyordu (maliyet gerekçesiyle). 50.000'de ölçüldü: rakipler 30 oyuncu alıyor (%0.06), **marketin en iyisine hiç dokunmuyor** (70 → 73 çıkıyor), ve 1.500+ yüksek potansiyelli genç her sezon el değmeden kalıyordu. **Kimsenin hissedemediği rekabet, rekabet değildir.**
+
+**Düzeltme, ve oyunun kalbine oturan ayrım.** Rakipler artık marketin **görünen yeteneğe göre en iyilerinden** alıyor (pencere başına tek kısmi geçiş, tüm kulüpler paylaşıyor — kulüp başına tarama 50.000'de bir milyon değerlendirme olurdu). Ve **potansiyeli kovalamıyorlar**: o scout-maskeli, ve onların göremediğini görmek keşfet-büyüt-sat fantezisinin tamamı. *Sonra (50.000 havuz, 8 sezon):* marketin en iyisi 73 → **71**'e iniyor (tepe yeniyor), lig ilk 11'i 61.7 → **66.4** çıkıyor ve hiç transfer yapmayan menajeri **geçiyor** (+1.8 → −1.6) — yani transfer yapmamak artık bedelli. Buna karşılık **~1.700 yüksek-potansiyelli genç her sezon el değmeden** duruyor: ucuz 16'lık cevher sana kalır, cilalı 26'lık kalmaz.
+
+Sıra **güçlüden zayıfa** ve **senin pencerenden önce**: büyük kulüpler ilk bakışı alır, sen kalanı görürsün. Kaybedebileceğin bir rekabet, seni bekleyen bir market değil. Test 542 → **554**; kalibrasyon değişmedi (5 gate PASS).
+
+---
+
+## Faz 2 ve Faz 4 yeşile alındı · 2026-08-16 (bayat kayıt düzeltmesi, yeni iş değil)
+
+Sahibi sordu: *"Faz 2 ve Faz 4 neden sarı?"* Cevap: **değiller — tablo bayattı.** Aynı desen bu oturumda üçüncü kez çıktı (dram kopyası, akademi tavanı, şimdi bunlar): iş yapılıyor, PROGRESS'e yazılıyor, ROADMAP'in **durum sütunu güncellenmiyor**. Her madde koda karşı tek tek doğrulandı, doküman okunarak değil:
+
+**Faz 2 — "JSON adapter kaldı".** `NewtonsoftJsonSerializer` + `JsonSaveStore` yerinde, **70 save testi yeşil**. Not yazıldığından beri üstüne binary serializer, container v3, şema v7 ve migration zinciri de geldi; not kendisinden çok sonra yapılmış işi bekliyordu.
+
+**Faz 4 — dört madde, dördü de kapalı.** Dram frekansı **yeniden ölçüldü: 2.30 olay/sezon, sezonların %20'si tavanda** (eskiden 3.94 ve %94) · karar kartı etki-önizlemesi `HarnessDrama.Preview` olarak var · 10 olayın kopyası EN+TR ve kapsam testte kilitli · Unity doğrulaması sahibi tarafından yapıldı. Ayrıca Faz 4'ün *ertelenenler* listesindeki iki madde de kapandı: moral+dram durumunun save kalıcılığı (v6) ve **`MatchImportance`'ın fikstürden türetilmesi** — ki notu "Faz 5 anlatı işiyle doğal gelir" diyordu ve tam olarak öyle geldi (`MatchContextBuilder`).
+
+**Ders:** durum sütunu tek yazılıp bırakılan bir alan değil. Bir faz maddesi kapandığında ROADMAP tablosu aynı commit'te güncellenmeli.
+
+---
+
 ## Faz 5 — hafıza ve anlatı · 2026-08-13
 
 **5.1 An tanıma.** `Application/Narrative`. Katman **tanır, üretmez**: maç bitti, goller atıldı, tablo yazıldı; buradaki hiçbir metot bir skoru oynatamaz — yani kopya, kalibre edilmiş tek bir sayıya dokunmadan istendiği kadar yeniden ayarlanabilir. Gol bir **olgu** (dakika, taraf, golcü); *"ilk derbisinde, ilk golü"* bir **an**, ve ikisini üç girdi ayırıyor: maç neydi, oyuncu kimdi, ona daha önce ne oldu. Üçüncüsü, günlüğün tanımanın **girdisi** olmasının sebebi — bir maçın hiçbir yerinde debut ile 50. maç arasında fark yok.
