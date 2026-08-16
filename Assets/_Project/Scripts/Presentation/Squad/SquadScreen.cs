@@ -44,6 +44,8 @@ namespace Gaffer.Presentation.Squad
         private readonly Label _clubName = new Label();
         private readonly Label _standing = new Label();
         private readonly Label _shape = new Label();
+        private readonly PitchView _pitch;
+        private readonly VisualElement _elevenCard = new VisualElement();
         private readonly ListView _eleven = new ListView();
         private readonly ListView _bench = new ListView();
         private readonly Label _message = new Label();
@@ -53,11 +55,14 @@ namespace Gaffer.Presentation.Squad
         private readonly List<Player> _starters = new List<Player>();
         private readonly List<Player> _benched = new List<Player>();
 
+        private bool _showingPitch = true;
+
         public SquadScreen(RunSession session, VisualElement root, LocalizedStrings text)
         {
             _session = session;
             _root = root;
             _text = text;
+            _pitch = new PitchView(OnSwapRequested);
         }
 
         /// <summary>Builds the screen once and draws the run's current state into it.</summary>
@@ -72,8 +77,15 @@ namespace Gaffer.Presentation.Squad
             _root.AddToClassList("screen");
 
             _root.Add(BuildHeader());
-            _root.Add(BuildList(Say(UiTextKeys.SquadEleven), _eleven, _starters, OnStarterTapped));
-            _root.Add(BuildList(Say(UiTextKeys.SquadBench), _bench, _benched, OnBenchTapped));
+            _root.Add(BuildEleven());
+            var benchCard = new VisualElement();
+            benchCard.AddToClassList("card");
+            var benchTitle = new Label(Say(UiTextKeys.SquadBench));
+            benchTitle.AddToClassList("label");
+            benchCard.Add(benchTitle);
+            BuildList(_bench, _benched, OnBenchTapped);
+            benchCard.Add(_bench);
+            _root.Add(benchCard);
             _root.Add(BuildActions());
 
             _message.AddToClassList("body");
@@ -104,6 +116,7 @@ namespace Gaffer.Presentation.Squad
             Refill(_benched, lineup.Bench);
             _eleven.Rebuild();
             _bench.Rebuild();
+            _pitch.Draw(lineup.Formation, lineup.Slots);
         }
 
         private static void Refill(List<Player> into, IReadOnlyList<Player> from)
@@ -113,6 +126,46 @@ namespace Gaffer.Presentation.Squad
             {
                 into.Add(from[i]);
             }
+        }
+
+        // The eleven, as a board or as a list. Both, because they answer different questions: the board
+        // shows the SHAPE — is anybody covering the left? — and the list is how twenty-five names get
+        // scanned on a phone. A toggle rather than one or the other, since neither answers both.
+        private VisualElement BuildEleven()
+        {
+            _elevenCard.AddToClassList("card");
+
+            var head = new VisualElement();
+            head.style.flexDirection = FlexDirection.Row;
+            head.style.alignItems = Align.Center;
+
+            var title = new Label(Say(UiTextKeys.SquadEleven));
+            title.AddToClassList("label");
+            title.style.flexGrow = 1;
+            head.Add(title);
+
+            var toggle = new Button { text = Say(UiTextKeys.ViewList) };
+            toggle.AddToClassList("button");
+            toggle.clicked += () => ShowPitch(!_showingPitch, toggle);
+            head.Add(toggle);
+
+            _elevenCard.Add(head);
+            _elevenCard.Add(_pitch.Root);
+
+            BuildList(_eleven, _starters, OnStarterTapped);
+            _eleven.style.display = DisplayStyle.None;
+            _elevenCard.Add(_eleven);
+
+            return _elevenCard;
+        }
+
+        private void ShowPitch(bool pitch, Button toggle)
+        {
+            _showingPitch = pitch;
+            _pitch.Root.style.display = pitch ? DisplayStyle.Flex : DisplayStyle.None;
+            _eleven.style.display = pitch ? DisplayStyle.None : DisplayStyle.Flex;
+            toggle.text = Say(pitch ? UiTextKeys.ViewList : UiTextKeys.ViewPitch);
+            _pitch.ClearSelection();
         }
 
         // ----- Layout -------------------------------------------------------------------------------------
@@ -132,15 +185,8 @@ namespace Gaffer.Presentation.Squad
             return card;
         }
 
-        private VisualElement BuildList(string heading, ListView view, List<Player> source, System.Action<int> onTapped)
+        private void BuildList(ListView view, List<Player> source, System.Action<int> onTapped)
         {
-            var card = new VisualElement();
-            card.AddToClassList("card");
-
-            var title = new Label(heading);
-            title.AddToClassList("label");
-            card.Add(title);
-
             view.itemsSource = source;
             view.fixedItemHeight = RowHeight;
             view.selectionType = SelectionType.None;
@@ -153,9 +199,6 @@ namespace Gaffer.Presentation.Squad
             // a class added on one row and not removed on the next is the classic ListView bug.
             view.makeItem = () => MakePlayerRow(onTapped);
             view.bindItem = (element, index) => BindPlayerRow(element, source, index);
-
-            card.Add(view);
-            return card;
         }
 
         // Layout and look both come from the stylesheet; this only says what the parts ARE. Inline styles
@@ -265,12 +308,39 @@ namespace Gaffer.Presentation.Squad
             }
         }
 
+        // A bench tap means two different things, and which one is decided by whether a slot is held. With
+        // one picked up it is "put HIM there", which is the whole point of the board; with nothing held it
+        // falls back to the list behaviour of pushing him into the first free place.
         private void OnBenchTapped(int index)
         {
-            if (index >= 0 && index < _benched.Count)
+            if (index < 0 || index >= _benched.Count)
             {
-                Apply(_session.ToggleStarter(_benched[index].Id));
+                return;
             }
+
+            int slot = _pitch.SelectedSlot;
+            if (slot >= 0)
+            {
+                _pitch.ClearSelection();
+                Apply(_session.PlaceInSlot(slot, _benched[index].Id));
+                return;
+            }
+
+            Apply(_session.ToggleStarter(_benched[index].Id));
+        }
+
+        // Two slots tapped in turn. The core decides what that MEANS — a straight swap when both are
+        // filled, benching the occupant when the mover came from elsewhere — and the screen only reports
+        // the gesture. Re-deriving the rule here is how a UI starts disagreeing with the game.
+        private void OnSwapRequested(int fromSlot, int toSlot)
+        {
+            IReadOnlyList<Player> slots = _session.Lineup().Slots;
+            if (fromSlot < 0 || fromSlot >= slots.Count || slots[fromSlot] == null)
+            {
+                return;
+            }
+
+            Apply(_session.PlaceInSlot(toSlot, slots[fromSlot].Id));
         }
 
         private void OnAutoPick()

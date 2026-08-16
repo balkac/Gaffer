@@ -76,6 +76,14 @@ namespace Gaffer.Infrastructure.Localization
                         "DEF",
                         "SAV"),
                     Row(
+                        "ui.squad.view_pitch",
+                        "Pitch",
+                        "Saha"),
+                    Row(
+                        "ui.squad.view_list",
+                        "List",
+                        "Liste"),
+                    Row(
                         "ui.action.auto_pick",
                         "Auto-pick",
                         "Otomatik seç"),

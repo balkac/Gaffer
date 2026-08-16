@@ -163,6 +163,98 @@
     -unity-text-align: middle-right;
 }
 
+/* ----- the pitch --------------------------------------------------------------------------------------
+   A tactics board, not a football pitch: no grass, no lines, no green. The shape reads from where the
+   cards SIT, which is the broadcast-graphic way of drawing a formation and keeps the single-accent rule
+   intact — a green pitch would be the second bright colour ART_STYLE forbids. */
+
+.pitch {
+    background-color: var(--pitch);
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    padding-top: var(--space-m);
+    padding-bottom: var(--space-m);
+}
+
+/* A band fills the width whatever it holds, so a back four and a front two both look deliberate. */
+.pitch__band {
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    margin-bottom: var(--space-m);
+}
+
+.slot {
+    width: 68px;
+    min-height: var(--tap-min);
+    align-items: center;
+    justify-content: center;
+    background-color: var(--pitch-raised);
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    padding-top: var(--space-xs);
+    padding-bottom: var(--space-xs);
+    transition-property: background-color, scale;
+    transition-duration: 90ms, 90ms;
+    transition-timing-function: ease-out, ease-out;
+}
+
+.slot:hover {
+    background-color: var(--pitch-line);
+}
+
+.slot:active {
+    scale: 0.96 0.96;
+}
+
+/* Picked up. The accent border is the only thing on the board that burns the signature colour, which is
+   what makes "this one is in your hand" unmissable at a glance. */
+.slot--selected {
+    border-left-color: var(--accent);
+    border-right-color: var(--accent);
+    border-top-color: var(--accent);
+    border-bottom-color: var(--accent);
+    background-color: rgba(255, 46, 126, 0.12);
+}
+
+.slot__role {
+    color: var(--muted);
+    font-size: 9px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+}
+
+.slot__name {
+    color: var(--chalk);
+    font-size: 12px;
+    -unity-text-align: middle-center;
+}
+
+.slot__rating {
+    font-size: 14px;
+    -unity-font-style: bold;
+}
+
 /* ----- type ------------------------------------------------------------------------------------------
    Hierarchy is built from size and weight, not from spending colour (ART_STYLE §3). */
 
