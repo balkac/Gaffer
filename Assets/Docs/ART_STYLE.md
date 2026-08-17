@@ -2,6 +2,10 @@
 
 > Bu, görsel dilin **metin** karşılığıdır. Render edilmiş, bağlayıcı referans levhası `ART_STYLE.html`'dir (palet + örnek arma + ikon seti + imza ekran mockup'ı). **Çelişki olursa `ART_STYLE.html` kazanır.**
 >
+> Bu levha arayüzün **neye benzediğini** tanımlar. **Nasıl davrandığı** — ekran mimarisi, jest sözlüğü,
+> dokunma hedefi, gezinme — `UI_REFERENCES.md`'dedir ve Football Manager'a dayanır. Bir UI işine başlarken
+> ikisi birlikte okunur.
+>
 > Tüm görsel işleri Claude üretir. AI ile art'ta en zor şey **tutarlılık**; bu yüzden yön illüstrasyona değil, **token'lı vektör (SVG) sistemine** dayanır — bu aynı zamanda Claude'un güvenilir ürettiği şeyle (temiz SVG) örtüşür.
 
 ---
