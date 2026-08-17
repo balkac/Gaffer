@@ -155,11 +155,18 @@ namespace Gaffer.Application.Run
             return new RunBalance(
                 simulation: balance.Simulation,
                 tacticsBalance: balance.TacticsBalance ?? Gaffer.Application.Simulation.TacticsSettings.Default,
+                positionalFit: balance.PositionalFit ?? Gaffer.Application.Simulation.PositionalFitSettings.Default,
                 scorer: balance.Scorer ?? Gaffer.Application.Simulation.ScorerWeights.Default,
                 development: balance.Development ?? Gaffer.Application.Progression.DevelopmentSettings.Default,
                 renewal: balance.Renewal ?? RenewalSettings.Default,
                 drama: balance.Drama ?? Gaffer.Application.Drama.DramaSettings.Default,
                 morale: balance.Morale ?? Gaffer.Application.Drama.MoraleSettings.Default,
+                // Named here because they were NOT, and a bundle that authored either had it dropped on the
+                // way in: this rebuild is exhaustive by construction, so anything it forgets to carry is
+                // silently replaced by a default. Rivalry behaviour and what counts as an occasion were
+                // being reset to calibrated defaults for every caller that set them.
+                matchContexts: balance.MatchContexts ?? Gaffer.Application.Season.MatchContextSettings.Default,
+                rivals: balance.Rivals ?? Gaffer.Application.Rivals.RivalSettings.Default,
                 economy: balance.Economy ?? Gaffer.Application.Transfers.EconomySettings.Default,
                 scouting: balance.Scouting ?? Gaffer.Application.Transfers.ScoutingSettings.Default,
                 traits: balance.Traits ?? Gaffer.Domain.Traits.TraitCatalog.Default,

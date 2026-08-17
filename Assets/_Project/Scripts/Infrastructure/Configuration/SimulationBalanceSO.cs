@@ -73,6 +73,23 @@ namespace Gaffer.Infrastructure.Configuration
         [Tooltip("...but tamer: chance-quality multiplier for possession.")]
         [SerializeField] private double possessionApproachQuality = 0.88;
 
+        // Mapped onto Football Manager's measured out-of-position penalty: ~10% off for another role on the
+        // same line, ~20% for the next line along, ~a third for two lines away, ~40% for goalkeeper-for-
+        // outfielder. FM's own floor is near 0.57 and its worst tier still wins matches; a penalty that
+        // erased a player would teach the manager to fear the team sheet rather than read it.
+        [Header("Out of position (1.0 = his own role, never a setting)")]
+        [Tooltip("Another role on the same line — a central midfielder at right midfield.")]
+        [SerializeField] private double sameLineFit = 0.90;
+
+        [Tooltip("The next line along — a defender in midfield, a midfielder up front.")]
+        [SerializeField] private double adjacentLineFit = 0.80;
+
+        [Tooltip("Two lines away or more — a centre-back asked to play striker.")]
+        [SerializeField] private double distantLineFit = 0.68;
+
+        [Tooltip("Goalkeeper for outfielder, either way. The auto-pick never volunteers this.")]
+        [SerializeField] private double impossibleFit = 0.60;
+
         [Header("Scorer attribution")]
         [Tooltip("Floor keeping every outfielder a live threat; keepers are exempt.")]
         [SerializeField] private double minOutfielderWeight = 0.5;
@@ -130,6 +147,16 @@ namespace Gaffer.Infrastructure.Configuration
                 possessionApproachQuality: possessionApproachQuality);
         }
 
+        public PositionalFitSettings ToPositionalFitSettings()
+        {
+            ClampToValidRanges();
+            return new PositionalFitSettings(
+                sameLine: sameLineFit,
+                adjacentLine: adjacentLineFit,
+                distantLine: distantLineFit,
+                impossible: impossibleFit);
+        }
+
         public ScorerWeights ToScorerWeights()
         {
             ClampToValidRanges();
@@ -185,6 +212,14 @@ namespace Gaffer.Infrastructure.Configuration
             counterApproachQuality = Math.Clamp(counterApproachQuality, 0.1, 3.0);
             possessionApproachVolume = Math.Clamp(possessionApproachVolume, 0.1, 3.0);
             possessionApproachQuality = Math.Clamp(possessionApproachQuality, 0.1, 3.0);
+
+            // A fit multiplier scales a rating, so 0 would delete a player and anything above 1 would make
+            // being out of position an upgrade. The floor is 0.1 rather than 0 for the same reason FM's is
+            // ~0.57: an eleven of erased players is not a lineup, it is a bug report.
+            sameLineFit = Math.Clamp(sameLineFit, 0.1, 1.0);
+            adjacentLineFit = Math.Clamp(adjacentLineFit, 0.1, 1.0);
+            distantLineFit = Math.Clamp(distantLineFit, 0.1, 1.0);
+            impossibleFit = Math.Clamp(impossibleFit, 0.1, 1.0);
 
             // Scorer weights are relative shares: negative is meaningless, and the selector normalises
             // them, so the only real requirement is a non-negative, finite number.

@@ -26,7 +26,10 @@ namespace Gaffer.Application.Season
         private readonly Dictionary<int, List<Fixture>> _fixturesByRound;
         private readonly Dictionary<ClubId, Tactics> _tacticsByClub;
         private readonly Dictionary<ClubId, Formation> _formationByClub;
-        private readonly Dictionary<ClubId, IReadOnlyList<Player>> _startersByClub;
+        // The eleven a club fields, as a TEAM SHEET (who stands in which slot) rather than a bare list of
+        // players — because what the match charges each man for is the slot he is in, not the role he owns
+        // (EffectiveStrengthBuilder). A pinned sheet from the manager wins over the auto-pick below.
+        private readonly Dictionary<ClubId, IReadOnlyList<SlottedPlayer>> _sheetByClub;
 
         // The auto-picked eleven per club, memoised (PERFORMANCE §6). LineupSelector.SelectBest is a
         // pure function of (squad, formation) and both are stable for a whole season unless
@@ -35,7 +38,14 @@ namespace Gaffer.Application.Season
         // role-rating evaluations over a 20-club, 380-match season. Entries hold their own list, not
         // the selector's reusable buffer (see LineupSelector.SelectBest's lifetime contract). A
         // restored season is a fresh LeagueSeason, so no cache survives Restore.
-        private readonly Dictionary<ClubId, List<Player>> _autoElevenByClub;
+        private readonly Dictionary<ClubId, List<SlottedPlayer>> _autoElevenByClub;
+
+        // The plain who-played list behind StartersOf, projected off whichever sheet is in force and cached
+        // beside it. Derived, never authored: it is dropped wherever the sheet it came from is dropped, so
+        // the two cannot disagree about who is playing (ARCHITECTURE §8a). It exists because the run reads
+        // it for every club every week to credit minutes, and projecting eleven names twenty times a week
+        // would be an allocation per club per week for an answer that does not change (PERFORMANCE §8).
+        private readonly Dictionary<ClubId, List<Player>> _playersByClub;
 
         // What each fixture MEANS, worked out per match rather than once per season. Without it every
         // game in the league is identical and nothing is ever an occasion (MatchContextBuilder).
@@ -66,7 +76,7 @@ namespace Gaffer.Application.Season
         /// meant to be played is built this way: the save path deliberately hands back data rather than an
         /// unplayable season (see <see cref="Gaffer.Application.Serialization.RestoredSeason"/>).
         /// </summary>
-        public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits, TacticsSettings tacticsSettings, MoraleSettings moraleSettings, MatchSimulator simulator)
+        public LeagueSeason(League league, Gaffer.Domain.Traits.TraitCatalog traits, TacticsSettings tacticsSettings, MoraleSettings moraleSettings, MatchSimulator simulator, PositionalFitSettings positionalFit = null)
         {
             _simulator = simulator;
             _clubsById = new Dictionary<ClubId, Club>(league.Clubs.Count);
@@ -92,11 +102,16 @@ namespace Gaffer.Application.Season
 
             _tacticsByClub = new Dictionary<ClubId, Tactics>();
             _formationByClub = new Dictionary<ClubId, Formation>();
-            _startersByClub = new Dictionary<ClubId, IReadOnlyList<Player>>();
-            _autoElevenByClub = new Dictionary<ClubId, List<Player>>(league.Clubs.Count);
+            _sheetByClub = new Dictionary<ClubId, IReadOnlyList<SlottedPlayer>>();
+            _autoElevenByClub = new Dictionary<ClubId, List<SlottedPlayer>>(league.Clubs.Count);
+            _playersByClub = new Dictionary<ClubId, List<Player>>(league.Clubs.Count);
             _tacticsSettings = tacticsSettings ?? TacticsSettings.Default;
-            _strengthBuilder = new EffectiveStrengthBuilder(traits ?? Gaffer.Domain.Traits.TraitCatalog.Default, _tacticsSettings);
-            _lineupSelector = new LineupSelector();
+
+            // Resolved once and handed to both: the auto-pick and the strength derivation must charge the
+            // same price for the same slot, or the eleven the season picks is not the eleven it then rates.
+            PositionalFitSettings fit = positionalFit ?? PositionalFitSettings.Default;
+            _strengthBuilder = new EffectiveStrengthBuilder(traits ?? Gaffer.Domain.Traits.TraitCatalog.Default, _tacticsSettings, fit);
+            _lineupSelector = new LineupSelector(fit);
             _table = new LeagueTable(clubIds);
             _playedResults = new List<MatchResult>();
             Morale = new MoraleLedger(moraleSettings);
@@ -130,12 +145,30 @@ namespace Gaffer.Application.Season
         {
             _formationByClub[club] = formation;
             _autoElevenByClub.Remove(club);
+            _playersByClub.Remove(club);
         }
 
-        /// <summary>Sets the exact eleven a club fields; overrides the auto-pick until changed.</summary>
+        /// <summary>Sets the exact team sheet a club fields; overrides the auto-pick until changed.</summary>
+        public void SetStarters(ClubId club, IReadOnlyList<SlottedPlayer> sheet)
+        {
+            _sheetByClub[club] = sheet;
+            _playersByClub.Remove(club);
+        }
+
+        /// <summary>
+        /// Sets an eleven with no shape declared: every man is taken to be in his own role, so nobody is out
+        /// of position and the eleven costs exactly what its players are worth. What a caller means when it
+        /// says "field these players" without saying where — a test fixture, or a squad judged as a squad.
+        /// </summary>
         public void SetStarters(ClubId club, IReadOnlyList<Player> starters)
         {
-            _startersByClub[club] = starters;
+            var sheet = new List<SlottedPlayer>(starters.Count);
+            for (int i = 0; i < starters.Count; i++)
+            {
+                sheet.Add(new SlottedPlayer(i, starters[i].Role, starters[i]));
+            }
+
+            SetStarters(club, sheet);
         }
 
         /// <summary>
@@ -152,8 +185,9 @@ namespace Gaffer.Application.Season
             }
 
             _clubsById[club] = new Club(current.Id, current.Name, squad, current.Strength);
-            _startersByClub.Remove(club);
+            _sheetByClub.Remove(club);
             _autoElevenByClub.Remove(club);
+            _playersByClub.Remove(club);
         }
 
         /// <summary>The club's current roster, or <c>null</c> for a squad-less (strength-only) club.</summary>
@@ -195,9 +229,9 @@ namespace Gaffer.Application.Season
         /// injected simulator, so a resumed season is wired exactly like a fresh one. A null
         /// <paramref name="simulator"/> carries the same meaning as on the constructor: the rebuilt season
         /// holds the table and the history but cannot be played.</summary>
-        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults, Gaffer.Domain.Traits.TraitCatalog traits, TacticsSettings tacticsSettings, MoraleSettings moraleSettings, MatchSimulator simulator)
+        public static LeagueSeason Restore(League league, int playedRounds, IReadOnlyList<MatchResult> playedResults, Gaffer.Domain.Traits.TraitCatalog traits, TacticsSettings tacticsSettings, MoraleSettings moraleSettings, MatchSimulator simulator, PositionalFitSettings positionalFit = null)
         {
-            var season = new LeagueSeason(league, traits, tacticsSettings, moraleSettings, simulator);
+            var season = new LeagueSeason(league, traits, tacticsSettings, moraleSettings, simulator, positionalFit);
             foreach (MatchResult result in playedResults)
             {
                 season._table.RecordMatch(result.Home, result.Away, result.HomeGoals, result.AwayGoals);
@@ -304,7 +338,7 @@ namespace Gaffer.Application.Season
                 return club.Strength;
             }
 
-            return _strengthBuilder.Build(StartersOf(club), TacticsOf(club.Id), context, Morale);
+            return _strengthBuilder.Build(SheetOf(club), TacticsOf(club.Id), context, Morale);
         }
 
         private IReadOnlyList<Player> ElevenOf(Club club)
@@ -312,14 +346,14 @@ namespace Gaffer.Application.Season
             return club.Squad != null ? StartersOf(club) : null;
         }
 
-        private IReadOnlyList<Player> StartersOf(Club club)
+        private IReadOnlyList<SlottedPlayer> SheetOf(Club club)
         {
-            if (_startersByClub.TryGetValue(club.Id, out IReadOnlyList<Player> starters))
+            if (_sheetByClub.TryGetValue(club.Id, out IReadOnlyList<SlottedPlayer> pinned))
             {
-                return starters;
+                return pinned;
             }
 
-            if (_autoElevenByClub.TryGetValue(club.Id, out List<Player> cached))
+            if (_autoElevenByClub.TryGetValue(club.Id, out List<SlottedPlayer> cached))
             {
                 return cached;
             }
@@ -327,8 +361,8 @@ namespace Gaffer.Application.Season
             // Copied out of the selector's reusable return buffer, whose documented lifetime ends at the
             // next SelectBest call — the away side of this same fixture would overwrite it. One list per
             // club per roster/formation change, instead of one per club per match.
-            IReadOnlyList<Player> picked = _lineupSelector.SelectBest(club.Squad, FormationOf(club.Id));
-            var owned = new List<Player>(picked.Count);
+            IReadOnlyList<SlottedPlayer> picked = _lineupSelector.SelectBest(club.Squad, FormationOf(club.Id));
+            var owned = new List<SlottedPlayer>(picked.Count);
             for (int i = 0; i < picked.Count; i++)
             {
                 owned.Add(picked[i]);
@@ -336,6 +370,24 @@ namespace Gaffer.Application.Season
 
             _autoElevenByClub[club.Id] = owned;
             return owned;
+        }
+
+        private IReadOnlyList<Player> StartersOf(Club club)
+        {
+            if (_playersByClub.TryGetValue(club.Id, out List<Player> cached))
+            {
+                return cached;
+            }
+
+            IReadOnlyList<SlottedPlayer> sheet = SheetOf(club);
+            var players = new List<Player>(sheet.Count);
+            for (int i = 0; i < sheet.Count; i++)
+            {
+                players.Add(sheet[i].Player);
+            }
+
+            _playersByClub[club.Id] = players;
+            return players;
         }
 
         private Formation FormationOf(ClubId club)

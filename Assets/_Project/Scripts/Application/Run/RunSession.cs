@@ -133,8 +133,8 @@ namespace Gaffer.Application.Run
                 new QualityChanceResolver(),
                 new WeightedScorerSelector(balance.Scorer));
             _transition = new SeasonTransition(balance.Development, balance.Renewal, balance.Traits);
-            _lineupSelector = new LineupSelector();
-            _strengthBuilder = new EffectiveStrengthBuilder(balance.Traits, balance.TacticsBalance);
+            _lineupSelector = new LineupSelector(balance.PositionalFit);
+            _strengthBuilder = new EffectiveStrengthBuilder(balance.Traits, balance.TacticsBalance, balance.PositionalFit);
             var playerGenerator = new PlayerGenerator(balance.Traits);
             _marketGenerator = new PlayerPoolGenerator(playerGenerator);
             _marketRenewal = new MarketRenewal(playerGenerator, balance.Development, balance.Renewal, balance.Traits);
@@ -214,6 +214,17 @@ namespace Gaffer.Application.Run
         public Formation Formation => _formation;
 
         public Tactics Tactics => _tactics;
+
+        /// <summary>
+        /// What this run charges for playing a man out of position — the same numbers the match is settled
+        /// on, so a screen can price a slot the manager is CONSIDERING (<see cref="PlayerRatings.ForSlot"/>)
+        /// rather than only the slots he has already filled, which is what <see cref="LineupOutcome.Sheet"/>
+        /// covers. Balance, not state: an immutable settings object, so handing it out is not the core
+        /// leaking something a view could diff against (NON-NEGOTIABLE #4). The alternative was for the
+        /// screen to keep its own copy of the penalty, which is exactly the second opinion this whole
+        /// arrangement exists to prevent.
+        /// </summary>
+        public PositionalFitSettings PositionalFit => _balance.PositionalFit;
 
         /// <summary>The managed club's live roster — signings and sales are reflected here at once.</summary>
         public Squad Squad => ManagedSquad();
@@ -987,7 +998,8 @@ namespace Gaffer.Application.Run
                 _balance.Traits,
                 _balance.TacticsBalance,
                 _balance.Morale,
-                _simulator);
+                _simulator,
+                _balance.PositionalFit);
 
             // The rivalries outlive the season, so every season the run builds is handed the same map.
             season.SetMatchContextBuilder(_contextBuilder);
@@ -1303,11 +1315,16 @@ namespace Gaffer.Application.Run
             if (squad != null)
             {
                 // Copied out of the selector's reusable return buffer, whose documented lifetime ends at
-                // the next SelectBest call.
-                IReadOnlyList<Player> eleven = _lineupSelector.SelectBest(squad, _formation);
-                for (int i = 0; i < eleven.Count && i < _slots.Length; i++)
+                // the next SelectBest call. Each pick names the slot it fills, so a squad too small to fill
+                // the sheet leaves that slot empty instead of shifting everyone after it up one.
+                IReadOnlyList<SlottedPlayer> eleven = _lineupSelector.SelectBest(squad, _formation);
+                for (int i = 0; i < eleven.Count; i++)
                 {
-                    _slots[i] = eleven[i];
+                    SlottedPlayer pick = eleven[i];
+                    if (pick.Slot >= 0 && pick.Slot < _slots.Length)
+                    {
+                        _slots[pick.Slot] = pick.Player;
+                    }
                 }
             }
 
@@ -1318,18 +1335,43 @@ namespace Gaffer.Application.Run
 
         private void BindStarters()
         {
-            _season.SetStarters(_managedClub, StartersList());
+            _season.SetStarters(_managedClub, SheetList());
         }
 
-        private List<Player> StartersList()
+        // The eleven as the match must see it: each man paired with the SLOT he was placed in, not merely
+        // listed in slot order. Handing the season a bare list and letting it re-derive the slots by index
+        // was wrong the moment a slot was left empty — every man after the gap was charged for somebody
+        // else's position (see SlottedPlayer).
+        private List<SlottedPlayer> SheetList()
         {
-            var starters = new List<Player>(_slots.Length);
+            IReadOnlyList<PlayerRole> slotRoles = _formation.Slots;
+            var sheet = new List<SlottedPlayer>(_slots.Length);
             for (int i = 0; i < _slots.Length; i++)
             {
-                if (_slots[i] != null)
+                if (_slots[i] != null && i < slotRoles.Count)
                 {
-                    starters.Add(_slots[i]);
+                    sheet.Add(new SlottedPlayer(i, slotRoles[i], _slots[i]));
                 }
+            }
+
+            return sheet;
+        }
+
+        // Who is playing, derived from the sheet rather than walked out of _slots a second time. Two walks
+        // over the same array with two slightly different conditions is how "the eleven" and "the team
+        // sheet" end up disagreeing about a man — and they are consumed together, by the outcome that
+        // reports both.
+        private List<Player> StartersList()
+        {
+            return PlayersOf(SheetList());
+        }
+
+        private static List<Player> PlayersOf(IReadOnlyList<SlottedPlayer> sheet)
+        {
+            var starters = new List<Player>(sheet.Count);
+            for (int i = 0; i < sheet.Count; i++)
+            {
+                starters.Add(sheet[i].Player);
             }
 
             return starters;
@@ -1372,7 +1414,11 @@ namespace Gaffer.Application.Run
         {
             var slots = new Player[_slots.Length];
             Array.Copy(_slots, slots, _slots.Length);
-            List<Player> starters = StartersList();
+            // Built once and used three times — the eleven, the strength and what the view draws all come
+            // off this one arrangement, so the number on the screen and the number the match plays cannot
+            // disagree about who is standing where.
+            List<SlottedPlayer> sheet = SheetList();
+            List<Player> starters = PlayersOf(sheet);
 
             var bench = new List<Player>();
             Squad squad = ManagedSquad();
@@ -1392,11 +1438,12 @@ namespace Gaffer.Application.Run
                 formation: _formation,
                 tactics: _tactics,
                 slots: slots,
+                sheet: sheet,
                 starters: starters,
                 bench: bench,
                 isComplete: starters.Count == _formation.Total,
                 strength: starters.Count > 0
-                    ? _strengthBuilder.Build(starters, _tactics)
+                    ? _strengthBuilder.Build(sheet, _tactics)
                     : _league.Clubs[_managedClub.Value].Strength,
                 chanceProfile: ChanceProfile.FromTactics(_tactics, _balance.TacticsBalance));
         }

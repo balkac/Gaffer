@@ -29,6 +29,7 @@ namespace Gaffer.Application.Run
         public RunBalance(
             MatchSimulationSettings? simulation = null,
             TacticsSettings tacticsBalance = null,
+            PositionalFitSettings positionalFit = null,
             ScorerWeights scorer = null,
             DevelopmentSettings development = null,
             RenewalSettings renewal = null,
@@ -43,6 +44,7 @@ namespace Gaffer.Application.Run
         {
             Simulation = simulation ?? MatchSimulationSettings.Default;
             TacticsBalance = tacticsBalance ?? TacticsSettings.Default;
+            PositionalFit = positionalFit ?? PositionalFitSettings.Default;
             Scorer = scorer ?? ScorerWeights.Default;
             Development = development ?? DevelopmentSettings.Default;
             Renewal = renewal ?? RenewalSettings.Default;
@@ -59,6 +61,9 @@ namespace Gaffer.Application.Run
         public MatchSimulationSettings Simulation { get; }
 
         public TacticsSettings TacticsBalance { get; }
+
+        /// <summary>What fielding a man out of position costs him (<see cref="PositionalFitSettings"/>).</summary>
+        public PositionalFitSettings PositionalFit { get; }
 
         public ScorerWeights Scorer { get; }
 

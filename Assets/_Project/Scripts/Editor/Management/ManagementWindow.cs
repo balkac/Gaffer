@@ -341,6 +341,7 @@ namespace Gaffer.Editor.Management
             return Result<RunBalance>.Success(new RunBalance(
                 simulation: _simulationBalance != null ? _simulationBalance.ToSettings() : MatchSimulationSettings.Default,
                 tacticsBalance: _simulationBalance != null ? _simulationBalance.ToTacticsSettings() : TacticsSettings.Default,
+                positionalFit: _simulationBalance != null ? _simulationBalance.ToPositionalFitSettings() : PositionalFitSettings.Default,
                 scorer: _simulationBalance != null ? _simulationBalance.ToScorerWeights() : ScorerWeights.Default,
                 development: _developmentBalance != null ? _developmentBalance.ToSettings() : DevelopmentSettings.Default,
                 renewal: _renewalBalance != null ? _renewalBalance.ToSettings() : RenewalSettings.Default,

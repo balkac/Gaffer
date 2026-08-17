@@ -45,5 +45,28 @@ namespace Gaffer.Application.Simulation
         {
             return ForRole(player.Role, player.Attributes);
         }
+
+        /// <summary>
+        /// How good a player is IN A GIVEN SLOT: his own-role rating, charged for being out of position
+        /// (<see cref="PlayerRoles.FitFor"/> × <see cref="PositionalFitSettings"/>).
+        ///
+        /// <para><b>Why the base stays his own role and is not re-weighted on the slot's.</b> Rating a
+        /// centre-back on a striker's attributes would ask what kind of striker he would be, which the
+        /// attribute sheet cannot answer — and it would reward the wrong thing, because a quick centre-back
+        /// would score well as a winger and the game would start recommending it. What playing out of
+        /// position actually costs is positioning and decisions, not talent; FM models it the same way, as a
+        /// penalty on the man rather than a re-reading of him.</para>
+        /// </summary>
+        public static double ForSlot(Player player, PlayerRole slotRole, PositionalFitSettings fit)
+        {
+            double rating = ForRole(player.Role, player.Attributes);
+            if (player.Role == slotRole)
+            {
+                return rating;
+            }
+
+            PositionalFitSettings settings = fit ?? PositionalFitSettings.Default;
+            return rating * settings.MultiplierFor(PlayerRoles.FitFor(player.Role, slotRole));
+        }
     }
 }

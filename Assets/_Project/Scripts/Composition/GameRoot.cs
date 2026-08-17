@@ -120,10 +120,18 @@ namespace Gaffer.Composition
                 guaranteedGems: 3);
         }
 
+        // One asset, four bundles: SimulationBalanceSO authors the chance model, the tactical steps, the
+        // scorer weights AND the out-of-position penalty, and only the first was being read here — so every
+        // tactics or attribution number tuned in the Inspector reached the editor windows (which wire all
+        // four) and silently did not reach the game. A config asset half-read is worse than none: it looks
+        // authored and behaves default.
         private RunBalance BuildBalance()
         {
             return new RunBalance(
                 simulation: _simulation != null ? _simulation.ToSettings() : null,
+                tacticsBalance: _simulation != null ? _simulation.ToTacticsSettings() : null,
+                positionalFit: _simulation != null ? _simulation.ToPositionalFitSettings() : null,
+                scorer: _simulation != null ? _simulation.ToScorerWeights() : null,
                 development: _development != null ? _development.ToSettings() : null,
                 economy: _economy != null ? _economy.ToSettings() : null);
         }
