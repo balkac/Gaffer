@@ -26,6 +26,8 @@ namespace Gaffer.Presentation
         public const string SquadDefence = "ui.squad.defence";
         public const string ViewPitch = "ui.squad.view_pitch";
         public const string ViewList = "ui.squad.view_list";
+        public const string PickerWho = "ui.squad.picker_who";
+        public const string PickerWhere = "ui.squad.picker_where";
 
         // ----- actions ------------------------------------------------------------------------------------
 
@@ -39,7 +41,7 @@ namespace Gaffer.Presentation
         private static readonly string[] AllKeys =
         {
             SquadEleven, SquadBench, SquadPosition, SquadWeek,
-            SquadAttack, SquadMidfield, SquadDefence, ViewPitch, ViewList,
+            SquadAttack, SquadMidfield, SquadDefence, ViewPitch, ViewList, PickerWho, PickerWhere,
             ActionAutoPick, ActionPlayWeek,
             MessageNoFixture,
         };

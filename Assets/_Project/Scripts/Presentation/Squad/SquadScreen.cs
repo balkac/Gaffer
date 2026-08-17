@@ -43,7 +43,7 @@ namespace Gaffer.Presentation.Squad
         private readonly Label _standing = new Label();
         private readonly Label _shape = new Label();
         private readonly PitchView _pitch;
-        private readonly ScrollView _page = new ScrollView(ScrollViewMode.Vertical);
+        private readonly VisualElement _overlay = new VisualElement();
         private readonly VisualElement _elevenCard = new VisualElement();
         private readonly VisualElement _eleven = new VisualElement();
         private readonly VisualElement _bench = new VisualElement();
@@ -51,20 +51,36 @@ namespace Gaffer.Presentation.Squad
 
         // The lists ListView binds against. Held and refilled rather than replaced, so a rebind does not
         // hand the view a different collection every time (PERFORMANCE §8).
-        private readonly List<Player> _starters = new List<Player>();
+        //
+        // The eleven is kept as the SHEET rather than as players, because every question the screen asks
+        // about a starter — what is he worth, is he out of position, how much is that costing — is a
+        // question about the slot he is in, and a bare list of players cannot answer any of them.
+        private readonly List<SlottedPlayer> _sheet = new List<SlottedPlayer>();
         private readonly List<Player> _benched = new List<Player>();
 
+        // What the shape asks for at each slot, kept from the last outcome. The sheet above only knows the
+        // FILLED slots, and the one the manager most often taps is an empty one. Held rather than fetched:
+        // asking the session for it re-derived a whole LineupOutcome — squad walk, bench walk and a strength
+        // derivation — and the picker did that once PER ROW.
+        private IReadOnlyList<PlayerRole> _slotRoles = System.Array.Empty<PlayerRole>();
+
         private bool _showingPitch = true;
-        private int _benchPressed = -1;
-        private bool _benchDragging;
-        private UnityEngine.Vector2 _benchOrigin;
+
+        private readonly Button _modeToggle = new Button();
+        private readonly VisualElement _listCard = new VisualElement();
+        private readonly ScrollView _listScroll = new ScrollView(ScrollViewMode.Vertical);
+        private readonly VisualElement _picker = new VisualElement();
+        private readonly ScrollView _pickerScroll = new ScrollView(ScrollViewMode.Vertical);
+        private readonly VisualElement _pickerList = new VisualElement();
+        private int _pickerSlot = -1;
+        private int _pickerPlayer = -1;
 
         public SquadScreen(RunSession session, VisualElement root, LocalizedStrings text)
         {
             _session = session;
             _root = root;
             _text = text;
-            _pitch = new PitchView(OnSwapRequested);
+            _pitch = new PitchView(OnSwapRequested, OpenPlayerPicker);
         }
 
         /// <summary>Builds the screen once and draws the run's current state into it.</summary>
@@ -78,29 +94,46 @@ namespace Gaffer.Presentation.Squad
             _root.AddToClassList("theme");
             _root.AddToClassList("screen");
 
-            // ONE scroller, and it owns the page.
+            // TWO MODES, AND NEITHER SCROLLS UNDER A DRAG.
             //
-            // Everything used to sit in a plain container that could not scroll, so the content simply ran
-            // off the bottom, and the squad lists each brought a scroller of their own to compensate. That
-            // is the worst of both: a phone-sized page you cannot reach the end of, and lists that fight
-            // the page for the same drag. A screen scrolls; the things on it do not.
-            _page.AddToClassList("page");
-            _root.Add(_page);
-
-            _page.Add(BuildHeader());
-            _page.Add(BuildEleven());
-            var benchCard = new VisualElement();
-            benchCard.AddToClassList("card");
-            var benchTitle = new Label(Say(UiTextKeys.SquadBench));
-            benchTitle.AddToClassList("label");
-            benchCard.Add(benchTitle);
-            benchCard.Add(_bench);
-            _page.Add(benchCard);
-            _page.Add(BuildActions());
-
+            // This is the shape shipped football managers use, and it was arrived at the long way round.
+            // A board you drag on and a list you swipe cannot share a screen: every attempt — stopping
+            // propagation, hold-to-lift, thresholds — only moved which gesture felt broken.
+            //
+            // So the board mode FILLS the screen and scrolls nothing: header, pitch, actions, and a sheet
+            // for "who plays here". The list mode has no board at all and scrolls freely. One surface, one
+            // gesture, no arbitration.
+            //
+            // The page used to scroll as a whole, and the tactics board sat inside it. That is what made
+            // dragging a player fight the scroll: the same press-and-move means two things in the same
+            // place, and no amount of stopping propagation makes that not confusing to use. It also put
+            // the action buttons below the fold.
+            //
+            // So the board does not scroll, because a thing you drag on must not. The bench does, because
+            // it is the only part that can be longer than the screen. Header and actions are pinned, so
+            // "play the week" is always under the thumb.
+            _root.Add(BuildHeader());
+            _root.Add(BuildEleven());
+            _root.Add(BuildListMode());
             _message.AddToClassList("body");
-            _page.Add(_message);
+            _root.Add(_message);
+            _root.Add(BuildActions());
 
+            // The layer the drag ghost draws on. It sits ON the screen root — which is what carries the
+            // theme — because an overlay parented to the panel would resolve none of the tokens and draw
+            // as a zero-width, colourless nothing. That is exactly what "I cannot see what I am dragging"
+            // was.
+            _root.Add(BuildPicker());
+
+            _overlay.AddToClassList("overlay");
+            _overlay.pickingMode = PickingMode.Ignore;
+            _root.Add(_overlay);
+            _pitch.AttachOverlay(_overlay);
+
+            // Stated rather than assumed. The initial mode used to rest on which elements happened to
+            // have had a display set during construction, which is the sort of implicit start that
+            // survives until somebody reorders two lines.
+            ShowPitch(true);
             Draw(_session.Lineup());
         }
 
@@ -122,14 +155,28 @@ namespace Gaffer.Presentation.Squad
                 + "   " + Say(UiTextKeys.SquadMidfield) + " " + Rounded(strength.Midfield)
                 + "   " + Say(UiTextKeys.SquadDefence) + " " + Rounded(strength.Defence);
 
-            Refill(_starters, lineup.Starters);
+            _slotRoles = lineup.Formation.Slots;
+            RefillSheet(_sheet, lineup.Sheet);
             Refill(_benched, lineup.Bench);
-            FillList(_eleven, _starters, OnStarterTapped);
-            FillList(_bench, _benched, OnBenchTapped, draggableOntoPitch: true);
-            _pitch.Draw(lineup.Formation, lineup.Slots);
+
+            // The eleven is drawn from the SHEET, so each row can price the man where he actually stands.
+            // The bench is drawn from a plain list, because a substitute stands nowhere yet and his own
+            // role is the only honest number to show him.
+            FillSheet(_eleven, _sheet);
+            FillList(_bench, _benched, OnBenchTapped);
+            _pitch.Draw(lineup.Formation, lineup.Slots, _session.PositionalFit);
         }
 
         private static void Refill(List<Player> into, IReadOnlyList<Player> from)
+        {
+            into.Clear();
+            for (int i = 0; i < from.Count; i++)
+            {
+                into.Add(from[i]);
+            }
+        }
+
+        private static void RefillSheet(List<SlottedPlayer> into, IReadOnlyList<SlottedPlayer> from)
         {
             into.Clear();
             for (int i = 0; i < from.Count; i++)
@@ -144,36 +191,60 @@ namespace Gaffer.Presentation.Squad
         private VisualElement BuildEleven()
         {
             _elevenCard.AddToClassList("card");
-
-            var head = new VisualElement();
-            head.style.flexDirection = FlexDirection.Row;
-            head.style.alignItems = Align.Center;
-
-            var title = new Label(Say(UiTextKeys.SquadEleven));
-            title.AddToClassList("label");
-            title.style.flexGrow = 1;
-            head.Add(title);
-
-            var toggle = new Button { text = Say(UiTextKeys.ViewList) };
-            toggle.AddToClassList("button");
-            toggle.clicked += () => ShowPitch(!_showingPitch, toggle);
-            head.Add(toggle);
-
-            _elevenCard.Add(head);
+            _elevenCard.AddToClassList("card--grow");
             _elevenCard.Add(_pitch.Root);
-
-            _eleven.style.display = DisplayStyle.None;
-            _elevenCard.Add(_eleven);
-
             return _elevenCard;
         }
 
-        private void ShowPitch(bool pitch, Button toggle)
+        // The list mode: one scroller holding the eleven and the bench, and no board. Nothing here is
+        // draggable, so the scroll is unambiguous — which is the entire point of it being a separate mode.
+        private VisualElement BuildListMode()
+        {
+            _listCard.AddToClassList("card");
+            _listCard.AddToClassList("card--grow");
+            _listCard.style.display = DisplayStyle.None;
+
+            _listScroll.AddToClassList("bench-scroll");
+
+            // Drag the CONTENT to scroll, which is how a phone list works — a bar down the side is a
+            // desktop affordance and a thumb never finds it.
+            //
+            // CLAMPED, not elastic: the bounce at the ends is a nice touch on a device and reads as judder
+            // under a mouse, and the editor is where this gets looked at most. AlwaysVisible for the bar
+            // for the same reason judder happens at all — an Auto bar appears when the content grows past
+            // the frame, which narrows the content, which can shrink it back under the frame, which hides
+            // the bar again. That oscillation is a real flicker and it has nothing to do with scrolling.
+            _listScroll.touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped;
+            // No bar at all. It was AlwaysVisible only to stop an Auto bar oscillating — appearing when
+            // the content grew past the frame, narrowing the content, letting it fit again, hiding itself.
+            // Hidden is just as stable and is what a phone list looks like: the content IS the control.
+            _listScroll.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+
+            // Content-drag scrolling, which UI Toolkit gives to touch only and not to a mouse. Without it
+            // the list cannot be moved in the editor at all — the place this screen is looked at most.
+            new DragToScroll(_listScroll);
+
+            var elevenTitle = new Label(Say(UiTextKeys.SquadEleven));
+            elevenTitle.AddToClassList("label");
+            _listScroll.Add(elevenTitle);
+            _listScroll.Add(_eleven);
+
+            var benchTitle = new Label(Say(UiTextKeys.SquadBench));
+            benchTitle.AddToClassList("label");
+            benchTitle.style.marginTop = 24;
+            _listScroll.Add(benchTitle);
+            _listScroll.Add(_bench);
+
+            _listCard.Add(_listScroll);
+            return _listCard;
+        }
+
+        private void ShowPitch(bool pitch)
         {
             _showingPitch = pitch;
-            _pitch.Root.style.display = pitch ? DisplayStyle.Flex : DisplayStyle.None;
-            _eleven.style.display = pitch ? DisplayStyle.None : DisplayStyle.Flex;
-            toggle.text = Say(pitch ? UiTextKeys.ViewList : UiTextKeys.ViewPitch);
+            _elevenCard.style.display = pitch ? DisplayStyle.Flex : DisplayStyle.None;
+            _listCard.style.display = pitch ? DisplayStyle.None : DisplayStyle.Flex;
+            _modeToggle.text = Say(pitch ? UiTextKeys.ViewList : UiTextKeys.ViewPitch);
             _pitch.ClearSelection();
         }
 
@@ -190,7 +261,25 @@ namespace Gaffer.Presentation.Squad
 
             card.Add(_clubName);
             card.Add(_standing);
-            card.Add(_shape);
+
+            // The mode toggle lives in the HEADER, which neither mode hides.
+            //
+            // It used to sit inside the board's own card, so switching to the list hid the card — and the
+            // button with it. There was no way back: a one-way door into a mode, which is the kind of
+            // fault that makes an interface feel broken rather than merely awkward. A control that
+            // switches between two things cannot belong to either of them.
+            var strip = new VisualElement();
+            strip.AddToClassList("header__strip");
+
+            _shape.style.flexGrow = 1;
+            strip.Add(_shape);
+
+            _modeToggle.AddToClassList("button");
+            _modeToggle.text = Say(UiTextKeys.ViewList);
+            _modeToggle.clicked += () => ShowPitch(!_showingPitch);
+            strip.Add(_modeToggle);
+
+            card.Add(strip);
             return card;
         }
 
@@ -203,96 +292,301 @@ namespace Gaffer.Presentation.Squad
         /// and a scrollbar nobody asked for. The market screen will still use one — this is the same
         /// decision made honestly for a different number.</para>
         /// </summary>
-        private void FillList(VisualElement list, List<Player> source, System.Action<int> onTapped, bool draggableOntoPitch = false)
+        private void FillList(VisualElement list, List<Player> source, System.Action<int> onTapped)
         {
             list.Clear();
             for (int i = 0; i < source.Count; i++)
             {
-                // A draggable row gets NO tap handler of its own: its own PointerUp already decides
-                // between a tap and a drop, and a second handler would fire the tap again on every drop.
-                VisualElement row = MakePlayerRow(draggableOntoPitch ? null : onTapped);
+                VisualElement row = MakePlayerRow(onTapped);
                 BindPlayerRow(row, source, i);
-                if (draggableOntoPitch)
-                {
-                    RegisterBenchDrag(row, i);
-                }
-
                 list.Add(row);
             }
         }
 
+        // The eleven, each man priced where he stands. Same row as the bench uses, filled from the sheet
+        // instead of a player list, so the two lists cannot end up saying different things about one man.
+        private void FillSheet(VisualElement list, List<SlottedPlayer> sheet)
+        {
+            list.Clear();
+            for (int i = 0; i < sheet.Count; i++)
+            {
+                VisualElement row = MakePlayerRow(OnStarterTapped);
+                BindSlotRow(row, sheet[i], i);
+                list.Add(row);
+            }
+        }
+
+        // A starter's row: the slot's role (the shape asks for a right-back, and this is the right-back
+        // row), his rating IN THAT SLOT, and what standing there costs him.
+        private void BindSlotRow(VisualElement element, SlottedPlayer entry, int index)
+        {
+            Player player = entry.Player;
+            element.userData = index;
+
+            var name = (Label)element[0];
+            var role = (Label)element[1];
+            var rating = (Label)element[2];
+            var penalty = (Label)element[3];
+
+            name.text = player.Name;
+            role.text = Abbreviate(entry.Role);
+
+            // Both written unconditionally — the penalty label goes empty and the mark goes off when there
+            // is nothing to say. An early return would leave whatever the last bind put there, which is the
+            // stale-row bug SetRating already exists to avoid.
+            double value = PlayerRatings.ForSlot(player, entry.Role, _session.PositionalFit);
+            SetRating(rating, value);
+            SetPenalty(penalty, PlayerRatings.ForRole(player), value);
+            MarkFit(element, entry.Fit, markNatural: false);
+        }
+
+        // The drop, in the manager's own units, beside the number it was taken out of. Written only when
+        // there IS a drop: a screen that prints "−0" for everyone teaches the reader to stop looking.
+        private static void SetPenalty(Label penalty, double ownRole, double inSlot)
+        {
+            int cost = Whole(ownRole) - Whole(inSlot);
+            penalty.text = cost > 0 ? "−" + cost : string.Empty;
+        }
+
+        // EVERY band class is removed before the right one is added — see BindPlayerRow.
+        private static void SetRating(Label rating, double value)
+        {
+            rating.text = Rounded(value);
+            foreach (AbilityBand band in (AbilityBand[])System.Enum.GetValues(typeof(AbilityBand)))
+            {
+                rating.RemoveFromClassList(AbilityBands.ClassOf(band));
+            }
+
+            rating.AddToClassList(AbilityBands.ClassOf(AbilityBands.Of(value)));
+        }
+
+        private static string Abbreviate(PlayerRole role)
+        {
+            string name = role.ToString();
+            return name.Length <= 3 ? name.ToUpperInvariant() : name.Substring(0, 3).ToUpperInvariant();
+        }
+
         // Layout and look both come from the stylesheet; this only says what the parts ARE. Inline styles
         // here would be the palette leaking into C# one property at a time.
-        // A bench row can be dragged onto the board, which is the gesture a manager reaches for first:
-        // pick a substitute up and drop him where he should play. The row reports the gesture and the
-        // BOARD decides where it landed — it owns the slots, so it owns the hit-testing.
-        private void RegisterBenchDrag(VisualElement row, int index)
+        /// <summary>
+        /// Who can play in this slot. Tap a position, get the players.
+        ///
+        /// <para><b>This replaced dragging out of the bench.</b> That list scrolls, so a press on a row
+        /// already means "scroll"; making it also mean "pick up" put two gestures in one place, and every
+        /// threshold and hold-delay only changed which one felt broken. A sheet has no ambiguity — the
+        /// list scrolls, a tap chooses. Dragging survives where it is unambiguous: slot to slot on the
+        /// board, which scrolls nothing.</para>
+        /// </summary>
+        private void OpenPlayerPicker(int slot)
         {
-            row.RegisterCallback<PointerDownEvent>(evt =>
+            _pickerSlot = slot;
+            PlayerRole wanted = slot >= 0 && slot < _slotRoles.Count ? _slotRoles[slot] : default;
+            OpenSheet(Say(UiTextKeys.PickerWho), list =>
             {
-                _benchPressed = index;
-                _benchOrigin = evt.position;
-                _benchDragging = false;
-                row.CapturePointer(evt.pointerId);
-                evt.StopPropagation();
-            });
-
-            row.RegisterCallback<PointerMoveEvent>(evt =>
-            {
-                if (_benchPressed < 0 || !row.HasPointerCapture(evt.pointerId))
+                for (int i = 0; i < _benched.Count; i++)
                 {
-                    return;
-                }
+                    int index = i;
+                    VisualElement row = MakePlayerRow(_ => ChoosePlayer(index));
 
-                if (!_benchDragging && (evt.position - (UnityEngine.Vector3)_benchOrigin).magnitude >= 24f)
-                {
-                    _benchDragging = true;
-                    _pitch.BeginDragFromOutside(index < _benched.Count ? _benched[index].Name : string.Empty);
-                }
-
-                if (_benchDragging)
-                {
-                    _pitch.MoveDragGhost(evt.position);
-                    evt.StopPropagation();
+                    // Priced FOR THIS SLOT. The sheet used to show each candidate his own-role rating, so
+                    // a 78 who would be a 70 here still read as the best man available — the manager was
+                    // comparing the wrong numbers, and the game knew it.
+                    BindCandidateRow(row, _benched[index], wanted, index);
+                    MarkFit(row, PlayerRoles.FitFor(_benched[index].Role, wanted), markNatural: true);
+                    list.Add(row);
                 }
             });
+        }
 
-            row.RegisterCallback<PointerUpEvent>(evt =>
+        // A candidate's row: who he is, what he plays, and what he would be worth HERE — with the drop
+        // spelled out, because a lower number the manager cannot account for is just a worse-looking player.
+        private void BindCandidateRow(VisualElement element, Player player, PlayerRole slotRole, int index)
+        {
+            element.userData = index;
+
+            var name = (Label)element[0];
+            var role = (Label)element[1];
+            var rating = (Label)element[2];
+            var penalty = (Label)element[3];
+
+            name.text = player.Name;
+            role.text = Abbreviate(player.Role);
+
+            double value = PlayerRatings.ForSlot(player, slotRole, _session.PositionalFit);
+            SetRating(rating, value);
+            SetPenalty(penalty, PlayerRatings.ForRole(player), value);
+        }
+
+        /// <summary>
+        /// Where this player plays. Tap a player, get the positions — the mirror of the sheet above.
+        ///
+        /// <para><b>Symmetry is the point.</b> Tapping a bench player used to push him into the first free
+        /// slot, which is a decision the game made and never explained: the manager taps a name and
+        /// somebody he did not choose comes off. Both directions are a CHOICE now, and they are the same
+        /// gesture answering the same question from either end.</para>
+        /// </summary>
+        private void OpenSlotPicker(int benchIndex)
+        {
+            _pickerPlayer = benchIndex;
+            LineupOutcome lineup = _session.Lineup();
+            Player candidate = benchIndex < _benched.Count ? _benched[benchIndex] : null;
+            PlayerRole his = candidate != null ? candidate.Role : default;
+
+            OpenSheet(Say(UiTextKeys.PickerWhere), list =>
             {
-                evt.StopPropagation();
-                if (row.HasPointerCapture(evt.pointerId))
+                IReadOnlyList<PlayerRole> slots = lineup.Formation.Slots;
+                for (int i = 0; i < slots.Count; i++)
                 {
-                    row.ReleasePointer(evt.pointerId);
-                }
-
-                int player = _benchPressed;
-                _benchPressed = -1;
-                if (!_benchDragging)
-                {
-                    OnBenchTapped(player);
-                    return;
-                }
-
-                _benchDragging = false;
-                _pitch.EndDragFromOutside();
-
-                int slot = _pitch.SlotUnder(evt.position);
-                if (slot >= 0 && player >= 0 && player < _benched.Count)
-                {
-                    Apply(_session.PlaceInSlot(slot, _benched[player].Id));
+                    int slot = i;
+                    Player occupant = slot < lineup.Slots.Count ? lineup.Slots[slot] : null;
+                    VisualElement row = MakeSlotRow(slots[slot], occupant, candidate, () => ChooseSlot(slot));
+                    MarkFit(row, PlayerRoles.FitFor(his, slots[slot]), markNatural: true);
+                    list.Add(row);
                 }
             });
+        }
 
-            row.RegisterCallback<PointerCaptureOutEvent>(_ =>
+        /// <summary>
+        /// How well a player fits a slot, read from the SAME rule the match charges him by
+        /// (<see cref="PlayerRoles.FitFor"/>). Not decoration: a mark the screen worked out for itself would
+        /// be a second opinion about what "out of position" means, and the two would drift the first time
+        /// either moved — which is how a screen ends up promising a fit the simulation then penalises.
+        ///
+        /// <para><paramref name="markNatural"/> is the only difference between the two surfaces that use
+        /// this. A sheet of CANDIDATES marks the good fit, because the manager is looking for it; the eleven
+        /// he has already picked does not, because highlighting all eleven would wash the list in accent and
+        /// say nothing. Both mark the bad fits identically, so one class means one thing everywhere.</para>
+        /// </summary>
+        private static void MarkFit(VisualElement row, PositionalFit fit, bool markNatural)
+        {
+            switch (fit)
             {
-                if (_benchDragging)
-                {
-                    _benchDragging = false;
-                    _pitch.EndDragFromOutside();
-                }
+                case PositionalFit.Natural:
+                    row.EnableInClassList("row--natural", markNatural);
+                    break;
+                case PositionalFit.SameLine:
+                    row.AddToClassList("row--samline");
+                    break;
+                case PositionalFit.Impossible:
+                    row.AddToClassList("row--wrong");
+                    break;
+                default:
+                    row.AddToClassList("row--misfit");
+                    break;
+            }
+        }
 
-                _benchPressed = -1;
-            });
+        private void ChoosePlayer(int index)
+        {
+            int slot = _pickerSlot;
+            CloseSheet();
+            if (slot >= 0 && index >= 0 && index < _benched.Count)
+            {
+                Apply(_session.PlaceInSlot(slot, _benched[index].Id));
+            }
+        }
+
+        private void ChooseSlot(int slot)
+        {
+            int index = _pickerPlayer;
+            CloseSheet();
+            if (slot >= 0 && index >= 0 && index < _benched.Count)
+            {
+                Apply(_session.PlaceInSlot(slot, _benched[index].Id));
+            }
+        }
+
+        private void OpenSheet(string title, System.Action<VisualElement> fill)
+        {
+            _pickerList.Clear();
+
+            var heading = new Label(title);
+            heading.AddToClassList("label");
+            _pickerList.Add(heading);
+
+            fill(_pickerList);
+
+            _picker.style.display = DisplayStyle.Flex;
+            _picker.BringToFront();
+        }
+
+        private void CloseSheet()
+        {
+            _pickerSlot = -1;
+            _pickerPlayer = -1;
+            _picker.style.display = DisplayStyle.None;
+            _pitch.ClearSelection();
+        }
+
+        /// <summary>
+        /// A row that names a POSITION and who is in it, so choosing where a substitute plays also says who
+        /// he would displace. A choice that hid its cost would be the auto-assign problem wearing a sheet.
+        ///
+        /// <para>The number is what the CANDIDATE would be worth in this slot, not what the occupant is
+        /// worth — the manager is choosing where to put one man, so the figure that changes as he reads down
+        /// the sheet has to be that man's. The occupant is named beside it because displacing him is the
+        /// other half of the price.</para>
+        /// </summary>
+        private VisualElement MakeSlotRow(PlayerRole role, Player occupant, Player candidate, System.Action onChosen)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("row");
+
+            var roleLabel = new Label(Abbreviate(role));
+            roleLabel.AddToClassList("row__role");
+            roleLabel.pickingMode = PickingMode.Ignore;
+            row.Add(roleLabel);
+
+            var name = new Label(occupant != null ? occupant.Name : "—");
+            name.AddToClassList("row__name");
+            name.pickingMode = PickingMode.Ignore;
+            row.Add(name);
+
+            var rating = new Label();
+            rating.AddToClassList("row__rating");
+            rating.pickingMode = PickingMode.Ignore;
+            row.Add(rating);
+
+            // Child [3], the same shape every row in this screen has — SetPenalty writes into it.
+            var penalty = new Label();
+            penalty.AddToClassList("row__penalty");
+            penalty.pickingMode = PickingMode.Ignore;
+            row.Add(penalty);
+
+            if (candidate != null)
+            {
+                double value = PlayerRatings.ForSlot(candidate, role, _session.PositionalFit);
+                SetRating(rating, value);
+                SetPenalty(penalty, PlayerRatings.ForRole(candidate), value);
+            }
+
+            row.RegisterCallback<ClickEvent>(_ => onChosen());
+            return row;
+        }
+
+        private VisualElement BuildPicker()
+        {
+            _picker.AddToClassList("sheet");
+            _picker.style.display = DisplayStyle.None;
+
+            // Tapping the dimmed ground behind the sheet dismisses it — the way out has to be as obvious
+            // as the way in, and a phone offers no back button on every device.
+            var scrim = new VisualElement();
+            scrim.AddToClassList("sheet__scrim");
+            scrim.RegisterCallback<ClickEvent>(_ => CloseSheet());
+            _picker.Add(scrim);
+
+            var panel = new VisualElement();
+            panel.AddToClassList("sheet__panel");
+            _pickerScroll.AddToClassList("sheet__scroll");
+            _pickerScroll.touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped;
+            _pickerScroll.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+            new DragToScroll(_pickerScroll);
+            _pickerScroll.Add(_pickerList);
+            panel.Add(_pickerScroll);
+            _picker.Add(panel);
+
+            return _picker;
         }
 
         private static VisualElement MakePlayerRow(System.Action<int> onTapped)
@@ -336,6 +630,14 @@ namespace Gaffer.Presentation.Squad
             rating.pickingMode = PickingMode.Ignore;
             row.Add(rating);
 
+            // Always built, usually empty. A penalty added only to the rows that have one would push the
+            // rating column left on those rows alone, and a column that moves from line to line is harder
+            // to read than the number it is trying to explain.
+            var penalty = new Label();
+            penalty.AddToClassList("row__penalty");
+            penalty.pickingMode = PickingMode.Ignore;
+            row.Add(penalty);
+
             return row;
         }
 
@@ -354,20 +656,13 @@ namespace Gaffer.Presentation.Squad
             var rating = (Label)element[2];
 
             name.text = player.Name;
-            role.text = player.Role.ToString().Substring(0, 3).ToUpperInvariant();
+            role.text = Abbreviate(player.Role);
 
-            double value = PlayerRatings.ForRole(player);
-            rating.text = Rounded(value);
-
-            // EVERY band class is removed before the right one is added. A reused row carries whatever the
-            // last player left on it otherwise, and the bug shows up as one row in a scrolled list wearing
-            // somebody else's brightness.
-            foreach (AbilityBand band in (AbilityBand[])System.Enum.GetValues(typeof(AbilityBand)))
-            {
-                rating.RemoveFromClassList(AbilityBands.ClassOf(band));
-            }
-
-            rating.AddToClassList(AbilityBands.ClassOf(AbilityBands.Of(value)));
+            // A player with no slot is worth what his own role is worth — there is nothing to charge him
+            // for yet. EVERY band class is removed before the right one is added (see SetRating): a reused
+            // row carries whatever the last player left on it otherwise, and the bug shows up as one row in
+            // a scrolled list wearing somebody else's brightness.
+            SetRating(rating, PlayerRatings.ForRole(player));
         }
 
         private VisualElement BuildActions()
@@ -397,31 +692,21 @@ namespace Gaffer.Presentation.Squad
 
         private void OnStarterTapped(int index)
         {
-            if (index >= 0 && index < _starters.Count)
+            if (index >= 0 && index < _sheet.Count)
             {
-                Apply(_session.ToggleStarter(_starters[index].Id));
+                Apply(_session.ToggleStarter(_sheet[index].Player.Id));
             }
         }
 
-        // A bench tap means two different things, and which one is decided by whether a slot is held. With
-        // one picked up it is "put HIM there", which is the whole point of the board; with nothing held it
-        // falls back to the list behaviour of pushing him into the first free place.
+        // Tapping a substitute asks WHERE HE SHOULD PLAY. It used to push him into the first free slot,
+        // which is a decision the game made silently: the manager taps a name and somebody he did not
+        // choose comes off.
         private void OnBenchTapped(int index)
         {
-            if (index < 0 || index >= _benched.Count)
+            if (index >= 0 && index < _benched.Count)
             {
-                return;
+                OpenSlotPicker(index);
             }
-
-            int slot = _pitch.SelectedSlot;
-            if (slot >= 0)
-            {
-                _pitch.ClearSelection();
-                Apply(_session.PlaceInSlot(slot, _benched[index].Id));
-                return;
-            }
-
-            Apply(_session.ToggleStarter(_benched[index].Id));
         }
 
         // Two slots tapped in turn. The core decides what that MEANS — a straight swap when both are
@@ -453,6 +738,10 @@ namespace Gaffer.Presentation.Squad
             }
 
             ShowMessage(Describe(week.Value));
+            // Stated rather than assumed. The initial mode used to rest on which elements happened to
+            // have had a display set during construction, which is the sort of implicit start that
+            // survives until somebody reorders two lines.
+            ShowPitch(true);
             Draw(_session.Lineup());
         }
 
@@ -496,7 +785,15 @@ namespace Gaffer.Presentation.Squad
 
         private static string Rounded(double value)
         {
-            return Mathf.RoundToInt((float)value).ToString();
+            return Whole(value).ToString();
+        }
+
+        // The number as the manager reads it. A cost is worked out from the ROUNDED pair rather than
+        // rounded afterwards, so "78" next to "70" is always marked "−8" and never "−7" because the
+        // unrounded difference happened to be 7.6.
+        private static int Whole(double value)
+        {
+            return Mathf.RoundToInt((float)value);
         }
     }
 }

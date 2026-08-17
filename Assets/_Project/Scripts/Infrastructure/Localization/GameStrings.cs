@@ -84,6 +84,14 @@ namespace Gaffer.Infrastructure.Localization
                         "List",
                         "Liste"),
                     Row(
+                        "ui.squad.picker_who",
+                        "WHO PLAYS HERE",
+                        "BURAYA KİM OYNASIN"),
+                    Row(
+                        "ui.squad.picker_where",
+                        "WHERE DOES HE PLAY",
+                        "NEREDE OYNASIN"),
+                    Row(
                         "ui.action.auto_pick",
                         "Auto-pick",
                         "Otomatik seç"),

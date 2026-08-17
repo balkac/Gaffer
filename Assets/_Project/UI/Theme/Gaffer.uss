@@ -79,15 +79,19 @@
 .screen {
     flex-grow: 1;
     background-color: var(--pitch);
-    /* The panel is a phone held upright: the screen fills it, and the content scrolls inside. */
+    /* A phone held upright: the screen fills it and lays its regions out top to bottom. */
     height: 100%;
+    flex-direction: column;
     padding-top: var(--space-m);
     padding-bottom: var(--space-m);
     padding-left: var(--space-m);
     padding-right: var(--space-m);
 }
 
+/* A card holds its size by default. Only the one marked --grow gives and takes, which is what keeps the
+   header and the actions where the manager left them instead of squashing as the squad changes size. */
 .card {
+    flex-shrink: 0;
     background-color: var(--pitch-raised);
     border-left-color: var(--pitch-line);
     border-right-color: var(--pitch-line);
@@ -108,6 +112,13 @@
     margin-bottom: var(--space-m);
 }
 
+/* The header's bottom line: the shape on the left, the mode toggle on the right. */
+.header__strip {
+    flex-direction: row;
+    align-items: center;
+    margin-top: var(--space-s);
+}
+
 /* ----- lists -----------------------------------------------------------------------------------------
    A row is a tap target first and a line of data second. 56px clears the 44px minimum with room for the
    separator, and the separator is a hairline of --pitch-line rather than a box: depth from lines and
@@ -116,7 +127,8 @@
 .row {
     flex-direction: row;
     align-items: center;
-    min-height: var(--row-height);
+    height: var(--row-height);
+    flex-shrink: 0;
     padding-left: var(--space-s);
     padding-right: var(--space-s);
     border-bottom-width: 2px;
@@ -124,22 +136,21 @@
 }
 
 /* Press feedback. A tap with no acknowledgement reads as a tap that did not register — the player
-   presses again, and now the game has heard two. The row lifts its ground and settles back a hair,
-   fast enough to feel like a button and slow enough to see: 90ms is about the shortest a change can be
-   and still be noticed. */
-.row:hover {
-    background-color: rgba(234, 242, 238, 0.04);
-}
+   presses again, and now the game has heard two.
 
+   NO :hover ON A ROW, and that is a scrolling fix rather than a style choice. A phone has no hover, and
+   on a desktop every row that slides under the pointer during a scroll enters and leaves the hover state
+   — each one starting a 90ms colour transition. A list of twenty doing that at once is the shimmer that
+   reads as the scroll "juddering". Press feedback stays, because a press is a real event; hovering is
+   the pointer standing still while the world moves. */
 .row:active {
     background-color: rgba(255, 46, 126, 0.14);
-    scale: 0.985 0.985;
 }
 
 .row {
-    transition-property: background-color, scale;
-    transition-duration: 90ms, 90ms;
-    transition-timing-function: ease-out, ease-out;
+    transition-property: background-color;
+    transition-duration: 90ms;
+    transition-timing-function: ease-out;
 }
 
 .button:hover {
@@ -156,10 +167,18 @@
     transition-timing-function: ease-out, ease-out;
 }
 
+/* Fixed height, no wrapping. A name that wrapped would change the row's height, which changes whether a
+   scrollbar is needed, which changes the width, which re-wraps the name — a layout loop that shows up as
+   the list vibrating. Rows in a virtualised or long list must have a height that does not depend on their
+   content. */
 .row__name {
     flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
     color: var(--chalk);
     font-size: var(--text-body);
+    white-space: nowrap;
+    text-overflow: ellipsis;
     -unity-text-align: middle-left;
 }
 
@@ -179,12 +198,28 @@
     -unity-text-align: middle-right;
 }
 
+/* What playing out of position costs, spelled out beside the number it was taken out of. Muted and small
+   on purpose: the rating is the figure being compared, and this is its footnote. It is NOT red — the
+   semantic colours belong to results (ART_STYLE §2), and a penalty painted like a defeat would make an
+   ordinary tactical compromise read as a disaster. */
+.row__penalty {
+    width: 70px;
+    color: var(--muted);
+    font-size: var(--text-body);
+    -unity-text-align: middle-right;
+}
+
 /* ----- the pitch --------------------------------------------------------------------------------------
    A tactics board, not a football pitch: no grass, no lines, no green. The shape reads from where the
    cards SIT, which is the broadcast-graphic way of drawing a formation and keeps the single-accent rule
    intact — a green pitch would be the second bright colour ART_STYLE forbids. */
 
+/* The board FILLS the space it is given and never scrolls. Bands share the height between them, so a
+   4-4-2 and a 3-5-2 both fit whatever phone they land on — which is what lets the whole mode be
+   gesture-unambiguous: there is nothing here to swipe. */
 .pitch {
+    flex-grow: 1;
+    justify-content: space-around;
     background-color: var(--pitch);
     border-left-color: var(--pitch-line);
     border-right-color: var(--pitch-line);
@@ -207,7 +242,7 @@
     flex-direction: row;
     justify-content: space-around;
     align-items: center;
-    margin-bottom: var(--space-m);
+    flex-shrink: 1;
 }
 
 .slot {
@@ -275,6 +310,29 @@
     -unity-font-style: bold;
 }
 
+/* The cost of standing here, on the tile. The rating above it is ALREADY the charged number — this says
+   where the missing points went, so a weaker-looking side can be accounted for rather than merely felt. */
+.slot__penalty {
+    color: var(--muted);
+    font-size: var(--text-small);
+}
+
+/* Out of position, on a tile — the same two tiers and the same names the rows use (.row--samline /
+   .row--misfit), so a fit means one thing whichever surface the manager happens to be looking at. A
+   compromise on the same line gets a quiet edge; anything further gets the edge and a dimming, so a
+   genuinely wrong tile is visible from across the board without a second bright colour entering the
+   palette. */
+.slot--samline {
+    border-left-color: var(--pitch-line);
+    border-left-width: 5px;
+}
+
+.slot--misfit {
+    border-left-color: var(--muted);
+    border-left-width: 5px;
+    opacity: 0.8;
+}
+
 /* The card in your hand while you drag. Positioned absolutely against the panel so it draws over
    everything, and deliberately unmistakable: this is the element that tells the manager the gesture
    was heard at all. */
@@ -298,6 +356,34 @@
     opacity: 0.35;
 }
 
+/* ----- the phone layout -------------------------------------------------------------------------------
+   Fixed regions, one scroller. The board must not scroll, because a thing you DRAG on cannot also be a
+   thing you swipe on — the same gesture in the same place meaning two things is confusing however it is
+   arbitrated. The bench is the only part that can outgrow the screen, so it is the only part that
+   scrolls, and the actions stay pinned where a thumb reaches. */
+
+.card--grow {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 220px;
+    /* The scroller inside needs a parent that can be smaller than its content, or it never scrolls. */
+    overflow: hidden;
+}
+
+.bench-scroll {
+    flex-grow: 1;
+}
+
+/* The drag layer. Absolutely positioned over everything and transparent to touch, so the card in your
+   hand never blocks the slot you are aiming at, and never affects the layout it floats above. */
+.overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
 /* ----- the page --------------------------------------------------------------------------------------
    One scroller for the whole screen. The scrollbar is a hairline rather than a control: on a phone the
    drag IS the scroll, and a chrome-heavy bar spends attention on something nobody presses. */
@@ -306,10 +392,12 @@
     flex-grow: 1;
 }
 
+.bench-scroll .unity-scroller--vertical,
 .page .unity-scroller--vertical {
     width: 10px;
 }
 
+.bench-scroll .unity-scroller--vertical .unity-base-slider__dragger,
 .page .unity-scroller--vertical .unity-base-slider__dragger {
     background-color: var(--pitch-line);
     border-left-width: 0;
@@ -322,6 +410,7 @@
     border-bottom-right-radius: 5px;
 }
 
+.bench-scroll .unity-scroller--vertical .unity-base-slider__tracker,
 .page .unity-scroller--vertical .unity-base-slider__tracker {
     background-color: rgba(0, 0, 0, 0);
     border-left-width: 0;
@@ -330,9 +419,53 @@
     border-bottom-width: 0;
 }
 
+.bench-scroll .unity-scroller__low-button,
+.bench-scroll .unity-scroller__high-button,
 .page .unity-scroller__low-button,
 .page .unity-scroller__high-button {
     display: none;
+}
+
+/* ----- the sheet -------------------------------------------------------------------------------------
+   A bottom sheet: the phone answer to "who plays here". It covers the screen, dims what is behind, and
+   scrolls freely — with nothing to drag out of it, the list can simply be a list. */
+
+.sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.sheet__scrim {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(6, 14, 13, 0.82);
+}
+
+.sheet__panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 70%;
+    background-color: var(--pitch-raised);
+    border-top-color: var(--accent);
+    border-top-width: 4px;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    padding-left: var(--space-m);
+    padding-right: var(--space-m);
+    padding-top: var(--space-m);
+    padding-bottom: var(--space-l);
+}
+
+.sheet__scroll {
+    flex-grow: 1;
 }
 
 /* ----- type ------------------------------------------------------------------------------------------
@@ -363,6 +496,36 @@
     color: var(--chalk);
     font-size: var(--text-body);
     -unity-text-align: middle-right;
+}
+
+/* FIT, on a row. One class per tier, and the same four everywhere a row appears — a sheet of candidates
+   and the eleven itself differ only in whether the natural mark is applied at all (marking all eleven
+   would wash the list in accent and say nothing).
+
+   The wash marks IMPORTANCE, never value — the same rule the role-key row follows (ART_STYLE §4.1/2), so
+   brightness stays the only thing that means "how good". Nothing here is red: the semantic colours belong
+   to results (ART_STYLE §2), and a tactical compromise painted like a defeat would read as a disaster. */
+.row--natural {
+    background-color: rgba(255, 46, 126, 0.09);
+    border-left-color: var(--accent);
+    border-left-width: 5px;
+}
+
+.row--samline {
+    border-left-color: var(--pitch-line);
+    border-left-width: 5px;
+}
+
+.row--misfit {
+    border-left-color: var(--muted);
+    border-left-width: 5px;
+    opacity: 0.75;
+}
+
+/* The one pairing the game refuses to pick for you — a keeper out of goal, an outfielder in it. Dimmed
+   hard rather than reddened, so it reads as "not really an option" instead of "danger". */
+.row--wrong {
+    opacity: 0.45;
 }
 
 /* ----- the brightness ramp -------------------------------------------------------------------------- */
