@@ -6,6 +6,65 @@
 
 ---
 
+## Tahta artık bir saha · 2026-08-30
+
+**Sorun, ancak görülünce anlaşıldı.** Ekran görüntüsü alınabilir olur olmaz çıkan ikinci bulgu: `ART_STYLE` "matchday broadcast graphics" diyor ama tahtada tek bir saha çizgisi yoktu — koyu bir dikdörtgen üzerinde kart ızgarası. Dört sıra kart, ona bakan göze *nerede* durduklarını söylemiyordu.
+
+**Ne yapıldı.** `PitchView`'a kartların **arkasında** duran, mutlak konumlu ve `PickingMode.Ignore` bir işaret katmanı: iki ceza sahası, iki altı pas, orta çizgi, orta yuvarlak, orta nokta. Ölçüler gerçek bir 105×68 sahanın oranları olarak **yüzdeyle** yazıldı (ceza sahası 40.3/68 geniş, 16.5/105 derin; altı pas 18.3×5.5; yuvarlak çapı 18.3), böylece tahta hangi yükseklikte olursa olsun oranını koruyor — bir telefonda doğru olan piksel sayıları taşımıyor. Katman **bir kez** kuruluyor ve her `Draw`'dan sonra yeniden ekleniyor; hiç değişmeyen yedi elemanı her çizimde yeniden yaratmak sabit bir şeyi ekranda tutmak için yedi tahsis demekti (PERFORMANCE §8).
+
+**Ve sonra düzeltilen.** İlk çekimde çizgiler kart kenarlarıyla **aynı ağırlıktaydı** (ikisi de `--pitch-line`). Kartlar opak ve çizgilerin üstünde duruyor — kaleci kendi altı pasının içinde, forvetler karşı ceza sahasının kenarında — yani çizgiler sürekli kesiliyor. Eşit ağırlıkta bu kesilmeler **kırık** okunuyordu. Çözüm katmana tek bir `opacity: 0.45`: kesilmeler artık kartların daha yakında olması olarak okunuyor, ve palet sahip olduğu üç yeşilde kalıyor — markalar için ayrı bir renk token'ı eklenmedi.
+
+**Ölçüt olarak bırakılan kural.** Çizgiler bilgi değil dokudur. Bir marka bir reytingle dikkat için yarışıyorsa fazla parlaktır; menajer reyting için geldi, saha ona nerede durduğunu söylüyor.
+
+---
+
+## Mevkiler artık okuyanın dilinde · 2026-08-30
+
+**Sorun.** Tahtadaki ve listedeki rol etiketi `role.ToString().Substring(0, 3).ToUpperInvariant()` ile üretiliyordu; ekranda `GOA`, `RIG`, `CEN`, `LEF`, `STR` yazıyordu. İki ayrı kusur: **(1)** NON-NEGOTIABLE #8 ihlali — kodda düz oyuncu-yüzü metin; **(2)** kısaltma olarak da kötü, `GOA` hiçbir dilde kaleci demiyor. Mekanizma aslında vardı (`PlayerRoles.GetShortLabelKey`, `role.<x>.abbrev` anahtarları) ama string table'da karşılıkları yoktu ve `PitchView` metin çözücü almıyordu.
+
+**Karar: iki dil, iki set.** Football Manager dünya çapında TEK kod seti gönderir — Türkçe FM'de de `GK`, `DC`, `DR` yazar — çünkü otuz dilde tek seti sürdürmek ucuz. Biz iki dil gönderiyoruz ve Türk futbolunun kendi kısaltmaları zaten var: bir Türk oyuncu `STP` ve `DOS`'u çevirmeden okur, `DC`'yi ise önce İngilizcesini hatırlayarak. İngilizce tarafta da FM'in mevki kodları yerine yaygın olanlar seçildi (`RB`, `DR` değil).
+
+| Rol | EN | TR | Rol | EN | TR |
+|---|---|---|---|---|---|
+| Goalkeeper | GK | KL | AttackingMidfield | AM | OOS |
+| RightBack | RB | SĞB | RightMidfield | RM | SĞO |
+| CentreBack | CB | STP | LeftMidfield | LM | SLO |
+| LeftBack | LB | SLB | RightWing | RW | SĞA |
+| DefensiveMidfield | DM | DOS | LeftWing | LW | SLA |
+| CentralMidfield | CM | MOS | Striker | ST | FV |
+
+**Nerede duruyor.** Kelimeler `GameStrings`'te (Infrastructure — #8'in katman yarısı); `PitchView` artık `SquadScreen` gibi `LocalizedStrings` alıyor. `UiTextKeys.All` rol anahtarlarını **enum'dan türetiyor**: yeni bir `PlayerRole` eklenince liste kendiliğinden büyür, guard onun kopyasını ister, ve yazılmış bir `StringTableSO` de onu sağlamak zorunda kalır — `GameRoot` tabloyu tam bu listeye karşı doğruluyor. Elle tutulan bir liste bayatlardı; bugün `_strings` null olduğu için o yol sessiz bir mayındı.
+
+**Guard'lar (`UiCopyTests`).** Her anahtarın her yerelde karşılığı var (mevcut guard, artık rolleri de kapsıyor). Her kısaltma **≤3 karakter** — `.row__role` sabit 100px'lik bir kolon, taşan metin akmaz, kırpılır. Ve bir yerelde iki rol aynı etikete sahip olamaz: bu üçü içinde en sinsisi, çünkü tahta doğru görünür ve yanlış okunur.
+
+**Doğrulama.** `dotnet test` 584 yeşil, `dotnet format` temiz, `recompile` hatasız — ve ilk kez **bakılarak**: EN'de `GK/RB/CB/LB/RM/CM/LM/ST`, TR'de `KL/SĞB/STP/SLB/SĞO/MOS/SLO/FV`. `Ğ` font atlasında mevcut ve düzgün çiziliyor, ki bunu kod okuyarak bilmenin yolu yoktu.
+
+**Yol boyunca çıkan hata.** `BindPlayerRow` `static`'ti ve artık instance olan `Abbreviate`'i çağırıyordu. `dotnet test` bunu göremezdi (`SquadScreen` köprüde yok); yeni `recompile` kapısı **2 saniyede** yakaladı — aracın kurulduğu günkü ilk karşılığı.
+
+---
+
+## Unity CLI dördüncü kapı oldu · 2026-08-30
+
+Unity, Temmuz 2026'da standalone bir `unity` binary'si yayınladı; Hub onu `~/.unity/bin/unity`'ye kurmuş (`1.0.0-beta.5`, PATH'te değil). Bizim için değerli olan tek komut `unity test`.
+
+**Neyi çözüyor.** Hem `CLAUDE.md` hem bu dosya baştan beri bir boşluğu kabul ediyordu: `dotnet test` köprüsü ile tek kullanımlık typecheck csproj'unun ikisi de assembly sınırlarını görmüyor. Typecheck bütün katmanları *tek* assembly'de derliyor, dolayısıyla eksik bir `.asmdef` referansı ona görünmüyor — 2026-08-16'daki "headless yeşil, editör kırmızı" olayı tam buydu. `Infrastructure`'ın geri kalanı, `Composition`, `Presentation` ve `Editor` ise hiçbir otomatik denetimden geçmiyordu; tek çare "Unity'yi aç ve bak" idi, yani doğrulama insana bağlıydı.
+
+`unity test` projeyi batch modda gerçek Editor'de açıyor ve **tek bir test koşmadan önce bütün assembly'leri derliyor**. Böylece asmdef grafiği + dört kör katman insan müdahalesi olmadan doğrulanıyor.
+
+**Ölçüm (temiz ağaç, `f0d2df1`).** 584/584 yeşil — 582 `Gaffer.Tests` + 2 `Gaffer.Tests.Unity`. Testlerin kendisi 1,85 sn; toplam duvar saati ~4 dk (editör açılışı + import). İlk koşuda Unity derlemeyi 17 Ağustos önbelleğinden aldığı için (kaynak değişmemişti) kapının gerçekten kapandığı ayrıca kanıtlandı: `Presentation/Squad/PitchView.cs`'e bilerek bir derleme hatası konup koşuldu → `exit 6`, `Aborting batchmode due to failure: Scripts have compiler errors.` Dosya geri alındı, ağaç temiz bırakıldı.
+
+**Karar.** `unity test` dördüncü doğrulama kapısıdır. `dotnet test`'in yerine **geçmez**: o saniyeler sürer ve her düzenlemede koşar, bu ~4 dk sürer ve yalnız `dotnet test`'in göremediği yere dokunulduğunda koşar. Projede hiçbir dosya değişmedi — ne `manifest.json`, ne `.asmdef`, ne kod; yalnız doğrulama akışı büyüdü.
+
+**`com.unity.pipeline` da kuruldu** (`0.5.0-exp.1`, sürüm sabitlendi; sahibinin onayıyla). Açık Editor'e `localhost:7800`'den komut geçiriyor — `recompile`, `get_console_logs`, `capture_game_view`, `menu`, `eval`, `run_tests`, sahne/asset düzenleme. İki ölçülmüş kazanç: **(1)** `recompile` dördüncü kapının derlediği aynı kör katmanları **~9 saniyede** derliyor (`unity test` ~4 dk) — iç döngü kapısı bu oldu; **(2)** `capture_game_view --source screen` ile Faz 7 ekranları **görülebiliyor**. Kurulumdan sonra dördüncü kapı tekrar koşuldu: 584/584 yeşil.
+
+**Yan etki (bilinçli bırakıldı).** Paket kurulumu `ProjectSettings.asset`'te `runInBackground`'ı `0 → 1` yaptı — Editor odak dışındayken isteklere cevap verebilsin diye. Bu bir *player* ayarı, yani build'e de gidiyor; mobilde pratik etkisi yok (iOS/Android uygulamayı zaten askıya alır), ama bir dev aracının ürün ayarını değiştirmesi kayda geçsin.
+
+**Tuzak.** `capture_game_view --save_path` göreli verilirse proje köküne değil `Assets/` altına çözülür ve orada `.meta` üretir; proje kökü dışına ise hiç yazamaz.
+
+**İlk görüntünün gösterdiği (Squad ekranı, 1080×1920).** İki şey kod okuyarak yakalanamayacakken gözle çıktı: rol kısaltmaları ekranda `GOA` / `RIG` / `CEN` / `LEF` / `STR` olarak görünüyor — NON-NEGOTIABLE #8 ihlali artık varsayım değil, ve kısaltmalar anlamsız (`GOA` = kaleci). İkincisi saha, ART_STYLE'ın "Matchday Broadcast Graphics" dili için fazla çıplak: saha çizgisi/orta yuvarlak yok, kalecinin üstünde geniş ölü alan var, kart ızgarasından ibaret. İkisi de sahibinin kararını bekliyor.
+
+---
+
 ## Pozisyon dışı oynatmak artık bir şeye mal oluyor · 2026-08-17
 
 Sahibi sordu: *"Önerin FM'de de böyle mi, mobilinde özellikle?"* — ve araştırma öneriyi hem doğruladı hem iki sayısını düzeltti. FM, oyuncunun pozisyon uyumunu 1–20 tutup **`rating × (1 − (20 − uyum) / 46)`** uyguluyor (puan başına ~%2.17); FM-Arena'nın maç motoru testleri kademeleri **Accomplished −%10 · Competent −%15 · Unconvincing −%20 · Awkward −%35 · Ineffectual −%40** olarak ölçmüş (11'i de Ineffectual olan takım 2.1 → 1.2 puan/maça düşüyor). Mobil de aynı: FM26 Mobile'da her oyuncunun "Player Positions" ekranı ve renk kodlu pozisyon yetkinliği var. Önerdiğim aynı-hat ×0.92 → **×0.90** (FM'in Accomplished'ı), kaleci-başkasında ×0.5 → **×0.60**: FM'in tabanı ~0.57 ve en kötü kademesi bile maç kazanıyor, çünkü **bir oyuncuyu silen ceza menajere takım kâğıdını okumayı değil ondan korkmayı öğretir.**
@@ -370,7 +429,8 @@ Asıl sayı bunun altında: **gelir modeli yok** (karar #18) ve maaşlar aynı t
 
 ## Nasıl koşulur (hatırlatma)
 
-- **Testler:** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj` — **341 yeşil**. Yalnız `Common`/`Domain`/`Application` derlenir; `Infrastructure` ve `Editor` bu köprüde **yok**, oraları ancak Unity (veya geçici bir typecheck csproj'u) doğrular.
+- **Testler (hızlı kapı):** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj` — **582 yeşil**, saniyeler. Yalnız framework'süz katmanlar derlenir; `Infrastructure`'ın çoğu, `Composition`, `Presentation`, `Editor` bu köprüde **yok**.
+- **Unity CLI (dördüncü kapı):** `~/.unity/bin/unity test --mode EditMode --output /tmp/gaffer-editmode.xml --non-interactive --no-banner --timeout 1800` — **584 yeşil**, ~4 dk. Gerçek Editor'de batch mod; koşmadan önce **her assembly'yi derler**, yani asmdef referansları + yukarıdaki kör katmanlar buradan geçer. Editor projeyi açık tutmamalı (`Library` kilidi).
 - **Biçim:** `PATH="$HOME/.dotnet:$PATH" dotnet format tests/Gaffer.Tests.csproj --verify-no-changes` — temiz olmalı (`CONVENTIONS.md` mekanik kuralları "tool-enforced" sayıyor).
 - **Harness:** Unity → menü **`Gaffer > Season Harness`** → Run
 - **Management (birleşik demo):** Unity → menü **`Gaffer > Management`** → Start Season → Advance Week (nakit erir) + Summer/Winter'da Sign/Sell (canlı kadro)
