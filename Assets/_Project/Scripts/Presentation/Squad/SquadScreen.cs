@@ -80,7 +80,7 @@ namespace Gaffer.Presentation.Squad
             _session = session;
             _root = root;
             _text = text;
-            _pitch = new PitchView(OnSwapRequested, OpenPlayerPicker);
+            _pitch = new PitchView(OnSwapRequested, OpenPlayerPicker, text);
         }
 
         /// <summary>Builds the screen once and draws the run's current state into it.</summary>
@@ -360,10 +360,10 @@ namespace Gaffer.Presentation.Squad
             rating.AddToClassList(AbilityBands.ClassOf(AbilityBands.Of(value)));
         }
 
-        private static string Abbreviate(PlayerRole role)
+        // See PitchView.Abbreviate — the same rule, and the same reason it is no longer the enum name.
+        private string Abbreviate(PlayerRole role)
         {
-            string name = role.ToString();
-            return name.Length <= 3 ? name.ToUpperInvariant() : name.Substring(0, 3).ToUpperInvariant();
+            return _text.Get(PlayerRoles.GetShortLabelKey(role));
         }
 
         // Layout and look both come from the stylesheet; this only says what the parts ARE. Inline styles
@@ -641,7 +641,8 @@ namespace Gaffer.Presentation.Squad
             return row;
         }
 
-        private static void BindPlayerRow(VisualElement element, List<Player> source, int index)
+        // Not static: the role label is COPY now, and the words live on the instance.
+        private void BindPlayerRow(VisualElement element, List<Player> source, int index)
         {
             if (index < 0 || index >= source.Count)
             {

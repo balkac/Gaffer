@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Gaffer.Application.Simulation;
+using Gaffer.Common.Localization;
 using Gaffer.Domain.Players;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -37,6 +38,15 @@ namespace Gaffer.Presentation.Squad
         private readonly Action<int, int> _onSwapRequested;
         private readonly Action<int> _onSlotChosen;
 
+        // The words. Same reason SquadScreen holds them rather than reaching for a table: a position's
+        // name is COPY, and this assembly may not see the string table's (NON-NEGOTIABLE #8).
+        private readonly LocalizedStrings _text;
+
+        // The pitch itself, under everything. Built once and re-added after each Clear rather than
+        // rebuilt: it never changes with the eleven, and six elements per draw for a thing that is always
+        // identical is six allocations to keep a constant on screen (PERFORMANCE §8).
+        private readonly VisualElement _markings = BuildMarkings();
+
         private readonly VisualElement _ghost = new VisualElement();
         private readonly Label _ghostName = new Label();
         private VisualElement _overlay;
@@ -49,10 +59,11 @@ namespace Gaffer.Presentation.Squad
         // that carried its own copy of the number would be a second opinion about what a slot costs.
         private PositionalFitSettings _fit = PositionalFitSettings.Default;
 
-        public PitchView(Action<int, int> onSwapRequested, Action<int> onSlotChosen)
+        public PitchView(Action<int, int> onSwapRequested, Action<int> onSlotChosen, LocalizedStrings text)
         {
             _onSwapRequested = onSwapRequested;
             _onSlotChosen = onSlotChosen;
+            _text = text;
             _root.AddToClassList("pitch");
 
             _ghost.AddToClassList("slot");
@@ -98,6 +109,10 @@ namespace Gaffer.Presentation.Squad
             _fit = fit ?? PositionalFitSettings.Default;
             _root.Clear();
             _slotCards.Clear();
+
+            // Added before the early return on purpose: an empty board should still read as a PITCH, and a
+            // bare rounded rectangle reads as a loading state.
+            _root.Add(_markings);
             if (formation.Slots == null)
             {
                 return;
@@ -175,6 +190,53 @@ namespace Gaffer.Presentation.Squad
             }
 
             return -1;
+        }
+
+        // ----- The pitch under the cards ------------------------------------------------------------------
+
+        /// <summary>
+        /// The markings, in real proportions. A tactics board that is only a grid of cards on a dark
+        /// rectangle tells the eye nothing about WHERE the shape sits; the lines are what turn four rows
+        /// into a back four defending a box. ART_STYLE's "matchday broadcast graphics" is largely this.
+        ///
+        /// <para>Laid out as percentages of a 105x68 pitch — the penalty area is 40.3m of 68 wide and
+        /// 16.5m of 105 deep, the goal area 18.3x5.5, the centre circle 18.3 across — so the board keeps
+        /// its proportions at any height instead of carrying numbers that were right on one phone. The
+        /// board draws the team's own goal at the TOP (see CompareSlots), so "near" is behind the
+        /// goalkeeper and "far" is the end the strikers are attacking.</para>
+        ///
+        /// <para>It sits in its own absolutely-positioned layer, added FIRST so it draws behind the cards,
+        /// and ignores picking entirely — a line that could eat a drag would be a decoration with
+        /// consequences.</para>
+        /// </summary>
+        private static VisualElement BuildMarkings()
+        {
+            var layer = new VisualElement();
+            layer.AddToClassList("pitch__markings");
+            layer.pickingMode = PickingMode.Ignore;
+
+            AddMarking(layer, "pitch__area", "pitch__area--near");
+            AddMarking(layer, "pitch__goal", "pitch__goal--near");
+            AddMarking(layer, "pitch__halfway");
+            AddMarking(layer, "pitch__circle");
+            AddMarking(layer, "pitch__spot");
+            AddMarking(layer, "pitch__area", "pitch__area--far");
+            AddMarking(layer, "pitch__goal", "pitch__goal--far");
+
+            return layer;
+        }
+
+        private static void AddMarking(VisualElement layer, string style, string modifier = null)
+        {
+            var mark = new VisualElement();
+            mark.AddToClassList(style);
+            if (modifier != null)
+            {
+                mark.AddToClassList(modifier);
+            }
+
+            mark.pickingMode = PickingMode.Ignore;
+            layer.Add(mark);
         }
 
         // ----- Cards --------------------------------------------------------------------------------------
@@ -355,10 +417,12 @@ namespace Gaffer.Presentation.Squad
             return space >= 0 && space < name.Length - 1 ? name.Substring(space + 1) : name;
         }
 
-        private static string Abbreviate(PlayerRole role)
+        // The position, in the reader's own language. This used to be the first three letters of the
+        // enum name, which put GOA, RIG and CEN on the board: English in a Turkish build, and not even
+        // good English — NON-NEGOTIABLE #8 says the core hands out a KEY and the table hands back words.
+        private string Abbreviate(PlayerRole role)
         {
-            string name = role.ToString();
-            return name.Length <= 3 ? name.ToUpperInvariant() : name.Substring(0, 3).ToUpperInvariant();
+            return _text.Get(PlayerRoles.GetShortLabelKey(role));
         }
 
         private static string Rounded(double value)

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Gaffer.Common.Localization;
+using Gaffer.Domain.Players;
 using Gaffer.Infrastructure.Localization;
 using Gaffer.Presentation;
 using NUnit.Framework;
@@ -43,7 +44,62 @@ namespace Gaffer.Tests
             for (int i = 0; i < UiTextKeys.All.Count; i++)
             {
                 Assert.That(seen.Add(UiTextKeys.All[i]), Is.True, $"'{UiTextKeys.All[i]}' is listed twice.");
-                Assert.That(UiTextKeys.All[i], Does.StartWith("ui."), UiTextKeys.All[i]);
+                Assert.That(
+                    UiTextKeys.All[i].StartsWith("ui.") || UiTextKeys.All[i].StartsWith("role."),
+                    Is.True,
+                    UiTextKeys.All[i]);
+            }
+        }
+
+        [Test]
+        public void EveryRoleAbbreviation_FitsTheColumnItIsDrawnIn()
+        {
+            // `.row__role` is a fixed 100px column; the label does not reflow, it clips. Three characters
+            // is the shape every abbreviation was written to — the guard is here so a fourth is a DECISION
+            // someone makes against this test, not a surprise on a phone in the language they don't read.
+            StringTable table = GameStrings.Default;
+            var wrong = new List<string>();
+
+            foreach (PlayerRole role in System.Enum.GetValues(typeof(PlayerRole)))
+            {
+                string key = PlayerRoles.GetShortLabelKey(role);
+                foreach (string locale in Locales.Shipped)
+                {
+                    string words = table.Find(key, locale);
+                    if (!string.IsNullOrEmpty(words) && words.Length > 3)
+                    {
+                        wrong.Add($"{key} ({locale}): '{words}' is {words.Length} chars");
+                    }
+                }
+            }
+
+            Assert.That(wrong, Is.Empty, string.Join(" | ", wrong));
+        }
+
+        [Test]
+        public void EveryRoleAbbreviation_IsDistinctWithinItsLocale()
+        {
+            // Two positions sharing a label is worse than a long one: the board looks right and reads
+            // wrong, and nobody files it as a bug because nothing is visibly broken.
+            StringTable table = GameStrings.Default;
+
+            foreach (string locale in Locales.Shipped)
+            {
+                var seen = new Dictionary<string, PlayerRole>();
+                foreach (PlayerRole role in System.Enum.GetValues(typeof(PlayerRole)))
+                {
+                    string words = table.Find(PlayerRoles.GetShortLabelKey(role), locale);
+                    if (string.IsNullOrEmpty(words))
+                    {
+                        continue;
+                    }
+
+                    Assert.That(
+                        seen.ContainsKey(words),
+                        Is.False,
+                        $"{locale}: {role} and {(seen.ContainsKey(words) ? seen[words].ToString() : string.Empty)} are both '{words}'.");
+                    seen[words] = role;
+                }
             }
         }
 

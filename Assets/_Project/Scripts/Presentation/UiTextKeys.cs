@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using Gaffer.Domain.Players;
 
 namespace Gaffer.Presentation
 {
@@ -38,7 +40,7 @@ namespace Gaffer.Presentation
 
         public const string MessageNoFixture = "ui.message.no_fixture";
 
-        private static readonly string[] AllKeys =
+        private static readonly string[] ScreenKeys =
         {
             SquadEleven, SquadBench, SquadPosition, SquadWeek,
             SquadAttack, SquadMidfield, SquadDefence, ViewPitch, ViewList, PickerWho, PickerWhere,
@@ -46,7 +48,35 @@ namespace Gaffer.Presentation
             MessageNoFixture,
         };
 
-        /// <summary>Every key above. A key added without being listed here is a key nothing guards.</summary>
+        private static readonly string[] AllKeys = Build();
+
+        /// <summary>Every key the screens ask for: the constants above, plus one abbreviation per
+        /// <see cref="PlayerRole"/>. A key added without reaching this list is a key nothing guards.</summary>
         public static IReadOnlyList<string> All => AllKeys;
+
+        /// <summary>
+        /// The role abbreviations are DERIVED from the enum rather than listed by hand, because a list
+        /// by hand is a list that goes stale: adding a role to <see cref="PlayerRole"/> would otherwise
+        /// leave a key nothing guards and a tile that throws the first time it is drawn. This is also
+        /// what makes an authored <c>StringTableSO</c> have to supply them — <c>GameRoot</c> validates a
+        /// table against exactly this list.
+        /// </summary>
+        private static string[] Build()
+        {
+            var roles = (PlayerRole[])Enum.GetValues(typeof(PlayerRole));
+            var keys = new string[ScreenKeys.Length + roles.Length];
+
+            for (int i = 0; i < ScreenKeys.Length; i++)
+            {
+                keys[i] = ScreenKeys[i];
+            }
+
+            for (int i = 0; i < roles.Length; i++)
+            {
+                keys[ScreenKeys.Length + i] = PlayerRoles.GetShortLabelKey(roles[i]);
+            }
+
+            return keys;
+        }
     }
 }

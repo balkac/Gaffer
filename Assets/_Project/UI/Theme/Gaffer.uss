@@ -238,6 +238,122 @@
 }
 
 /* A band fills the width whatever it holds, so a back four and a front two both look deliberate. */
+/* The pitch under the cards. Proportions are a real 105x68 pitch expressed as percentages of the board,
+   so they hold at any height: the penalty area is 40.3m of 68 wide and 16.5m of 105 deep, the goal area
+   18.3x5.5, the centre circle 18.3 across. Everything is centred with translate rather than with a
+   hand-computed left, so a changed width stays centred without a second number to keep in step.
+
+   They are drawn in --pitch-line, the same quiet ink the card borders use, and they sit BEHIND opaque
+   cards. That is the whole discipline here: the lines are texture, not information. If a marking ever
+   competes with a rating for attention, it is too bright, because the rating is what the manager came
+   for and the pitch is what tells him where he is standing. */
+.pitch__markings {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+
+    /* Dimmed as ONE layer rather than by giving the markings their own colour token. The cards are
+       opaque and stand on the lines — a goalkeeper inside his own six-yard box, strikers on the edge of
+       theirs — so the lines are constantly interrupted. At the same weight as the card borders those
+       interruptions read as BROKEN; a step back and they read as the cards being nearer. One knob, and
+       the palette keeps exactly the three greens it had. */
+    opacity: 0.45;
+}
+
+.pitch__area {
+    position: absolute;
+    left: 50%;
+    translate: -50% 0;
+    width: 59.3%;
+    height: 15.7%;
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+}
+
+.pitch__area--near {
+    top: 0;
+}
+
+.pitch__area--far {
+    bottom: 0;
+}
+
+.pitch__goal {
+    position: absolute;
+    left: 50%;
+    translate: -50% 0;
+    width: 26.9%;
+    height: 5.2%;
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+}
+
+.pitch__goal--near {
+    top: 0;
+}
+
+.pitch__goal--far {
+    bottom: 0;
+}
+
+.pitch__halfway {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    background-color: var(--pitch-line);
+}
+
+.pitch__circle {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 26.9%;
+    height: 17.4%;
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-top-left-radius: 50%;
+    border-top-right-radius: 50%;
+    border-bottom-left-radius: 50%;
+    border-bottom-right-radius: 50%;
+}
+
+.pitch__spot {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 10px;
+    height: 10px;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+    background-color: var(--pitch-line);
+}
+
 .pitch__band {
     flex-direction: row;
     justify-content: space-around;

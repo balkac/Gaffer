@@ -104,6 +104,33 @@ namespace Gaffer.Infrastructure.Localization
                         "No fixture this week.",
                         "Bu hafta maç yok."),
 
+                    // --- what a position is CALLED, in three characters ------------------------------
+                    // The tiles on the board and every row in the sheet are labelled with these, so they
+                    // are read more often than any other string in the game and are the only ones whose
+                    // LENGTH is load-bearing: `.row__role` is a FIXED 100px column at 22px with 2px
+                    // letter-spacing, so a fourth character crowds it and a longer one clips rather than
+                    // reflows. UiCopyTests pins three.
+                    //
+                    // Football Manager ships ONE code set worldwide — its Turkish build still says GK, DC,
+                    // DR — because a single set is cheaper to maintain across thirty languages. We ship
+                    // two, because we ship two languages and Turkish football already has its own
+                    // abbreviations: a Turkish player reads STP and DOS without translating, and reads DC
+                    // by first remembering what it stands for in English. English keeps the conventional
+                    // codes rather than FM's positional ones (RB, not DR) — they are what an English
+                    // reader outside FM expects.
+                    Row("role.goalkeeper.abbrev", "GK", "KL"),
+                    Row("role.right_back.abbrev", "RB", "SĞB"),
+                    Row("role.centre_back.abbrev", "CB", "STP"),
+                    Row("role.left_back.abbrev", "LB", "SLB"),
+                    Row("role.defensive_midfield.abbrev", "DM", "DOS"),
+                    Row("role.central_midfield.abbrev", "CM", "MOS"),
+                    Row("role.attacking_midfield.abbrev", "AM", "OOS"),
+                    Row("role.right_midfield.abbrev", "RM", "SĞO"),
+                    Row("role.left_midfield.abbrev", "LM", "SLO"),
+                    Row("role.right_wing.abbrev", "RW", "SĞA"),
+                    Row("role.left_wing.abbrev", "LW", "SLA"),
+                    Row("role.striker.abbrev", "ST", "FV"),
+
                     // --- the narrative layer (Faz 5.4) -----------------------------------------------
                     // One line per kind of career moment. House rules on top of the ones above, and they
                     // are what keep a journey readable rather than a fixture list:
