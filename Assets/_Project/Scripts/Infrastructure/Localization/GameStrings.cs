@@ -131,6 +131,75 @@ namespace Gaffer.Infrastructure.Localization
                     Row("role.left_wing.abbrev", "LW", "SLA"),
                     Row("role.striker.abbrev", "ST", "FV"),
 
+                    // --- the match report (Faz 7) ----------------------------------------------------
+                    // Broadcast voice: the eyebrows are what a score bug would caption, not what a form
+                    // would label. Turkish is written native — "DİĞER SAHALARDA" is what a Turkish
+                    // round-up says, where a rendering of "other results" would not be said out loud.
+                    Row(
+                        "ui.match.goal",
+                        "GOAL",
+                        "GOL"),
+                    Row(
+                        "ui.match.shots",
+                        "shots",
+                        "şut"),
+                    Row(
+                        "ui.match.elsewhere",
+                        "ELSEWHERE",
+                        "DİĞER SAHALARDA"),
+                    Row(
+                        "ui.match.setup",
+                        "WHAT YOU SET UP",
+                        "KURDUĞUN DÜZEN"),
+                    Row(
+                        "ui.match.mentality",
+                        "MENTALITY",
+                        "MENTALİTE"),
+                    Row(
+                        "ui.match.tempo",
+                        "TEMPO",
+                        "TEMPO"),
+                    Row(
+                        "ui.match.pressing",
+                        "PRESSING",
+                        "PRES"),
+                    Row(
+                        "ui.match.approach",
+                        "APPROACH",
+                        "YAKLAŞIM"),
+                    Row(
+                        "ui.match.journal",
+                        "Into the journey log",
+                        "Günlüğe yazıldı"),
+                    Row(
+                        "ui.match.quiet",
+                        "A quiet afternoon.",
+                        "Sessiz bir maç."),
+                    Row(
+                        "ui.action.continue",
+                        "Continue",
+                        "Devam et"),
+
+                    // --- the tactical axes, by name --------------------------------------------------
+                    // One row per setting on the four axes the simulation actually reads. They are named
+                    // here rather than near the enums for the usual reason: the enum carries the key, the
+                    // table carries the word. Turkish uses what a Turkish coach says on television —
+                    // "kontra" rather than a rendering of "counter-attack".
+                    Row("tactics.mentality.very_defensive", "Very defensive", "Çok defansif"),
+                    Row("tactics.mentality.defensive", "Defensive", "Defansif"),
+                    Row("tactics.mentality.balanced", "Balanced", "Dengeli"),
+                    Row("tactics.mentality.attacking", "Attacking", "Hücumcu"),
+                    Row("tactics.mentality.very_attacking", "Very attacking", "Çok hücumcu"),
+                    Row("tactics.tempo.patient", "Patient", "Sabırlı"),
+                    Row("tactics.tempo.standard", "Standard", "Standart"),
+                    Row("tactics.tempo.intense", "Intense", "Yoğun"),
+                    Row("tactics.pressing.contain", "Contain", "Geri çekil"),
+                    Row("tactics.pressing.standard", "Standard", "Standart"),
+                    Row("tactics.pressing.press", "Press", "Bas"),
+                    Row("tactics.approach.possession", "Possession", "Topa sahip ol"),
+                    Row("tactics.approach.balanced", "Balanced", "Dengeli"),
+                    Row("tactics.approach.counter", "Counter", "Kontra"),
+
                     // --- the narrative layer (Faz 5.4) -----------------------------------------------
                     // One line per kind of career moment. House rules on top of the ones above, and they
                     // are what keep a journey readable rather than a fixture list:

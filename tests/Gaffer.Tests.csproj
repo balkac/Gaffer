@@ -42,6 +42,9 @@
     <Compile Include="../Assets/_Project/Scripts/Presentation/Squad/AbilityBand.cs" />
     <Compile Include="../Assets/_Project/Scripts/Presentation/UiTextKeys.cs" />
     <Compile Include="../Assets/_Project/Scripts/Presentation/Squad/PitchBand.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Presentation/UiWords.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Presentation/Matchday/MomentLine.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Presentation/Matchday/MatchBeats.cs" />
     <Compile Include="../Assets/_Project/Scripts/Tests/EditMode/**/*.cs" />
   </ItemGroup>
 

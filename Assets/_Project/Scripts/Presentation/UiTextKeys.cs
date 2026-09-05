@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Gaffer.Application.Simulation;
 using Gaffer.Domain.Players;
 
 namespace Gaffer.Presentation
@@ -31,10 +32,24 @@ namespace Gaffer.Presentation
         public const string PickerWho = "ui.squad.picker_who";
         public const string PickerWhere = "ui.squad.picker_where";
 
+        // ----- match report -------------------------------------------------------------------------------
+
+        public const string MatchGoal = "ui.match.goal";
+        public const string MatchShots = "ui.match.shots";
+        public const string MatchElsewhere = "ui.match.elsewhere";
+        public const string MatchSetup = "ui.match.setup";
+        public const string MatchMentality = "ui.match.mentality";
+        public const string MatchTempo = "ui.match.tempo";
+        public const string MatchPressing = "ui.match.pressing";
+        public const string MatchApproach = "ui.match.approach";
+        public const string MatchJournal = "ui.match.journal";
+        public const string MatchQuiet = "ui.match.quiet";
+
         // ----- actions ------------------------------------------------------------------------------------
 
         public const string ActionAutoPick = "ui.action.auto_pick";
         public const string ActionPlayWeek = "ui.action.play_week";
+        public const string ActionContinue = "ui.action.continue";
 
         // ----- messages -----------------------------------------------------------------------------------
 
@@ -44,14 +59,17 @@ namespace Gaffer.Presentation
         {
             SquadEleven, SquadBench, SquadPosition, SquadWeek,
             SquadAttack, SquadMidfield, SquadDefence, ViewPitch, ViewList, PickerWho, PickerWhere,
-            ActionAutoPick, ActionPlayWeek,
+            MatchGoal, MatchShots, MatchElsewhere, MatchSetup,
+            MatchMentality, MatchTempo, MatchPressing, MatchApproach, MatchJournal, MatchQuiet,
+            ActionAutoPick, ActionPlayWeek, ActionContinue,
             MessageNoFixture,
         };
 
         private static readonly string[] AllKeys = Build();
 
         /// <summary>Every key the screens ask for: the constants above, plus one abbreviation per
-        /// <see cref="PlayerRole"/>. A key added without reaching this list is a key nothing guards.</summary>
+        /// <see cref="PlayerRole"/> and one name per setting on the four tactical axes. A key added
+        /// without reaching this list is a key nothing guards.</summary>
         public static IReadOnlyList<string> All => AllKeys;
 
         /// <summary>
@@ -63,20 +81,35 @@ namespace Gaffer.Presentation
         /// </summary>
         private static string[] Build()
         {
-            var roles = (PlayerRole[])Enum.GetValues(typeof(PlayerRole));
-            var keys = new string[ScreenKeys.Length + roles.Length];
+            var keys = new List<string>(ScreenKeys.Length + 32);
+            keys.AddRange(ScreenKeys);
 
-            for (int i = 0; i < ScreenKeys.Length; i++)
+            foreach (PlayerRole role in (PlayerRole[])Enum.GetValues(typeof(PlayerRole)))
             {
-                keys[i] = ScreenKeys[i];
+                keys.Add(PlayerRoles.GetShortLabelKey(role));
             }
 
-            for (int i = 0; i < roles.Length; i++)
+            foreach (Mentality value in (Mentality[])Enum.GetValues(typeof(Mentality)))
             {
-                keys[ScreenKeys.Length + i] = PlayerRoles.GetShortLabelKey(roles[i]);
+                keys.Add(TacticsTextKeys.For(value));
             }
 
-            return keys;
+            foreach (Tempo value in (Tempo[])Enum.GetValues(typeof(Tempo)))
+            {
+                keys.Add(TacticsTextKeys.For(value));
+            }
+
+            foreach (Pressing value in (Pressing[])Enum.GetValues(typeof(Pressing)))
+            {
+                keys.Add(TacticsTextKeys.For(value));
+            }
+
+            foreach (Approach value in (Approach[])Enum.GetValues(typeof(Approach)))
+            {
+                keys.Add(TacticsTextKeys.For(value));
+            }
+
+            return keys.ToArray();
         }
     }
 }

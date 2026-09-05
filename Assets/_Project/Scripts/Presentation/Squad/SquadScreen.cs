@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using Gaffer.Application.Run;
-using Gaffer.Application.Season;
 using Gaffer.Application.Simulation;
 using Gaffer.Common;
 using Gaffer.Common.Localization;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
+using Gaffer.Presentation.Matchday;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -70,6 +70,11 @@ namespace Gaffer.Presentation.Squad
         private readonly VisualElement _listCard = new VisualElement();
         private readonly ScrollView _listScroll = new ScrollView(ScrollViewMode.Vertical);
         private readonly VisualElement _picker = new VisualElement();
+
+        // The week's report. A sheet like the picker rather than a screen of its own, because there is no
+        // navigation shell yet — and when there is one, this is the thing that moves, not MatchScreen.
+        private readonly VisualElement _report = new VisualElement();
+        private readonly VisualElement _reportPanel = new VisualElement();
         private readonly ScrollView _pickerScroll = new ScrollView(ScrollViewMode.Vertical);
         private readonly VisualElement _pickerList = new VisualElement();
         private int _pickerSlot = -1;
@@ -124,6 +129,7 @@ namespace Gaffer.Presentation.Squad
             // as a zero-width, colourless nothing. That is exactly what "I cannot see what I am dragging"
             // was.
             _root.Add(BuildPicker());
+            _root.Add(BuildReport());
 
             _overlay.AddToClassList("overlay");
             _overlay.pickingMode = PickingMode.Ignore;
@@ -738,12 +744,49 @@ namespace Gaffer.Presentation.Squad
                 return;
             }
 
-            ShowMessage(Describe(week.Value));
-            // Stated rather than assumed. The initial mode used to rest on which elements happened to
-            // have had a display set during construction, which is the sort of implicit start that
-            // survives until somebody reorders two lines.
+            // The result is SHOWN rather than summarised into one line. A manager who picks an eleven and
+            // is told "Fairwood 2-1 Ashcombe" has been given the score of a match he had no part in; the
+            // report is where the decision and the afternoon meet.
+            ShowMessage(string.Empty);
+            ShowReport(week.Value);
+        }
+
+        private void ShowReport(WeekOutcome week)
+        {
+            // The report brings its own scroller and its own pinned action, so the sheet only lends it a
+            // panel to stand in. Rebuilt per week rather than refilled: it is shown once and a week is an
+            // immutable record.
+            _reportPanel.Clear();
+            _reportPanel.Add(new MatchScreen(_session, _text, CloseReport).Build(week));
+            _report.style.display = DisplayStyle.Flex;
+            _report.BringToFront();
+        }
+
+        private void CloseReport()
+        {
+            _report.style.display = DisplayStyle.None;
+
+            // Redrawn on the way out, not on the way in: the week that was just played changed the squad
+            // underneath the board, and the manager returns to the board expecting it to be current.
             ShowPitch(true);
             Draw(_session.Lineup());
+        }
+
+        private VisualElement BuildReport()
+        {
+            _report.AddToClassList("sheet");
+            _report.style.display = DisplayStyle.None;
+
+            var scrim = new VisualElement();
+            scrim.AddToClassList("sheet__scrim");
+            scrim.RegisterCallback<ClickEvent>(_ => CloseReport());
+            _report.Add(scrim);
+
+            _reportPanel.AddToClassList("sheet__panel");
+            _reportPanel.AddToClassList("sheet__panel--tall");
+            _report.Add(_reportPanel);
+
+            return _report;
         }
 
         private void Apply(Result<LineupOutcome> result)
@@ -758,30 +801,17 @@ namespace Gaffer.Presentation.Squad
             Draw(result.Value);
         }
 
-        // A key's words, or the key itself when the table has no row for it. Visible-but-wrong beats blank:
-        // a missing line shows up as "ui.squad.bench" on screen, which names its own fix, where an empty
-        // label just looks like a layout bug.
+        // A key's words, or the key itself when the table has no row for it — the policy lives in UiWords
+        // so the screens cannot drift apart on it. Kept as a name because it reads better at the call site.
         private string Say(string key)
         {
-            string words = _text.IsBound ? _text.Find(key) : null;
-            return string.IsNullOrEmpty(words) ? key : words;
+            return _text.Or(key);
         }
 
         private void ShowMessage(string message)
         {
             _message.text = message;
             _message.style.display = string.IsNullOrEmpty(message) ? DisplayStyle.None : DisplayStyle.Flex;
-        }
-
-        private string Describe(WeekOutcome week)
-        {
-            if (week.ManagedMatch == null)
-            {
-                return Say(UiTextKeys.MessageNoFixture);
-            }
-
-            MatchResult match = week.ManagedMatch.Value;
-            return _session.ClubName(match.Home) + " " + match.HomeGoals + "-" + match.AwayGoals + " " + _session.ClubName(match.Away);
         }
 
         private static string Rounded(double value)

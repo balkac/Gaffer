@@ -45,7 +45,9 @@ namespace Gaffer.Tests
             {
                 Assert.That(seen.Add(UiTextKeys.All[i]), Is.True, $"'{UiTextKeys.All[i]}' is listed twice.");
                 Assert.That(
-                    UiTextKeys.All[i].StartsWith("ui.") || UiTextKeys.All[i].StartsWith("role."),
+                    UiTextKeys.All[i].StartsWith("ui.")
+                        || UiTextKeys.All[i].StartsWith("role.")
+                        || UiTextKeys.All[i].StartsWith("tactics."),
                     Is.True,
                     UiTextKeys.All[i]);
             }

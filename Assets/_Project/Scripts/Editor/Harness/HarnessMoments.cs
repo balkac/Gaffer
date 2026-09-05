@@ -1,7 +1,6 @@
-using System.Globalization;
 using Gaffer.Application.Narrative;
 using Gaffer.Application.Run;
-using Gaffer.Common.Localization;
+using Gaffer.Presentation.Matchday;
 
 namespace Gaffer.Editor.Harness
 {
@@ -21,45 +20,15 @@ namespace Gaffer.Editor.Harness
     /// </summary>
     internal static class HarnessMoments
     {
-        /// <summary>
-        /// The line for one moment. Numbers are rendered HERE, at the edge, where the locale is known —
-        /// which is also why the minute arrives already marked ("68'") rather than the template writing
-        /// the apostrophe: an apostrophe after an interpolated value is the exact shape the suffix guard
-        /// refuses, and it caught this copy on its first run.
-        /// </summary>
+        /// <summary>The line for one moment, in whichever locale <c>HarnessCopy</c> is set to.</summary>
         internal static string Line(CareerMoment moment, RunSession session)
         {
-            string player = NameOf(moment, session);
-            string club = session != null ? session.ManagedClubName : string.Empty;
-            string minute = moment.HappenedInAMatch
-                ? moment.Minute.ToString(CultureInfo.InvariantCulture) + "'"
-                : string.Empty;
-            string count = moment.Count != 0
-                ? moment.Count.ToString("N0", CultureInfo.InvariantCulture)
-                : string.Empty;
-
+            // The arguments are shared with the match screen (Presentation.Matchday.MomentLine) so the two
+            // cannot disagree about which name a moment carries; the RESOLUTION stays here, because a
+            // window wants a loud developer marker for a missing key and a screen does not.
             return HarnessCopy.Resolve(
                 MomentTextKeys.For(moment.Kind),
-                new TextArguments(player, club, minute, count));
-        }
-
-        // The journey's own name first: a moment can outlive its subject's time at the club — a sale, a
-        // retirement — and by then the squad no longer knows who he was. Asking the roster first is what
-        // printed "(left the club)" in the Gate B probe before the journey started carrying a name.
-        private static string NameOf(CareerMoment moment, RunSession session)
-        {
-            if (session == null)
-            {
-                return string.Empty;
-            }
-
-            PlayerJourney journey = session.JourneyOf(moment.Player);
-            if (journey != null && !string.IsNullOrEmpty(journey.Name))
-            {
-                return journey.Name;
-            }
-
-            return session.PlayerName(moment.Club, moment.Player);
+                MomentLine.ArgumentsFor(moment, session));
         }
     }
 }
