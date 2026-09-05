@@ -22,6 +22,9 @@ namespace Gaffer.Infrastructure.Configuration
         [Tooltip("Half-width of a fully unscouted (accuracy 0) attribute band, in rating points.")]
         [Range(0, 50)] [SerializeField] private int attributeMaxWidth = 12;
 
+        [Tooltip("How well the club's scouts read a player before any perk, 0..1. At 0.5 a hidden potential shows as a ±11 band and a key attribute as ±6.")]
+        [Range(0f, 1f)] [SerializeField] private float baseAccuracy = 0.5f;
+
         private void OnValidate()
         {
             ClampToValidRanges();
@@ -32,7 +35,8 @@ namespace Gaffer.Infrastructure.Configuration
             ClampToValidRanges();
             return new ScoutingSettings(
                 potentialMaxWidth: potentialMaxWidth,
-                attributeMaxWidth: attributeMaxWidth);
+                attributeMaxWidth: attributeMaxWidth,
+                baseAccuracy: baseAccuracy);
         }
 
         /// <summary>
@@ -46,6 +50,7 @@ namespace Gaffer.Infrastructure.Configuration
         {
             potentialMaxWidth = Math.Clamp(potentialMaxWidth, 0, 50);
             attributeMaxWidth = Math.Clamp(attributeMaxWidth, 0, 50);
+            baseAccuracy = Math.Clamp(baseAccuracy, 0f, 1f);
         }
     }
 }

@@ -65,12 +65,51 @@ namespace Gaffer.Presentation
         public const string SeasonTargetUp = "ui.season.target_up";
         public const string SeasonTargetStay = "ui.season.target_stay";
 
+        // ----- the shell ----------------------------------------------------------------------------------
+
+        public const string NavSquad = "ui.nav.squad";
+        public const string NavSeason = "ui.nav.season";
+        public const string NavMarket = "ui.nav.market";
+
+        // ----- the market ---------------------------------------------------------------------------------
+
+        public const string MarketWindowSummer = "ui.market.window_summer";
+        public const string MarketWindowWinter = "ui.market.window_winter";
+        public const string MarketWindowClosed = "ui.market.window_closed";
+        public const string MarketOpensAfter = "ui.market.opens_after";
+        public const string MarketOpensSummer = "ui.market.opens_summer";
+        public const string MarketCash = "ui.market.cash";
+        public const string MarketWageRoom = "ui.market.wage_room";
+        public const string MarketPerWeek = "ui.market.per_week";
+        public const string MarketSegmentMarket = "ui.market.segment_market";
+        public const string MarketSegmentSquad = "ui.market.segment_squad";
+        public const string MarketFilterAll = "ui.market.filter_all";
+        public const string MarketFilterAffordable = "ui.market.filter_affordable";
+        public const string MarketEmpty = "ui.market.empty";
+        public const string MarketReport = "ui.market.report";
+        public const string MarketPotential = "ui.market.potential";
+        public const string MarketAge = "ui.market.age";
+        public const string MarketFee = "ui.market.fee";
+        public const string MarketWage = "ui.market.wage";
+        public const string MarketShortCash = "ui.market.short_cash";
+        public const string MarketShortWage = "ui.market.short_wage";
+        public const string MarketShortBoth = "ui.market.short_both";
+        public const string MarketLeavesCash = "ui.market.leaves_cash";
+        public const string MarketLeavesWage = "ui.market.leaves_wage";
+        public const string MarketSigned = "ui.market.signed";
+        public const string MarketSold = "ui.market.sold";
+        public const string MarketStarter = "ui.market.starter";
+        public const string MarketSquadFloor = "ui.market.squad_floor";
+
         // ----- actions ------------------------------------------------------------------------------------
 
         public const string ActionAutoPick = "ui.action.auto_pick";
         public const string ActionPlayWeek = "ui.action.play_week";
         public const string ActionContinue = "ui.action.continue";
         public const string ActionClose = "ui.action.close";
+        public const string ActionSign = "ui.action.sign";
+        public const string ActionSell = "ui.action.sell";
+        public const string ActionDone = "ui.action.done";
 
         // ----- messages -----------------------------------------------------------------------------------
 
@@ -85,15 +124,22 @@ namespace Gaffer.Presentation
             SeasonNext, SeasonHome, SeasonAway, SeasonOver, SeasonTable,
             SeasonPlayed, SeasonWon, SeasonDrawn, SeasonLost, SeasonGoalDifference, SeasonPoints,
             SeasonPromotion, SeasonRelegation, SeasonTarget, SeasonJob, SeasonTargetUp, SeasonTargetStay,
-            ActionAutoPick, ActionPlayWeek, ActionContinue, ActionClose,
+            NavSquad, NavSeason, NavMarket,
+            MarketWindowSummer, MarketWindowWinter, MarketWindowClosed, MarketOpensAfter, MarketOpensSummer,
+            MarketCash, MarketWageRoom, MarketPerWeek, MarketSegmentMarket, MarketSegmentSquad,
+            MarketFilterAll, MarketFilterAffordable, MarketEmpty, MarketReport, MarketPotential, MarketAge,
+            MarketFee, MarketWage, MarketShortCash, MarketShortWage, MarketShortBoth,
+            MarketLeavesCash, MarketLeavesWage, MarketSigned, MarketSold, MarketStarter, MarketSquadFloor,
+            ActionAutoPick, ActionPlayWeek, ActionContinue, ActionClose, ActionSign, ActionSell, ActionDone,
             MessageNoFixture,
         };
 
         private static readonly string[] AllKeys = Build();
 
         /// <summary>Every key the screens ask for: the constants above, plus one abbreviation per
-        /// <see cref="PlayerRole"/> and one name per setting on the four tactical axes. A key added
-        /// without reaching this list is a key nothing guards.</summary>
+        /// <see cref="PlayerRole"/>, one per <see cref="PlayerAttribute"/> (the scout report's rows) and
+        /// one name per setting on the four tactical axes. A key added without reaching this list is a key
+        /// nothing guards.</summary>
         public static IReadOnlyList<string> All => AllKeys;
 
         /// <summary>
@@ -111,6 +157,11 @@ namespace Gaffer.Presentation
             foreach (PlayerRole role in (PlayerRole[])Enum.GetValues(typeof(PlayerRole)))
             {
                 keys.Add(PlayerRoles.GetShortLabelKey(role));
+            }
+
+            foreach (PlayerAttribute attribute in (PlayerAttribute[])Enum.GetValues(typeof(PlayerAttribute)))
+            {
+                keys.Add(PlayerAttributes.GetLabelKey(attribute));
             }
 
             foreach (Mentality value in (Mentality[])Enum.GetValues(typeof(Mentality)))

@@ -47,6 +47,7 @@ namespace Gaffer.Tests
                 Assert.That(
                     UiTextKeys.All[i].StartsWith("ui.")
                         || UiTextKeys.All[i].StartsWith("role.")
+                        || UiTextKeys.All[i].StartsWith("attr.")
                         || UiTextKeys.All[i].StartsWith("tactics."),
                     Is.True,
                     UiTextKeys.All[i]);
@@ -92,12 +93,62 @@ namespace Gaffer.Tests
             // `.row__role` is a fixed 100px column; the label does not reflow, it clips. Three characters
             // is the shape every abbreviation was written to — the guard is here so a fourth is a DECISION
             // someone makes against this test, not a surprise on a phone in the language they don't read.
+            AssertAbbreviationsFit(RoleKeys(), "role");
+        }
+
+        [Test]
+        public void EveryAttributeAbbreviation_FitsTheColumnItIsDrawnIn()
+        {
+            // The scout report's rows wear these in a fixed column of the same width, for the same reason.
+            AssertAbbreviationsFit(AttributeKeys(), "attribute");
+        }
+
+        [Test]
+        public void EveryRoleAbbreviation_IsDistinctWithinItsLocale()
+        {
+            // Two positions sharing a label is worse than a long one: the board looks right and reads
+            // wrong, and nobody files it as a bug because nothing is visibly broken.
+            AssertAbbreviationsDistinct(RoleKeys());
+        }
+
+        [Test]
+        public void EveryAttributeAbbreviation_IsDistinctWithinItsLocale()
+        {
+            // Twenty-nine attributes in three letters each is exactly where two collide by accident —
+            // POS for positioning and for possession, say — and a scout report with two POS rows reads as
+            // one attribute listed twice.
+            AssertAbbreviationsDistinct(AttributeKeys());
+        }
+
+        private static List<string> RoleKeys()
+        {
+            var keys = new List<string>();
+            foreach (PlayerRole role in System.Enum.GetValues(typeof(PlayerRole)))
+            {
+                keys.Add(PlayerRoles.GetShortLabelKey(role));
+            }
+
+            return keys;
+        }
+
+        private static List<string> AttributeKeys()
+        {
+            var keys = new List<string>();
+            foreach (PlayerAttribute attribute in System.Enum.GetValues(typeof(PlayerAttribute)))
+            {
+                keys.Add(PlayerAttributes.GetLabelKey(attribute));
+            }
+
+            return keys;
+        }
+
+        private static void AssertAbbreviationsFit(List<string> keys, string what)
+        {
             StringTable table = GameStrings.Default;
             var wrong = new List<string>();
 
-            foreach (PlayerRole role in System.Enum.GetValues(typeof(PlayerRole)))
+            foreach (string key in keys)
             {
-                string key = PlayerRoles.GetShortLabelKey(role);
                 foreach (string locale in Locales.Shipped)
                 {
                     string words = table.Find(key, locale);
@@ -108,22 +159,19 @@ namespace Gaffer.Tests
                 }
             }
 
-            Assert.That(wrong, Is.Empty, string.Join(" | ", wrong));
+            Assert.That(wrong, Is.Empty, what + " abbreviations that would clip: " + string.Join(" | ", wrong));
         }
 
-        [Test]
-        public void EveryRoleAbbreviation_IsDistinctWithinItsLocale()
+        private static void AssertAbbreviationsDistinct(List<string> keys)
         {
-            // Two positions sharing a label is worse than a long one: the board looks right and reads
-            // wrong, and nobody files it as a bug because nothing is visibly broken.
             StringTable table = GameStrings.Default;
 
             foreach (string locale in Locales.Shipped)
             {
-                var seen = new Dictionary<string, PlayerRole>();
-                foreach (PlayerRole role in System.Enum.GetValues(typeof(PlayerRole)))
+                var seen = new Dictionary<string, string>();
+                foreach (string key in keys)
                 {
-                    string words = table.Find(PlayerRoles.GetShortLabelKey(role), locale);
+                    string words = table.Find(key, locale);
                     if (string.IsNullOrEmpty(words))
                     {
                         continue;
@@ -132,18 +180,23 @@ namespace Gaffer.Tests
                     Assert.That(
                         seen.ContainsKey(words),
                         Is.False,
-                        $"{locale}: {role} and {(seen.ContainsKey(words) ? seen[words].ToString() : string.Empty)} are both '{words}'.");
-                    seen[words] = role;
+                        $"{locale}: {key} and {(seen.ContainsKey(words) ? seen[words] : string.Empty)} are both '{words}'.");
+                    seen[words] = key;
                 }
             }
         }
 
         [Test]
-        public void EveryScreenString_IsShortEnoughForAPhone()
+        public void EveryScreenLabel_IsShortEnoughForAPhone()
         {
             // Interface copy is not prose. A label that wraps to two lines on a narrow phone breaks a row
             // height the whole list is built on, and the failure shows up as clipped text rather than as a
             // string that was too long.
+            //
+            // A SENTENCE is exempt — one that ends in a full stop — because it is drawn in a wrapping body
+            // label by design: "Leaves €1.2M in cash." lives on a card, not in a row. The distinction is
+            // in the copy itself, so a label that grew a full stop to dodge this test would read as a
+            // sentence and look wrong on the row for the same reason.
             StringTable table = GameStrings.Default;
             var tooLong = new List<string>();
 
@@ -153,7 +206,7 @@ namespace Gaffer.Tests
                 foreach (string locale in Locales.Shipped)
                 {
                     string words = table.Find(key, locale);
-                    if (!string.IsNullOrEmpty(words) && words.Length > 28)
+                    if (!string.IsNullOrEmpty(words) && words.Length > 28 && !words.EndsWith("."))
                     {
                         tooLong.Add($"{key} ({locale}): {words.Length} chars");
                     }

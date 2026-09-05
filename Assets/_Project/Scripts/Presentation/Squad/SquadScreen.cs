@@ -6,7 +6,7 @@ using Gaffer.Common.Localization;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
 using Gaffer.Presentation.Matchday;
-using Gaffer.Presentation.Season;
+using Gaffer.Presentation.Shell;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -34,6 +34,10 @@ namespace Gaffer.Presentation.Squad
     {
         private readonly RunSession _session;
         private readonly VisualElement _root;
+
+        // The shell. Asked for three things only — a tab, a sheet, the overlay layer — and never for a
+        // neighbour; see IScreenHost for why the sheet cannot be this screen's own.
+        private readonly IScreenHost _host;
 
         // The words. Injected rather than reached for: Presentation may not see the string table's
         // assembly (NON-NEGOTIABLE #8's layer half), and Composition is what binds a locale to a screen —
@@ -72,36 +76,25 @@ namespace Gaffer.Presentation.Squad
         private readonly ScrollView _listScroll = new ScrollView(ScrollViewMode.Vertical);
         private readonly VisualElement _picker = new VisualElement();
 
-        // The tall sheet: where the week's report and the season screen stand. A sheet like the picker
-        // rather than screens of their own, because there is no navigation shell yet — and when there is
-        // one, THIS is the thing that moves; MatchScreen and SeasonScreen stay as they are. One host for
-        // both because they are the same shape (a page with its own scroller and a pinned way out) and
-        // never open together.
-        private readonly VisualElement _tall = new VisualElement();
-        private readonly VisualElement _tallPanel = new VisualElement();
         private readonly ScrollView _pickerScroll = new ScrollView(ScrollViewMode.Vertical);
         private readonly VisualElement _pickerList = new VisualElement();
         private int _pickerSlot = -1;
         private int _pickerPlayer = -1;
 
-        public SquadScreen(RunSession session, VisualElement root, LocalizedStrings text)
+        public SquadScreen(RunSession session, VisualElement root, IScreenHost host, LocalizedStrings text)
         {
             _session = session;
             _root = root;
+            _host = host;
             _text = text;
             _pitch = new PitchView(OnSwapRequested, OpenPlayerPicker, text);
         }
 
-        /// <summary>Builds the screen once and draws the run's current state into it.</summary>
+        /// <summary>Builds the screen once and draws the run's current state into it. The root is a page
+        /// the shell hands over, already wearing the ground; the palette lives on the shell above it.</summary>
         public void Build()
         {
             _root.Clear();
-
-            // .theme carries the palette, .screen the ground it paints. Both, because a screen that wore
-            // only the second would resolve every var() to nothing and fall back to Unity's default
-            // runtime theme — which is exactly what a missing stylesheet looks like on a device.
-            _root.AddToClassList("theme");
-            _root.AddToClassList("screen");
 
             // TWO MODES, AND NEITHER SCROLLS UNDER A DRAG.
             //
@@ -128,22 +121,30 @@ namespace Gaffer.Presentation.Squad
             _root.Add(_message);
             _root.Add(BuildActions());
 
-            // The layer the drag ghost draws on. It sits ON the screen root — which is what carries the
-            // theme — because an overlay parented to the panel would resolve none of the tokens and draw
-            // as a zero-width, colourless nothing. That is exactly what "I cannot see what I am dragging"
-            // was.
-            _root.Add(BuildPicker());
-            _root.Add(BuildTallSheet());
+            // The picker and the drag layer go on the SHELL's overlay, not on this page: a sheet parented
+            // to the page would leave the tab bar live beneath it, and a ghost parented to the page would
+            // be clipped by it. The overlay resolves the same tokens because the theme sits on the shell
+            // root above both — an overlay parented outside the theme was what "I cannot see what I am
+            // dragging" once was.
+            _host.Overlay.Add(BuildPicker());
 
             _overlay.AddToClassList("overlay");
             _overlay.pickingMode = PickingMode.Ignore;
-            _root.Add(_overlay);
+            _host.Overlay.Add(_overlay);
             _pitch.AttachOverlay(_overlay);
 
             // Stated rather than assumed. The initial mode used to rest on which elements happened to
             // have had a display set during construction, which is the sort of implicit start that
             // survives until somebody reorders two lines.
             ShowPitch(true);
+            Draw(_session.Lineup());
+        }
+
+        /// <summary>Redraws from the run. The shell calls this when the tab is shown and when a sheet
+        /// closes, because a signing on the market or a week played behind the report changed the squad
+        /// underneath the board, and the manager returns to it expecting it to be current.</summary>
+        public void Refresh()
+        {
             Draw(_session.Lineup());
         }
 
@@ -765,53 +766,24 @@ namespace Gaffer.Presentation.Squad
         private void ShowReport(WeekOutcome week)
         {
             // Rebuilt per week rather than refilled: it is shown once and a week is an immutable record.
-            ShowTall(new MatchScreen(_session, _text, CloseTall).Build(week));
+            // Raised on the shell's sheet so it covers the tab bar: the report is the payoff of the week
+            // and nothing should lead out of it but Continue.
+            _host.ShowSheet(new MatchScreen(_session, _text, CloseReport).Build(week));
         }
 
+        private void CloseReport()
+        {
+            // Back to the board on the way out: the week changed the squad, and the manager returns to it
+            // expecting it to be current. The shell redraws the page as the sheet closes.
+            ShowPitch(true);
+            _host.CloseSheet();
+        }
+
+        // The standing is a tile and the season is its card — but the season has a tab of its own, so the
+        // tile is a shortcut to it rather than a second copy of it.
         private void OpenSeason()
         {
-            // Rebuilt on every opening: the table is a render-time query and small, and a diff of it would
-            // be a second model of the league.
-            ShowTall(new SeasonScreen(_session, _text, CloseTall).Build());
-        }
-
-        // The page brings its own scroller and its own pinned action, so the sheet only lends it a panel
-        // to stand in.
-        private void ShowTall(VisualElement page)
-        {
-            _tallPanel.Clear();
-            _tallPanel.Add(page);
-            _tall.style.display = DisplayStyle.Flex;
-            _tall.BringToFront();
-        }
-
-        private void CloseTall()
-        {
-            _tall.style.display = DisplayStyle.None;
-
-            // Redrawn on the way out, not on the way in: a week played behind the report changed the squad
-            // underneath the board, and the manager returns to the board expecting it to be current. After
-            // the season screen nothing changed and the redraw is cheap — one rule for the way out beats
-            // two the caller has to pick between.
-            ShowPitch(true);
-            Draw(_session.Lineup());
-        }
-
-        private VisualElement BuildTallSheet()
-        {
-            _tall.AddToClassList("sheet");
-            _tall.style.display = DisplayStyle.None;
-
-            var scrim = new VisualElement();
-            scrim.AddToClassList("sheet__scrim");
-            scrim.RegisterCallback<ClickEvent>(_ => CloseTall());
-            _tall.Add(scrim);
-
-            _tallPanel.AddToClassList("sheet__panel");
-            _tallPanel.AddToClassList("sheet__panel--tall");
-            _tall.Add(_tallPanel);
-
-            return _tall;
+            _host.Show(ShellTab.Season);
         }
 
         private void Apply(Result<LineupOutcome> result)

@@ -131,6 +131,42 @@ namespace Gaffer.Infrastructure.Localization
                     Row("role.left_wing.abbrev", "LW", "SLA"),
                     Row("role.striker.abbrev", "ST", "FV"),
 
+                    // --- what an attribute is CALLED, in three characters --------------------------------
+                    // The scout report's rows. Same rule as the positions: three characters, fixed column,
+                    // two native sets rather than one shared one. English keeps Football Manager's codes,
+                    // which an English-reading manager already knows by heart; Turkish is what the Turkish
+                    // FM community and press actually write — BİT for bitiricilik, MRK for markaj — not
+                    // the English letters left in place.
+                    Row("attr.finishing.abbrev", "FIN", "BİT"),
+                    Row("attr.technique.abbrev", "TEC", "TEK"),
+                    Row("attr.first_touch.abbrev", "FIR", "İLK"),
+                    Row("attr.dribbling.abbrev", "DRI", "TOP"),
+                    Row("attr.passing.abbrev", "PAS", "PAS"),
+                    Row("attr.crossing.abbrev", "CRO", "ORT"),
+                    Row("attr.heading.abbrev", "HEA", "KAF"),
+                    Row("attr.long_shots.abbrev", "LSH", "UZŞ"),
+                    Row("attr.marking.abbrev", "MAR", "MRK"),
+                    Row("attr.tackling.abbrev", "TCK", "MÜD"),
+                    Row("attr.penalties.abbrev", "PEN", "PEN"),
+                    Row("attr.free_kicks.abbrev", "FRK", "FRK"),
+                    Row("attr.corners.abbrev", "COR", "KÖŞ"),
+                    Row("attr.long_throws.abbrev", "LTH", "UZT"),
+                    Row("attr.pace.abbrev", "PAC", "HIZ"),
+                    Row("attr.acceleration.abbrev", "ACC", "İVM"),
+                    Row("attr.stamina.abbrev", "STA", "DAY"),
+                    Row("attr.strength.abbrev", "STR", "GÜÇ"),
+                    Row("attr.agility.abbrev", "AGI", "ÇEV"),
+                    Row("attr.jumping.abbrev", "JUM", "SIÇ"),
+                    Row("attr.balance.abbrev", "BAL", "DNG"),
+                    Row("attr.positioning.abbrev", "POS", "POZ"),
+                    Row("attr.reflexes.abbrev", "REF", "RFL"),
+                    Row("attr.handling.abbrev", "HAN", "TUT"),
+                    Row("attr.aerial_reach.abbrev", "AER", "HVA"),
+                    Row("attr.command_of_area.abbrev", "CMD", "ALN"),
+                    Row("attr.one_on_ones.abbrev", "1v1", "1e1"),
+                    Row("attr.kicking.abbrev", "KIC", "VUR"),
+                    Row("attr.gk_positioning.abbrev", "GKP", "KPZ"),
+
                     // --- the match report (Faz 7) ----------------------------------------------------
                     // Broadcast voice: the eyebrows are what a score bug would caption, not what a form
                     // would label. Turkish is written native — "DİĞER SAHALARDA" is what a Turkish
@@ -183,6 +219,59 @@ namespace Gaffer.Infrastructure.Localization
                         "ui.action.close",
                         "Close",
                         "Kapat"),
+                    Row(
+                        "ui.action.sign",
+                        "Sign",
+                        "İmzala"),
+                    Row(
+                        "ui.action.sell",
+                        "Sell",
+                        "Sat"),
+                    Row(
+                        "ui.action.done",
+                        "Done",
+                        "Tamam"),
+
+                    // --- the shell ---------------------------------------------------------------------
+                    // Three tabs, one word each. Turkish says TRANSFER for the market because that is the
+                    // word a Turkish manager uses for the whole business — "piyasa" is what an economist
+                    // says.
+                    Row("ui.nav.squad", "SQUAD", "KADRO"),
+                    Row("ui.nav.season", "SEASON", "SEZON"),
+                    Row("ui.nav.market", "MARKET", "TRANSFER"),
+
+                    // --- the market (Faz 7) ----------------------------------------------------------
+                    // The status line says WHEN a deal can be done before anything else is read; the card
+                    // says WHY NOT before the button is pressed, in money, naming the exact shortfall.
+                    // Turkish: "bonservis" is the fee, "maaş boşluğu" the wage room — the words a Turkish
+                    // sports page uses, not renderings.
+                    Row("ui.market.window_summer", "OPEN · SUMMER WINDOW", "AÇIK · YAZ DÖNEMİ"),
+                    Row("ui.market.window_winter", "OPEN · WINTER WINDOW", "AÇIK · KIŞ DÖNEMİ"),
+                    Row("ui.market.window_closed", "WINDOW CLOSED", "TRANSFER DÖNEMİ KAPALI"),
+                    Row("ui.market.opens_after", "Opens after week {count}.", "{count}. haftadan sonra açılır."),
+                    Row("ui.market.opens_summer", "Opens again in the summer.", "Yazın yeniden açılır."),
+                    Row("ui.market.cash", "CASH", "NAKİT"),
+                    Row("ui.market.wage_room", "WAGE ROOM", "MAAŞ BOŞLUĞU"),
+                    Row("ui.market.per_week", "/wk", "/hf"),
+                    Row("ui.market.segment_market", "MARKET", "PİYASA"),
+                    Row("ui.market.segment_squad", "YOUR SQUAD", "KADRON"),
+                    Row("ui.market.filter_all", "ALL", "HEPSİ"),
+                    Row("ui.market.filter_affordable", "Within budget", "Bütçeme uygun"),
+                    Row("ui.market.empty", "Nobody matches.", "Eşleşen oyuncu yok."),
+                    Row("ui.market.report", "SCOUT REPORT", "GÖZLEMCİ RAPORU"),
+                    Row("ui.market.potential", "POTENTIAL", "POTANSİYEL"),
+                    Row("ui.market.age", "AGE", "YAŞ"),
+                    Row("ui.market.fee", "FEE", "BONSERVİS"),
+                    Row("ui.market.wage", "WAGE", "MAAŞ"),
+                    Row("ui.market.short_cash", "{count} short on cash.", "{count} nakit eksik."),
+                    Row("ui.market.short_wage", "{count} a week short in wage room.", "Maaş boşluğu haftada {count} eksik."),
+                    Row("ui.market.short_both", "Short on cash and on wage room.", "Hem nakit hem maaş boşluğu eksik."),
+                    Row("ui.market.leaves_cash", "Leaves {count} in cash.", "Kasada {count} kalır."),
+                    Row("ui.market.leaves_wage", "Leaves {count} a week in wage room.", "Maaş boşluğunda haftada {count} kalır."),
+                    Row("ui.market.signed", "Signed.", "İmzalandı."),
+                    Row("ui.market.sold", "Sold for {count}.", "{count} karşılığında satıldı."),
+                    Row("ui.market.starter", "He starts for you.", "İlk 11'inde oynuyor."),
+                    Row("ui.market.squad_floor", "The squad is down to {count}. Nobody can leave.", "Kadro {count} kişiye indi. Kimse gidemez."),
 
                     // --- the season (Faz 7) ----------------------------------------------------------
                     // A league table's column heads are the one place a single letter IS the word: P W D

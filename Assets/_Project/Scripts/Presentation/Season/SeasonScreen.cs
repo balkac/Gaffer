@@ -27,8 +27,9 @@ namespace Gaffer.Presentation.Season
         private readonly RunSession _session;
         private readonly LocalizedStrings _text;
         private readonly Action _onClose;
-        private readonly ScrollView _scroll = new ScrollView(ScrollViewMode.Vertical);
 
+        /// <param name="onClose">What the way out does — or null when the screen is a page of the shell
+        /// and has no way out to offer, because the tab bar is it.</param>
         public SeasonScreen(RunSession session, LocalizedStrings text, Action onClose)
         {
             _session = session;
@@ -36,26 +37,34 @@ namespace Gaffer.Presentation.Season
             _onClose = onClose;
         }
 
+        /// <summary>Builds the screen from the run as it stands. Built whole on every call — the shell
+        /// rebuilds it each time the tab is shown — so nothing here is kept between builds.</summary>
         public VisualElement Build()
         {
             var root = new VisualElement();
             root.AddToClassList("page");
 
-            _scroll.AddToClassList("page__scroll");
-            _scroll.touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped;
-            _scroll.verticalScrollerVisibility = ScrollerVisibility.Hidden;
-            new DragToScroll(_scroll);
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.AddToClassList("page__scroll");
+            scroll.touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped;
+            scroll.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+            new DragToScroll(scroll);
 
             var body = new VisualElement();
             body.AddToClassList("page__body");
             body.Add(BuildNext());
             body.Add(BuildTable());
             body.Add(BuildTarget());
-            _scroll.Add(body);
-            root.Add(_scroll);
+            scroll.Add(body);
+            root.Add(scroll);
 
-            // Pinned beneath the scroller, as the report's is — the same rule for the same reason.
-            root.Add(CloseButton());
+            // Pinned beneath the scroller, as the report's is — the same rule for the same reason. Only
+            // when there is somewhere to go: as a page of the shell the tab bar is the way out.
+            if (_onClose != null)
+            {
+                root.Add(CloseButton());
+            }
+
             return root;
         }
 

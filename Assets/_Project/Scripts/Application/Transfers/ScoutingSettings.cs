@@ -18,10 +18,11 @@ namespace Gaffer.Application.Transfers
         /// Every parameter is optional and defaulted to the calibrated value, so a caller writes only what
         /// it changes: <c>new ScoutingSettings(potentialMaxWidth: 4)</c>.
         /// </summary>
-        public ScoutingSettings(int potentialMaxWidth = 22, int attributeMaxWidth = 12)
+        public ScoutingSettings(int potentialMaxWidth = 22, int attributeMaxWidth = 12, double baseAccuracy = 0.5)
         {
             PotentialMaxWidth = potentialMaxWidth;
             AttributeMaxWidth = attributeMaxWidth;
+            BaseAccuracy = baseAccuracy < 0.0 ? 0.0 : baseAccuracy > 1.0 ? 1.0 : baseAccuracy;
         }
 
         /// <summary>Half-width of a fully unscouted (accuracy 0) hidden-potential band, in rating points.</summary>
@@ -29,6 +30,15 @@ namespace Gaffer.Application.Transfers
 
         /// <summary>Half-width of a fully unscouted (accuracy 0) attribute band, in rating points.</summary>
         public int AttributeMaxWidth { get; }
+
+        /// <summary>
+        /// How well the club's scouting reads a player before any perk improves it, 0..1 — the accuracy
+        /// <see cref="Scout.Observe"/> is asked with when nothing else says. At the default 0.5 a hidden
+        /// potential shows as a band of ±11 and a key attribute as ±6. A balance value rather than a
+        /// setup value because it is the same for every run until Faz 6 gives the manager a way to raise
+        /// it; that perk will add to THIS, not replace it.
+        /// </summary>
+        public double BaseAccuracy { get; }
 
         /// <summary>
         /// The calibrated defaults — one cached, shared, immutable instance, the convention every

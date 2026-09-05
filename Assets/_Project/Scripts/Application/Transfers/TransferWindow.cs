@@ -46,5 +46,17 @@ namespace Gaffer.Application.Transfers
         {
             return At(playedRounds, roundCount) != TransferWindowPhase.Closed;
         }
+
+        /// <summary>
+        /// The round after which the next window of THIS season opens, or null when no window is left
+        /// before the summer — so a closed market can say when it reopens rather than only that it is
+        /// closed. Asked here, beside <see cref="At"/>, so the two cannot disagree about where the winter
+        /// break falls.
+        /// </summary>
+        public static int? NextOpening(int playedRounds, int roundCount)
+        {
+            int winter = roundCount / 2;
+            return roundCount > 0 && playedRounds < winter ? winter : (int?)null;
+        }
     }
 }

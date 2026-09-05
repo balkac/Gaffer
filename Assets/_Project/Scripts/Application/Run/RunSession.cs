@@ -424,6 +424,13 @@ namespace Gaffer.Application.Run
             return _scout.Observe(player, accuracy);
         }
 
+        /// <summary>What the manager knows about a prospect at the club's own scouting accuracy
+        /// (<see cref="ScoutingSettings.BaseAccuracy"/>) — the report the shipped screens draw.</summary>
+        public ScoutReport Observe(Player player)
+        {
+            return _scout.Observe(player, _balance.Scouting.BaseAccuracy);
+        }
+
         /// <summary>
         /// The run as a serializable document, with the managed club's live roster folded back into the
         /// league first — capturing before that sync was how a just-signed player could be missing from a
