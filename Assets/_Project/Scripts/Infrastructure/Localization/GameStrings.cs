@@ -43,6 +43,228 @@ namespace Gaffer.Infrastructure.Localization
                 Locales.Shipped,
                 new[]
                 {
+                    // --- the screens (Faz 7) ---------------------------------------------------------
+                    // Interface copy, not narrative: a label names what a thing IS, in as few words as it
+                    // takes, and a button names the ACTION rather than its result. Turkish is written
+                    // native — the shortest natural phrase, not the English one rendered word for word.
+                    Row(
+                        "ui.squad.eleven",
+                        "THE ELEVEN",
+                        "İLK 11"),
+                    Row(
+                        "ui.squad.bench",
+                        "BENCH",
+                        "YEDEKLER"),
+                    Row(
+                        "ui.squad.position",
+                        "POSITION",
+                        "SIRA"),
+                    Row(
+                        "ui.squad.week",
+                        "WEEK",
+                        "HAFTA"),
+                    Row(
+                        "ui.squad.attack",
+                        "ATK",
+                        "HÜC"),
+                    Row(
+                        "ui.squad.midfield",
+                        "MID",
+                        "ORT"),
+                    Row(
+                        "ui.squad.defence",
+                        "DEF",
+                        "SAV"),
+                    Row(
+                        "ui.squad.view_pitch",
+                        "Pitch",
+                        "Saha"),
+                    Row(
+                        "ui.squad.view_list",
+                        "List",
+                        "Liste"),
+                    Row(
+                        "ui.squad.picker_who",
+                        "WHO PLAYS HERE",
+                        "BURAYA KİM OYNASIN"),
+                    Row(
+                        "ui.squad.picker_where",
+                        "WHERE DOES HE PLAY",
+                        "NEREDE OYNASIN"),
+                    Row(
+                        "ui.action.auto_pick",
+                        "Auto-pick",
+                        "Otomatik seç"),
+                    Row(
+                        "ui.action.play_week",
+                        "Play the week",
+                        "Haftayı oyna"),
+                    Row(
+                        "ui.message.no_fixture",
+                        "No fixture this week.",
+                        "Bu hafta maç yok."),
+
+                    // --- what a position is CALLED, in three characters ------------------------------
+                    // The tiles on the board and every row in the sheet are labelled with these, so they
+                    // are read more often than any other string in the game and are the only ones whose
+                    // LENGTH is load-bearing: `.row__role` is a FIXED 100px column at 22px with 2px
+                    // letter-spacing, so a fourth character crowds it and a longer one clips rather than
+                    // reflows. UiCopyTests pins three.
+                    //
+                    // Football Manager ships ONE code set worldwide — its Turkish build still says GK, DC,
+                    // DR — because a single set is cheaper to maintain across thirty languages. We ship
+                    // two, because we ship two languages and Turkish football already has its own
+                    // abbreviations: a Turkish player reads STP and DOS without translating, and reads DC
+                    // by first remembering what it stands for in English. English keeps the conventional
+                    // codes rather than FM's positional ones (RB, not DR) — they are what an English
+                    // reader outside FM expects.
+                    Row("role.goalkeeper.abbrev", "GK", "KL"),
+                    Row("role.right_back.abbrev", "RB", "SĞB"),
+                    Row("role.centre_back.abbrev", "CB", "STP"),
+                    Row("role.left_back.abbrev", "LB", "SLB"),
+                    Row("role.defensive_midfield.abbrev", "DM", "DOS"),
+                    Row("role.central_midfield.abbrev", "CM", "MOS"),
+                    Row("role.attacking_midfield.abbrev", "AM", "OOS"),
+                    Row("role.right_midfield.abbrev", "RM", "SĞO"),
+                    Row("role.left_midfield.abbrev", "LM", "SLO"),
+                    Row("role.right_wing.abbrev", "RW", "SĞA"),
+                    Row("role.left_wing.abbrev", "LW", "SLA"),
+                    Row("role.striker.abbrev", "ST", "FV"),
+
+                    // --- the match report (Faz 7) ----------------------------------------------------
+                    // Broadcast voice: the eyebrows are what a score bug would caption, not what a form
+                    // would label. Turkish is written native — "DİĞER SAHALARDA" is what a Turkish
+                    // round-up says, where a rendering of "other results" would not be said out loud.
+                    Row(
+                        "ui.match.goal",
+                        "GOAL",
+                        "GOL"),
+                    Row(
+                        "ui.match.shots",
+                        "shots",
+                        "şut"),
+                    Row(
+                        "ui.match.elsewhere",
+                        "ELSEWHERE",
+                        "DİĞER SAHALARDA"),
+                    Row(
+                        "ui.match.setup",
+                        "WHAT YOU SET UP",
+                        "KURDUĞUN DÜZEN"),
+                    Row(
+                        "ui.match.mentality",
+                        "MENTALITY",
+                        "MENTALİTE"),
+                    Row(
+                        "ui.match.tempo",
+                        "TEMPO",
+                        "TEMPO"),
+                    Row(
+                        "ui.match.pressing",
+                        "PRESSING",
+                        "PRES"),
+                    Row(
+                        "ui.match.approach",
+                        "APPROACH",
+                        "YAKLAŞIM"),
+                    Row(
+                        "ui.match.journal",
+                        "Into the journey log",
+                        "Günlüğe yazıldı"),
+                    Row(
+                        "ui.match.quiet",
+                        "A quiet afternoon.",
+                        "Sessiz bir maç."),
+                    Row(
+                        "ui.action.continue",
+                        "Continue",
+                        "Devam et"),
+                    Row(
+                        "ui.action.close",
+                        "Close",
+                        "Kapat"),
+
+                    // --- the season (Faz 7) ----------------------------------------------------------
+                    // A league table's column heads are the one place a single letter IS the word: P W D
+                    // L is how every English table has read for a century, and O G B M is how every
+                    // Turkish one has. Spelling them out would be the less legible choice. The zone labels
+                    // sit on the lines the board's two numbers draw through the table.
+                    Row(
+                        "ui.season.next",
+                        "NEXT",
+                        "SIRADAKİ"),
+                    Row(
+                        "ui.season.home",
+                        "HOME",
+                        "İÇ SAHA"),
+                    Row(
+                        "ui.season.away",
+                        "AWAY",
+                        "DEPLASMAN"),
+                    Row(
+                        "ui.season.over",
+                        "SEASON OVER",
+                        "SEZON BİTTİ"),
+                    Row(
+                        "ui.season.table",
+                        "TABLE",
+                        "PUAN DURUMU"),
+                    Row("ui.season.played", "P", "O"),
+                    Row("ui.season.won", "W", "G"),
+                    Row("ui.season.drawn", "D", "B"),
+                    Row("ui.season.lost", "L", "M"),
+                    Row("ui.season.goal_difference", "GD", "AV"),
+                    Row("ui.season.points", "PTS", "P"),
+                    Row(
+                        "ui.season.promotion",
+                        "PROMOTION",
+                        "TERFİ"),
+                    Row(
+                        "ui.season.relegation",
+                        "RELEGATION",
+                        "KÜME DÜŞME"),
+                    Row(
+                        "ui.season.target",
+                        "BOARD TARGET",
+                        "YÖNETİMİN HEDEFİ"),
+                    // The second number is the one that ends the run. Turkish football talks about a
+                    // manager's job as his SEAT — "koltuk" — and that is the word, not a rendering of "job".
+                    Row(
+                        "ui.season.job",
+                        "KEEP THE JOB",
+                        "KOLTUK"),
+                    // The two numbers the board judges a season by, as a manager would say them. The
+                    // count is rendered at the edge, so the Turkish ordinal's own full stop sits in the
+                    // template rather than being wished onto the number.
+                    Row(
+                        "ui.season.target_up",
+                        "Top {count}",
+                        "İlk {count}"),
+                    Row(
+                        "ui.season.target_stay",
+                        "{count} or above",
+                        "En kötü {count}. sıra"),
+
+                    // --- the tactical axes, by name --------------------------------------------------
+                    // One row per setting on the four axes the simulation actually reads. They are named
+                    // here rather than near the enums for the usual reason: the enum carries the key, the
+                    // table carries the word. Turkish uses what a Turkish coach says on television —
+                    // "kontra" rather than a rendering of "counter-attack".
+                    Row("tactics.mentality.very_defensive", "Very defensive", "Çok defansif"),
+                    Row("tactics.mentality.defensive", "Defensive", "Defansif"),
+                    Row("tactics.mentality.balanced", "Balanced", "Dengeli"),
+                    Row("tactics.mentality.attacking", "Attacking", "Hücumcu"),
+                    Row("tactics.mentality.very_attacking", "Very attacking", "Çok hücumcu"),
+                    Row("tactics.tempo.patient", "Patient", "Sabırlı"),
+                    Row("tactics.tempo.standard", "Standard", "Standart"),
+                    Row("tactics.tempo.intense", "Intense", "Yoğun"),
+                    Row("tactics.pressing.contain", "Contain", "Geri çekil"),
+                    Row("tactics.pressing.standard", "Standard", "Standart"),
+                    Row("tactics.pressing.press", "Press", "Bas"),
+                    Row("tactics.approach.possession", "Possession", "Topa sahip ol"),
+                    Row("tactics.approach.balanced", "Balanced", "Dengeli"),
+                    Row("tactics.approach.counter", "Counter", "Kontra"),
+
                     // --- the narrative layer (Faz 5.4) -----------------------------------------------
                     // One line per kind of career moment. House rules on top of the ones above, and they
                     // are what keep a journey readable rather than a fixture list:
@@ -122,6 +344,45 @@ namespace Gaffer.Infrastructure.Localization
                         "moment.retirement",
                         "{player} hung up his boots.",
                         "{player} kariyerini noktaladı."),
+
+                    // --- the same moments, read under the goal that made them --------------------------
+                    // The match report draws a recognised moment UNDER its goal, and that row already says
+                    // "41' · GOAL · Pauquet". The lines above were written for the journey log, where they
+                    // stand alone and must carry the minute and the name themselves — under a goal they
+                    // read both twice. These say only what the goal WAS. No minute, no name (a test holds
+                    // that), and no second sentence. Only the kinds a goal can produce have one; the rest
+                    // never fold and keep their full line (MomentTextKeys.Folded).
+                    //
+                    // A hat-trick and a brace are raised at the FIRST of the goals, so the line under it
+                    // says so rather than announcing a feat the feed has not shown yet.
+                    Row(
+                        "moment.first_goal.folded",
+                        "His first goal for the club.",
+                        "Kulüpteki ilk golü."),
+                    Row(
+                        "moment.big_match_goal.folded",
+                        "On the day it mattered.",
+                        "Büyük maçta geldi."),
+                    Row(
+                        "moment.derby_goal.folded",
+                        "A derby goal.",
+                        "Derbi golü."),
+                    Row(
+                        "moment.title_decider_goal.folded",
+                        "With the title on the line.",
+                        "Şampiyonluk yolunda."),
+                    Row(
+                        "moment.relegation_goal.folded",
+                        "In a relegation six-pointer.",
+                        "Küme düşme mücadelesinde."),
+                    Row(
+                        "moment.brace.folded",
+                        "The first of his two.",
+                        "İki golün ilki."),
+                    Row(
+                        "moment.hattrick.folded",
+                        "The first of his hat-trick.",
+                        "Hat-trick'in ilk golü."),
 
                     // --- transfer-request ------------------------------------------------------------
                     // He is good enough that someone came in for him and the window is open. Refusing

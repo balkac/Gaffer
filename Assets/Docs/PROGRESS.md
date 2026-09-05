@@ -6,6 +6,133 @@
 
 ---
 
+## Sezon ekranı, ve golün altındaki satırın kendi kopyası · 2026-09-05 (Faz 7, 5 ekranın 3.'sü)
+
+**Önce bekleyen iş kapandı.** 30 Ağustos'un maç raporu dilimi çalışma ağacında duruyordu; Unity kapısı açık Editor üzerinden (`run_tests`, pipeline) koşuldu — 592/592 — ve iki commit atıldı (`923c44d` feat, `4d718c0` docs). Sonra sahibine dört karar soruldu ve dördü de öneriyle aynı çıktı: kısa ek cümle, tablo + hedef + sıradaki maç, başlıktaki sıra satırından açılış, yerel merge.
+
+**Katlanmış satır artık kendi kopyasını okuyor.** Rapordaki hikâye satırı dakikayı ve ismi iki kez yazıyordu (30 Ağustos'un açık maddesi). Çözüm ikinci bir kopya kaydı: `MomentTextKeys.Folded(kind)` → `moment.<tür>.folded`, yalnız **golde doğan** türler için (first_goal, big_match_goal, derby_goal, title_decider_goal, relegation_goal, brace, hattrick); diğerleri null döner ve tam satırlarını korur. `MomentLine.Under` bu ikisini seçer, `MatchBeats` hikâyeyi onunla yazar. İki şey kod okunurken değişti: **(1)** ilk öneride goal_milestone da vardı — `MilestoneRule` anı `NoMinute` ile üretiyor, yani hiç katlanmıyor, kısa formu olmasının anlamı yok, çıkarıldı; **(2)** hat-trick ve brace `FirstGoalMinute` ile üretiliyor, yani üç golün **ilkinin** altında duruyor — "That completes his hat-trick." yanlış olurdu, satır "The first of his hat-trick." / "Hat-trick'in ilk golü." oldu. Üç guard: dakika yazan her tam satırın kısa formu var; hiçbir kısa form `{minute}` veya `{player}` içermiyor (varoluş sebebi bu); `MatchBeats` testi hikâyede golcünün adının ve dakikanın geçmediğini tutuyor. Ekranda doğrulandı: 2. hafta, "41' · GOAL · Dimitri Pauquet" ve altında "His first goal for the club."
+
+**Sezon ekranı (GDD §8: puan durumu, fikstür, hedef).** Üç kart: sıradaki rakip (iç saha/deplasman), tablo, yönetimin hedefi. Çekirdeğe iki sorgu eklendi — `LeagueSeason.FixturesOf(round)` ve `RunSession.NextFixture()` — ikisi de render-time okuma, durum tutmaz. Hedef çizgileri için `SeasonEvaluator`'ın iki karşılaştırması `Judge(position, target)` olarak dışa açıldı ve `Evaluate` onu çağırıyor; `Presentation.Season.TableZones` bölgeyi **ona sorar**, yeniden türetmez — böylece tablonun "terfi" dediği yer, sezon sonunda kurulun terfi diyeceği yerle aynı tanımdan gelir. Çizginin **nereye** çizildiği ise burada karar verilir ve bu off-by-one'ın yaşadığı kural: 4 testle kilitli (son satırın altına çizilmez, iki sayı çakışırsa tek çizgi).
+
+**Gözle bulunan iki kusur, aynı görüntüde.** İlk çekimde **(1)** "PTS" başlığı puan sütununun display boyutunu giymişti — tablodaki en büyük sayı gibi okunuyordu; başlık satırına kendi kuralı verildi. **(2)** PROMOTION etiketi çizginin **altında** duruyordu, yani 3. sıranın başlığı gibi okunuyordu. Kural: etiket bölgenin **kendi tarafında** — terfi etiketi çizginin üstünde bölgeyi kapatır, küme etiketi çizginin altında bölgeyi açar (`table__line--closes/--opens`).
+
+**Ekranın yeri ve ortaklaşan kabuk.** Başlıktaki "Sıra 8 · Hafta 0/38 ›" satırı artık bir karo (UI_REFERENCES §2): dokununca sezon ekranı açılır; aksiyon satırına üçüncü düğme konmadı. Rapor ile sezon ekranı aynı şekilde olduğu için (`kendi scroller'ı + altına sabitlenmiş tek çıkış`) `.report`'un kabuk sınıfları `.page*` oldu ve `SquadScreen` ikisini tek "tall sheet" üzerinden gösteriyor. Kabuk geldiğinde taşınacak şey hâlâ bu host.
+
+**Yöntem notu — Play Mode'da sheet'i terminalden açmak.** `capture_game_view` yalnız görüneni çeker; sezon ekranı bir dokunuşun arkasında. Çözüm `eval`: `UQueryExtensions.Q(root, null, "header__standing")` ile elemanı bul, `ClickEvent.GetPooled()` gönder. İki tuzak ölçüldü: **(a)** eval'da `using` yok, `root.Q(...)` derlenmez — uzantı metodu tam adıyla çağrılır; **(b)** `ClickEvent` bir `Button`'ı **tetiklemez** (hafta 0/38'de kaldı) — `Button` için `NavigationSubmitEvent` gerekir. Bununla "hikâye çıkana kadar hafta oyna" döngüsü tek eval'da koştu (2. haftada buldu). Adımlar CLAUDE.md'ye eklendi.
+
+**Sayılar.** dotnet köprüsü 590 → 599 (+3 kopya guard'ı, +1 beat, +4 bölge, +1 UI şablon doğrulaması). Unity kapısı 601.
+
+---
+
+## Maç anlatısı ekranı · 2026-08-30 (Faz 7, 5 ekranın 2.'si)
+
+**Kapsam kararı, sim'e bakılarak.** Ekranı tasarlamadan önce sim'in ne ürettiğine bakıldı ve belirleyici şey çıktı: **`MatchEventKind` enum'unun tek değeri var, `Goal`.** ART_STYLE §06'nın feed'i sarı kart, oyuncu değişikliği, kaçan fırsat (xG'li) ve trait aktivasyonu da istiyor — hiçbiri simde yok. Sahibinin kararı: **bugün üretileni tam biçimde göster, sim genişletmesi ayrı bir dilim.** Uydurulmadı; NON-NEGOTIABLE #7 gereği olmayan olay gösterilmiyor, çünkü kartı uyduran bir feed'e gol konusunda da güvenilmez.
+
+**Ne var.** Score bug (hafta, kulüpler, skor, şut sayıları), dakikalı beat feed'i, kurulan düzen (dizilim + dört eksen), haftanın diğer sonuçları, devam düğmesi. Skor **sonuca göre** renkleniyor — `result--win/loss/draw`, ekranın renk harcadığı tek yer, ve ART_STYLE bu renkleri tam olarak sonuç için ayırıyor.
+
+**İmza olan kısım çalışıyor.** Faz 5'in tanıdığı kariyer anları feed'e giriyor ve bir gol ile onun yarattığı an **tek satır** oluyor (mock'un şekli): golün altında hikâye, yanında accent kenar, altında "günlüğe yazıldı" etiketi. 2. haftada gerçek bir örnek yakalandı ve ekran görüntüsüyle doğrulandı.
+
+**Mantık ekrandan ayrıldı.** Hangi beat'ler var, hangi sırada, ve hangi anın hangi gole ait olduğu `MatchBeats`'te — framework'süz, köprüde, 6 testle kilitli. Sebep: bu iki kural **sessizce** yanlış olur. Yanlış gole iliştirilen bir hikâye kusursuz okunan bir cümlede yanlış oyuncuyu anar, ve yanlış sıralanmış bir feed yine feed'e benzer. İkisi de exception atmaz. Eşleşme bu yüzden dakika **ve** golcü üzerinden yapılıyor, ve bir an bir kez harcanıyor.
+
+**Yol boyunca ortaklaştırılanlar.** `HarnessMoments`'ın Gate B'de kanıtlanmış an→cümle mantığı `Presentation.Matchday.MomentLine`'a taşındı; harness artık ona bağlanıyor. Ayrım bilinçli: **argümanlar** ortak (hangi isim, kulüp, dakika, sayı), **eksik anahtarda ne yapılacağı** değil — pencere gürültülü bir geliştirici işareti çizer, ekran anahtarın kendisini gösterir. Ayrıca "kelime yoksa anahtarı göster" politikası dört yerde tekrarlanıyordu (`SquadScreen`, rapor, beat listesi, an satırı); tek bir `UiWords.Or`'a indi.
+
+**Taktik eksenlerinin adları geldi.** `TacticsTextKeys` çekirdekte anahtar üretiyor (kelime değil, #8), 14 satır kopya iki dilde yazıldı, ve `UiTextKeys.All` bunları da enum'dan türetiyor — yani yeni bir eksen değeri eklenince guard kopyasını ister. Taktik ekranı bunları hazır bulacak.
+
+**Gözle bulunan, henüz çözülmemiş.** Katlanmış hikâye satırı dakikayı ve ismi **iki kez** yazıyor: satır "41' · GOAL · Dimitri Pauquet" diyor, altındaki cümle "41' — Dimitri Pauquet kulüpteki ilk golünü attı." Sebep yapısal — bu kopya *yolculuk günlüğü* için, tek başına duran bir cümle olarak yazılmış; raporda ise bağlamı satır sağlıyor. ART_STYLE'ın mock'unda alt satır ne dakikayı ne ismi tekrar ediyor. Ucuz bir düzeltmesi yok: rapor için ikinci bir kopya kaydı gerekiyor (gol türleri için ~6 satır × 2 dil), ve bu sahibinin ses kararı.
+
+**Sahibinin bulduğu üç kusur — aynı gün, ölçülerek düzeltildi.**
+
+1. **Continue bazen basılamıyordu.** Ölçüm: kariyer anı taşıyan bir haftada düğme `y=2181..2291`, ekran `2109` — tamamen görünümün dışında, ve scrollbar gizli olduğu için kaydırılabildiğine dair görsel ipucu da yok. Sebebi utanç verici biçimde yazılıydı: `SquadScreen`'in kendi yorumu *"Header ve aksiyonlar sabitlenir, böylece 'haftayı oyna' hep başparmağın altındadır"* diyor, ben raporda düğmeyi scroller'ın **içine** koymuştum. Rapor artık kendi scroller'ını taşıyor ve çıkışı onun altına sabitliyor → `y=1919..2029`, ekranda.
+
+2. **Panel sıfıra çöktü — düzeltmenin kendi regresyonu.** Sabitlemenin ilk hâlinde panel yüksekliğini *içeriğinden* alıyordu, içerik ise `flex-grow` ile "bana ne verirsen onu doldururum" diyordu; iki iddia birbirini sıfırda çözdü ve ekran kayboldu. Panele kesin yükseklik verildi. Ardından ikinci bir sessizlik çıktı: taban `.sheet__panel`'ın `max-height: 70%`'i, `height: 92%`'i kırpıyordu — kural 92 diyor, ekran 70 çiziyordu. İkisi de yazıldı.
+
+3. **Hover rengi primary düğmeyi bozuyordu.** `.button:hover` **bütün** düğmeleri `--pitch-line`'a boyuyordu, ve bir pseudo-sınıf düz bir sınıftan üstün olduğu için `.button--primary`'yi de eziyordu. Ölçüm: `FF2E7E → 1E3733` — accent düğme imlecin altında parlak magentadan koyu yeşile dönüyor, yani tam işaret edildiği anda devre dışı gibi okunuyordu. Artık `FF2E7E → FF5C97` (`--accent-lift`): ikinci bir renk değil, aynı tonun bir durumu.
+
+**Ekranın yeri geçici.** Rapor `SquadScreen`'in içinde bir sheet olarak açılıyor, çünkü navigasyon kabuğu yok. Kabuk geldiğinde taşınacak olan `SquadScreen`'deki bağlantı; `MatchScreen` olduğu gibi kalır.
+
+---
+
+## Tahta artık bir saha · 2026-08-30
+
+**Sorun, ancak görülünce anlaşıldı.** Ekran görüntüsü alınabilir olur olmaz çıkan ikinci bulgu: `ART_STYLE` "matchday broadcast graphics" diyor ama tahtada tek bir saha çizgisi yoktu — koyu bir dikdörtgen üzerinde kart ızgarası. Dört sıra kart, ona bakan göze *nerede* durduklarını söylemiyordu.
+
+**Ne yapıldı.** `PitchView`'a kartların **arkasında** duran, mutlak konumlu ve `PickingMode.Ignore` bir işaret katmanı: iki ceza sahası, iki altı pas, orta çizgi, orta yuvarlak, orta nokta. Ölçüler gerçek bir 105×68 sahanın oranları olarak **yüzdeyle** yazıldı (ceza sahası 40.3/68 geniş, 16.5/105 derin; altı pas 18.3×5.5; yuvarlak çapı 18.3), böylece tahta hangi yükseklikte olursa olsun oranını koruyor — bir telefonda doğru olan piksel sayıları taşımıyor. Katman **bir kez** kuruluyor ve her `Draw`'dan sonra yeniden ekleniyor; hiç değişmeyen yedi elemanı her çizimde yeniden yaratmak sabit bir şeyi ekranda tutmak için yedi tahsis demekti (PERFORMANCE §8).
+
+**Ve sonra düzeltilen.** İlk çekimde çizgiler kart kenarlarıyla **aynı ağırlıktaydı** (ikisi de `--pitch-line`). Kartlar opak ve çizgilerin üstünde duruyor — kaleci kendi altı pasının içinde, forvetler karşı ceza sahasının kenarında — yani çizgiler sürekli kesiliyor. Eşit ağırlıkta bu kesilmeler **kırık** okunuyordu. Çözüm katmana tek bir `opacity: 0.45`: kesilmeler artık kartların daha yakında olması olarak okunuyor, ve palet sahip olduğu üç yeşilde kalıyor — markalar için ayrı bir renk token'ı eklenmedi.
+
+**Ölçüt olarak bırakılan kural.** Çizgiler bilgi değil dokudur. Bir marka bir reytingle dikkat için yarışıyorsa fazla parlaktır; menajer reyting için geldi, saha ona nerede durduğunu söylüyor.
+
+---
+
+## Mevkiler artık okuyanın dilinde · 2026-08-30
+
+**Sorun.** Tahtadaki ve listedeki rol etiketi `role.ToString().Substring(0, 3).ToUpperInvariant()` ile üretiliyordu; ekranda `GOA`, `RIG`, `CEN`, `LEF`, `STR` yazıyordu. İki ayrı kusur: **(1)** NON-NEGOTIABLE #8 ihlali — kodda düz oyuncu-yüzü metin; **(2)** kısaltma olarak da kötü, `GOA` hiçbir dilde kaleci demiyor. Mekanizma aslında vardı (`PlayerRoles.GetShortLabelKey`, `role.<x>.abbrev` anahtarları) ama string table'da karşılıkları yoktu ve `PitchView` metin çözücü almıyordu.
+
+**Karar: iki dil, iki set.** Football Manager dünya çapında TEK kod seti gönderir — Türkçe FM'de de `GK`, `DC`, `DR` yazar — çünkü otuz dilde tek seti sürdürmek ucuz. Biz iki dil gönderiyoruz ve Türk futbolunun kendi kısaltmaları zaten var: bir Türk oyuncu `STP` ve `DOS`'u çevirmeden okur, `DC`'yi ise önce İngilizcesini hatırlayarak. İngilizce tarafta da FM'in mevki kodları yerine yaygın olanlar seçildi (`RB`, `DR` değil).
+
+| Rol | EN | TR | Rol | EN | TR |
+|---|---|---|---|---|---|
+| Goalkeeper | GK | KL | AttackingMidfield | AM | OOS |
+| RightBack | RB | SĞB | RightMidfield | RM | SĞO |
+| CentreBack | CB | STP | LeftMidfield | LM | SLO |
+| LeftBack | LB | SLB | RightWing | RW | SĞA |
+| DefensiveMidfield | DM | DOS | LeftWing | LW | SLA |
+| CentralMidfield | CM | MOS | Striker | ST | FV |
+
+**Nerede duruyor.** Kelimeler `GameStrings`'te (Infrastructure — #8'in katman yarısı); `PitchView` artık `SquadScreen` gibi `LocalizedStrings` alıyor. `UiTextKeys.All` rol anahtarlarını **enum'dan türetiyor**: yeni bir `PlayerRole` eklenince liste kendiliğinden büyür, guard onun kopyasını ister, ve yazılmış bir `StringTableSO` de onu sağlamak zorunda kalır — `GameRoot` tabloyu tam bu listeye karşı doğruluyor. Elle tutulan bir liste bayatlardı; bugün `_strings` null olduğu için o yol sessiz bir mayındı.
+
+**Guard'lar (`UiCopyTests`).** Her anahtarın her yerelde karşılığı var (mevcut guard, artık rolleri de kapsıyor). Her kısaltma **≤3 karakter** — `.row__role` sabit 100px'lik bir kolon, taşan metin akmaz, kırpılır. Ve bir yerelde iki rol aynı etikete sahip olamaz: bu üçü içinde en sinsisi, çünkü tahta doğru görünür ve yanlış okunur.
+
+**Doğrulama.** `dotnet test` 584 yeşil, `dotnet format` temiz, `recompile` hatasız — ve ilk kez **bakılarak**: EN'de `GK/RB/CB/LB/RM/CM/LM/ST`, TR'de `KL/SĞB/STP/SLB/SĞO/MOS/SLO/FV`. `Ğ` font atlasında mevcut ve düzgün çiziliyor, ki bunu kod okuyarak bilmenin yolu yoktu.
+
+**Yol boyunca çıkan hata.** `BindPlayerRow` `static`'ti ve artık instance olan `Abbreviate`'i çağırıyordu. `dotnet test` bunu göremezdi (`SquadScreen` köprüde yok); yeni `recompile` kapısı **2 saniyede** yakaladı — aracın kurulduğu günkü ilk karşılığı.
+
+---
+
+## Unity CLI dördüncü kapı oldu · 2026-08-30
+
+Unity, Temmuz 2026'da standalone bir `unity` binary'si yayınladı; Hub onu `~/.unity/bin/unity`'ye kurmuş (`1.0.0-beta.5`, PATH'te değil). Bizim için değerli olan tek komut `unity test`.
+
+**Neyi çözüyor.** Hem `CLAUDE.md` hem bu dosya baştan beri bir boşluğu kabul ediyordu: `dotnet test` köprüsü ile tek kullanımlık typecheck csproj'unun ikisi de assembly sınırlarını görmüyor. Typecheck bütün katmanları *tek* assembly'de derliyor, dolayısıyla eksik bir `.asmdef` referansı ona görünmüyor — 2026-08-16'daki "headless yeşil, editör kırmızı" olayı tam buydu. `Infrastructure`'ın geri kalanı, `Composition`, `Presentation` ve `Editor` ise hiçbir otomatik denetimden geçmiyordu; tek çare "Unity'yi aç ve bak" idi, yani doğrulama insana bağlıydı.
+
+`unity test` projeyi batch modda gerçek Editor'de açıyor ve **tek bir test koşmadan önce bütün assembly'leri derliyor**. Böylece asmdef grafiği + dört kör katman insan müdahalesi olmadan doğrulanıyor.
+
+**Ölçüm (temiz ağaç, `f0d2df1`).** 584/584 yeşil — 582 `Gaffer.Tests` + 2 `Gaffer.Tests.Unity`. Testlerin kendisi 1,85 sn; toplam duvar saati ~4 dk (editör açılışı + import). İlk koşuda Unity derlemeyi 17 Ağustos önbelleğinden aldığı için (kaynak değişmemişti) kapının gerçekten kapandığı ayrıca kanıtlandı: `Presentation/Squad/PitchView.cs`'e bilerek bir derleme hatası konup koşuldu → `exit 6`, `Aborting batchmode due to failure: Scripts have compiler errors.` Dosya geri alındı, ağaç temiz bırakıldı.
+
+**Karar.** `unity test` dördüncü doğrulama kapısıdır. `dotnet test`'in yerine **geçmez**: o saniyeler sürer ve her düzenlemede koşar, bu ~4 dk sürer ve yalnız `dotnet test`'in göremediği yere dokunulduğunda koşar. Projede hiçbir dosya değişmedi — ne `manifest.json`, ne `.asmdef`, ne kod; yalnız doğrulama akışı büyüdü.
+
+**`com.unity.pipeline` da kuruldu** (`0.5.0-exp.1`, sürüm sabitlendi; sahibinin onayıyla). Açık Editor'e `localhost:7800`'den komut geçiriyor — `recompile`, `get_console_logs`, `capture_game_view`, `menu`, `eval`, `run_tests`, sahne/asset düzenleme. İki ölçülmüş kazanç: **(1)** `recompile` dördüncü kapının derlediği aynı kör katmanları **~9 saniyede** derliyor (`unity test` ~4 dk) — iç döngü kapısı bu oldu; **(2)** `capture_game_view --source screen` ile Faz 7 ekranları **görülebiliyor**. Kurulumdan sonra dördüncü kapı tekrar koşuldu: 584/584 yeşil.
+
+**Yan etki (bilinçli bırakıldı).** Paket kurulumu `ProjectSettings.asset`'te `runInBackground`'ı `0 → 1` yaptı — Editor odak dışındayken isteklere cevap verebilsin diye. Bu bir *player* ayarı, yani build'e de gidiyor; mobilde pratik etkisi yok (iOS/Android uygulamayı zaten askıya alır), ama bir dev aracının ürün ayarını değiştirmesi kayda geçsin.
+
+**Tuzak.** `capture_game_view --save_path` göreli verilirse proje köküne değil `Assets/` altına çözülür ve orada `.meta` üretir; proje kökü dışına ise hiç yazamaz.
+
+**İlk görüntünün gösterdiği (Squad ekranı, 1080×1920).** İki şey kod okuyarak yakalanamayacakken gözle çıktı: rol kısaltmaları ekranda `GOA` / `RIG` / `CEN` / `LEF` / `STR` olarak görünüyor — NON-NEGOTIABLE #8 ihlali artık varsayım değil, ve kısaltmalar anlamsız (`GOA` = kaleci). İkincisi saha, ART_STYLE'ın "Matchday Broadcast Graphics" dili için fazla çıplak: saha çizgisi/orta yuvarlak yok, kalecinin üstünde geniş ölü alan var, kart ızgarasından ibaret. İkisi de sahibinin kararını bekliyor.
+
+---
+
+## Pozisyon dışı oynatmak artık bir şeye mal oluyor · 2026-08-17
+
+Sahibi sordu: *"Önerin FM'de de böyle mi, mobilinde özellikle?"* — ve araştırma öneriyi hem doğruladı hem iki sayısını düzeltti. FM, oyuncunun pozisyon uyumunu 1–20 tutup **`rating × (1 − (20 − uyum) / 46)`** uyguluyor (puan başına ~%2.17); FM-Arena'nın maç motoru testleri kademeleri **Accomplished −%10 · Competent −%15 · Unconvincing −%20 · Awkward −%35 · Ineffectual −%40** olarak ölçmüş (11'i de Ineffectual olan takım 2.1 → 1.2 puan/maça düşüyor). Mobil de aynı: FM26 Mobile'da her oyuncunun "Player Positions" ekranı ve renk kodlu pozisyon yetkinliği var. Önerdiğim aynı-hat ×0.92 → **×0.90** (FM'in Accomplished'ı), kaleci-başkasında ×0.5 → **×0.60**: FM'in tabanı ~0.57 ve en kötü kademesi bile maç kazanıyor, çünkü **bir oyuncuyu silen ceza menajere takım kâğıdını okumayı değil ondan korkmayı öğretir.**
+
+**Ceza yokken ne olduğu, ölçülerek.** Seçim yaprağı uygunluğu **işaretliyordu**, simülasyon ise görmezden gelmeyi **bedavaya veriyordu** — yani NON-NEGOTIABLE #7'nin tanımıyla flavor text. Dahası: `EffectiveStrengthBuilder` her oyuncuyu **kendi hattının** eksenine yazıyordu, slotunun değil. Yani 4-3-3'e on bir defans dizince hücum ekseni "boş hat" fallback'inden (kadro ortalaması) geliyordu ve **lig bunu hiç fark etmiyordu**. Dizilişin kendisi dekoratif.
+
+**Üç parça.** (1) `PositionalFit` (Domain) — Natural / SameLine / AdjacentLine / DistantLine / Impossible, sınıflandırma `PlayerRoles.FitFor`'da, yani **rol topolojisinin tek sahibinde**; ekranın işareti ile maçın faturası aynı kuraldan okunuyor. (2) `PositionalFitSettings` (Application, `SimulationBalanceSO`'dan authorable — #3) çarpanları taşıyor. (3) `SlottedPlayer` — 11'i artık "slot sırasına göre oyuncu listesi" değil, **oyuncu + slot + o slotun rolü**; ilk boş slot bütün indeksleri kaydırdığı ve herkesi başkasının pozisyonundan faturalandırdığı için bu bir kolaylık değil, doğruluk argümanı.
+
+**Otomatik seçim de düzeldi.** Eski kural "önce tam rol, sonra aynı hat, sonra herkes" idi: 40'lık doğal sağ orta saha, 95'lik merkez orta sahayı **her zaman** yeniyordu. Artık tek sıralı geçiş — ceza uygulanıp öyle karşılaştırılıyor, yani çok daha iyi futbolcu slotu alır, azıcık daha iyisi almaz. Tek istisna: kaleci–oyuncu takası **gönüllü olarak asla** seçilmiyor (iyi bir forvet %60'la bile kötü kaleciyi geçer; menajer isterse elle yapar ve bedelini öder). 200 üretilmiş kadro × 5 diziliş = 11.000 slotta ölçüm: **%82.3 natural · %15.4 aynı hat · %2.3 acil durum · 0 absürt** — gerçek bir takım kâğıdının profili, ve testle kilitli.
+
+**Yol boyunca iki sessiz kablolama hatası çıktı.** `RunSessionFactory.Normalize` bundle'ı yeniden kurarken `matchContexts` ve `rivals`'ı **adlandırmıyordu** — yani ikisini authorlayan her çağıran onları sessizce default'a döndürüyordu. `GameRoot` ise `SimulationBalanceSO`'nun yalnız ilk bundle'ını okuyordu: Inspector'da ayarlanan taktik adımları ve golcü ağırlıkları editör pencerelerine gidiyor, **oyuna gitmiyordu.** Yarım okunan config asset hiç olmayandan kötüdür — authored görünür, default davranır.
+
+**Kalibrasyon yeniden ölçüldü (1000 sezon), beş gate PASS:** gol **2.637**/maç (2.692'den) · favori **%50.8** (%51.6) · ev **%41.7** / beraberlik %24.3 / deplasman **%34.0** (%38.2 / %35.8) · şampiyon 12 kulüpte, tepe tohum %37.9 · 0 sıra inversiyonu. Ev/deplasman kayması dizilişlerin değişmesinden: yeni dağılım gerçek futbola (~%45 / %25 / %30) **eskisinden daha yakın**. Test 568 → **580**.
+
+**Ve sahibi doğru soruyu sordu: *"Peki bu güç düşüşünü UI'da niye göstermiyoruz?"*** Göstermiyorduk — ekran her oyuncuya **kendi rolündeki** puanını yazıyordu, yani stopere hücumda oynatınca kart hâlâ 78 diyordu ve takım güçlenmiş gibi duruyordu. Cezayı hesaplayıp saklamak, eleştirdiğim şeyin ta kendisi. Üç yerde düzeltildi: **tahtadaki slot kartı**, **liste görünümündeki ilk 11 satırı**, ve **iki seçim yaprağı** artık oyuncunun *o slottaki* puanını yazıyor, yanında da düşüşü (`−8`). Parlaklık rampası böylece doğruyu söylüyor: yanlış yere konan yıldız gözle görülür şekilde soluyor. Ceza etiketi **kırmızı değil** — semantik renkler sonuçlara ait (ART_STYLE §2) ve sıradan bir taktik ödünü felaket gibi göstermek yanlış olurdu; iki kademe var, aynı hat için sessiz bir kenar, ötesi için kenar + soluklaştırma. Etiket **her satırda var, çoğu zaman boş**: yalnız cezalı satıra eklemek puan sütununu o satırlarda kaydırırdı, ve satırdan satıra oynayan bir sütun açıklamaya çalıştığı sayıdan daha zor okunur.
+
+Çekirdek tarafında bunun bedeli iki ekleme: `LineupOutcome.Sheet` (11'i slotlarıyla birlikte taşır — ekran artık iki listeyi indeksten eşleştirmiyor) ve `RunSession.PositionalFit` (menajerin *düşündüğü* bir slotu fiyatlayabilmek için; balans, state değil). İkisi de #4'e uygun: ekran outcome'u replay ediyor, kendi ceza kopyasını tutmuyor.
+
+**Ayrıca bir test dürüstleştirildi.** `AdvanceWeek_ChangingOneClubsTactics_LeavesMatchesWithoutItIdentical` "sadece 0. kulübün maçları değişebilir" diyordu, ama sezon sonunda bir fikstürün **anlamı tablodan** okunuyor (`MatchContextBuilder`: mayısta iki şampiyonluk adayı bir şampiyonluk maçı oynar) — yani 0. kulübün aldığı üç puan üçüncü bir kulübü aday çizgisinin öbür tarafına geçirip 0. kulübün içinde olmadığı bir maçı değiştirebilir. Bu bağ **kasıtlı ve doğru**; testin iddia ettiği özellik değil. Artık test finiş düzlüğünü kapatarak yalnız kendi iddiasını ölçüyor.
+
+---
+
 ## Faz 3 kapandı — rakip menajer AI'ı · 2026-08-16
 
 Faz 3'ün son açık maddesi, ve Faz 7'den **önce** yapıldı: Faz 7 simülasyonun üstüne arayüz, ve hareketsiz bir dünyanın ekranı sonradan iki kez yapılır. Oyun açısından eksik olan da buydu — **yetenek için rekabet yok**: market yalnız oyuncunun aldıklarıyla küçülüyordu, yani her cevherde ilk seçim sonsuza dek onundu.
@@ -348,7 +475,8 @@ Asıl sayı bunun altında: **gelir modeli yok** (karar #18) ve maaşlar aynı t
 
 ## Nasıl koşulur (hatırlatma)
 
-- **Testler:** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj` — **341 yeşil**. Yalnız `Common`/`Domain`/`Application` derlenir; `Infrastructure` ve `Editor` bu köprüde **yok**, oraları ancak Unity (veya geçici bir typecheck csproj'u) doğrular.
+- **Testler (hızlı kapı):** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj` — **599 yeşil**, saniyeler. Yalnız framework'süz katmanlar derlenir; `Infrastructure`'ın çoğu, `Composition`, `Presentation`, `Editor` bu köprüde **yok**.
+- **Unity CLI (dördüncü kapı):** `~/.unity/bin/unity test --mode EditMode --output /tmp/gaffer-editmode.xml --non-interactive --no-banner --timeout 1800` — **601 yeşil**, ~4 dk. Editor açıkken aynı kapı `~/.unity/bin/unity command run_tests --mode EditMode` ile açık Editor'de koşar (Library kilidi yok, ~2 dk). Gerçek Editor'de batch mod; koşmadan önce **her assembly'yi derler**, yani asmdef referansları + yukarıdaki kör katmanlar buradan geçer. Editor projeyi açık tutmamalı (`Library` kilidi).
 - **Biçim:** `PATH="$HOME/.dotnet:$PATH" dotnet format tests/Gaffer.Tests.csproj --verify-no-changes` — temiz olmalı (`CONVENTIONS.md` mekanik kuralları "tool-enforced" sayıyor).
 - **Harness:** Unity → menü **`Gaffer > Season Harness`** → Run
 - **Management (birleşik demo):** Unity → menü **`Gaffer > Management`** → Start Season → Advance Week (nakit erir) + Summer/Winter'da Sign/Sell (canlı kadro)

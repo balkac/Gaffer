@@ -88,6 +88,97 @@ namespace Gaffer.Tests
             Assert.That(problems, Is.Empty, string.Join(" | ", problems));
         }
 
+        // ----- The short forms, read under a goal --------------------------------------------------------
+
+        [Test]
+        public void EveryFoldedKind_HasWordsInEveryShippedLocale_AndTheyAreValid()
+        {
+            StringTable table = GameStrings.Default;
+            var problems = new List<string>();
+
+            foreach (CareerMomentKind kind in AllKinds)
+            {
+                string key = MomentTextKeys.Folded(kind);
+                if (key == null)
+                {
+                    continue;
+                }
+
+                Assert.That(key, Is.EqualTo(MomentTextKeys.For(kind) + MomentTextKeys.FoldedSuffix), kind.ToString());
+                foreach (string locale in Locales.Shipped)
+                {
+                    string template = table.Find(key, locale);
+                    if (string.IsNullOrEmpty(template))
+                    {
+                        problems.Add($"{key} ({locale}): no words");
+                        continue;
+                    }
+
+                    Result validated = TextTemplate.Validate(template);
+                    if (validated.IsFailure)
+                    {
+                        problems.Add($"{key} ({locale}): {validated.Error}");
+                    }
+                }
+            }
+
+            Assert.That(problems, Is.Empty, string.Join(" | ", problems));
+        }
+
+        [Test]
+        public void EveryLineThatWritesTheMinute_HasAShortFormToReadUnderTheGoal()
+        {
+            // A full line that names the minute is a line written to stand alone — and a moment with a
+            // minute is one that folds under a goal on the report, where the row above has said the
+            // minute already. So every such kind needs the short form, or the duplication this exists to
+            // remove comes back the day somebody adds a kind.
+            StringTable table = GameStrings.Default;
+            var missing = new List<string>();
+
+            foreach (CareerMomentKind kind in AllKinds)
+            {
+                string full = table.Find(MomentTextKeys.For(kind), Locales.Reference);
+                if (!string.IsNullOrEmpty(full)
+                    && full.Contains("{" + TextTemplate.MinutePlaceholder + "}")
+                    && MomentTextKeys.Folded(kind) == null)
+                {
+                    missing.Add(kind.ToString());
+                }
+            }
+
+            Assert.That(missing, Is.Empty, "These write the minute and have no short form: " + string.Join(", ", missing));
+        }
+
+        [Test]
+        public void NoShortForm_RepeatsWhatTheGoalRowAlreadySays()
+        {
+            // The whole reason the short form exists. The row it sits under carries the minute and the
+            // scorer; a short form that wrote either would be the full line under another key.
+            StringTable table = GameStrings.Default;
+            var offenders = new List<string>();
+
+            foreach (CareerMomentKind kind in AllKinds)
+            {
+                string key = MomentTextKeys.Folded(kind);
+                if (key == null)
+                {
+                    continue;
+                }
+
+                foreach (string locale in Locales.Shipped)
+                {
+                    string line = table.Find(key, locale) ?? string.Empty;
+                    if (line.Contains("{" + TextTemplate.MinutePlaceholder + "}")
+                        || line.Contains("{" + TextTemplate.PlayerPlaceholder + "}"))
+                    {
+                        offenders.Add($"{key} ({locale})");
+                    }
+                }
+            }
+
+            Assert.That(offenders, Is.Empty, "These repeat the minute or the name: " + string.Join(", ", offenders));
+        }
+
         [Test]
         public void EveryMomentLine_IsASingleSentence()
         {

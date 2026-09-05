@@ -141,7 +141,7 @@ namespace Gaffer.Tests
             var managed = new ClubId(ManagedIndex);
             season.SetFormation(managed, Formation.F442);
             season.SetTactics(managed, Tactics.Balanced);
-            season.SetStarters(managed, new List<Player>(new LineupSelector().SelectBest(season.SquadOf(managed), Formation.F442)));
+            season.SetStarters(managed, new List<SlottedPlayer>(new LineupSelector().SelectBest(season.SquadOf(managed), Formation.F442)));
 
             MatchContext context = RunSetup.Default.MatchContext;
             for (int week = 0; week < weeks; week++)
@@ -587,6 +587,85 @@ namespace Gaffer.Tests
 
             Assert.That(refused.IsFailure, Is.True);
             Assert.That(session.Lineup().Starters.Count, Is.EqualTo(sheet.Starters.Count));
+        }
+
+        [Test]
+        public void Lineup_Sheet_PairsEveryStarterWithTheSlotHeStandsIn()
+        {
+            // What the screen draws its numbers from. The outcome used to carry a list of players and a
+            // list of slot roles and leave the view to pair them by index — which holds until a slot is
+            // empty and then quietly charges every man after the gap for somebody else's position.
+            RunSession session = StartRun(Setup(), QuietDrama());
+            LineupOutcome sheet = session.Lineup();
+
+            Assert.That(sheet.Sheet.Count, Is.EqualTo(sheet.Starters.Count));
+            for (int i = 0; i < sheet.Sheet.Count; i++)
+            {
+                SlottedPlayer entry = sheet.Sheet[i];
+                Assert.That(sheet.Slots[entry.Slot], Is.SameAs(entry.Player));
+                Assert.That(entry.Role, Is.EqualTo(sheet.Formation.Slots[entry.Slot]));
+            }
+        }
+
+        [Test]
+        public void PlaceInSlot_AManOutOfPosition_ShowsOnTheSheetAndCostsTheSide()
+        {
+            // The manager's half of the bargain: he may field whoever he likes anywhere, and the sheet he
+            // reads afterwards says what it cost. Before this, the screen showed the same rating wherever a
+            // man stood and only the league table ever disagreed.
+            RunSession session = StartRun(Setup(), QuietDrama());
+            LineupOutcome before = session.Lineup();
+
+            int strikerSlot = IndexOfSlot(before.Formation, PlayerRole.Striker);
+            Player defender = FirstBenchedOnLine(before, Position.Defender);
+            Assert.That(defender, Is.Not.Null, "The bench had no defender to misplace.");
+
+            Result<LineupOutcome> placed = session.PlaceInSlot(strikerSlot, defender.Id);
+            Assert.That(placed.IsSuccess, Is.True, placed.Error);
+
+            SlottedPlayer entry = EntryAt(placed.Value, strikerSlot);
+            Assert.That(entry.Player, Is.SameAs(defender));
+            Assert.That(entry.Fit, Is.EqualTo(PositionalFit.DistantLine));
+            Assert.That(placed.Value.Strength.Attack, Is.LessThan(before.Strength.Attack));
+        }
+
+        private static int IndexOfSlot(Formation formation, PlayerRole role)
+        {
+            for (int i = 0; i < formation.Slots.Count; i++)
+            {
+                if (formation.Slots[i] == role)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static Player FirstBenchedOnLine(LineupOutcome lineup, Position line)
+        {
+            for (int i = 0; i < lineup.Bench.Count; i++)
+            {
+                if (lineup.Bench[i].Position == line)
+                {
+                    return lineup.Bench[i];
+                }
+            }
+
+            return null;
+        }
+
+        private static SlottedPlayer EntryAt(LineupOutcome lineup, int slot)
+        {
+            for (int i = 0; i < lineup.Sheet.Count; i++)
+            {
+                if (lineup.Sheet[i].Slot == slot)
+                {
+                    return lineup.Sheet[i];
+                }
+            }
+
+            return default;
         }
 
         [Test]

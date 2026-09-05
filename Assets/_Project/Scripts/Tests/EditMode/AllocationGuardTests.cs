@@ -216,11 +216,18 @@ namespace Gaffer.Tests
                 "The scorer port must serve a scorer from its memoised weight vectors.");
 
             var strengthBuilder = new EffectiveStrengthBuilder();
-            IReadOnlyList<Player> eleven = selector.SelectBest(squad, Formation.F442);
+            IReadOnlyList<SlottedPlayer> sheet = selector.SelectBest(squad, Formation.F442);
             var ledger = new MoraleLedger();
             MatchContext context = NormalContext();
+            Assert.That(BytesFor(calls, () => strengthBuilder.Build(sheet, Tactics.Balanced, context, ledger)), Is.Zero,
+                "Deriving a club's strength from its team sheet must not allocate.");
+
+            // The same call handed a bare list of players, which pairs every man with his own role through a
+            // reused scratch sheet. It is the path the whole-squad strength takes for every club every week,
+            // so a List allocated per call here would be twenty a week for nothing.
+            IReadOnlyList<Player> eleven = squad.Players;
             Assert.That(BytesFor(calls, () => strengthBuilder.Build(eleven, Tactics.Balanced, context, ledger)), Is.Zero,
-                "Deriving a club's strength from its eleven must not allocate.");
+                "Deriving strength from an unshaped eleven must reuse the own-role scratch sheet.");
         }
 
         [Test]

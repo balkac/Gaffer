@@ -1,0 +1,1089 @@
+/*
+    GAFFER — the theme. ART_STYLE §2 and §4.1, and the only place a colour is written down.
+
+    "Matchday Broadcast Graphics": the interface is the broadcast package of a match you manage but never
+    watch. Night-pitch teal ground, one broadcast-magenta accent, condensed sporting type.
+
+    THE RULE THAT MATTERS MOST: one accent, and no second bright colour (semantics excepted). Everything
+    else is built out of a rich neutral base — depth comes from borders and space, never from gradients or
+    a pile of shadows. Adding a second bright hue here is the change that would make this look like every
+    other dark-mode game, and it is the one thing ART_STYLE forbids by name.
+
+    Nothing outside this file writes a hex. The C# side names BANDS (Presentation/Squad/AbilityBand.cs)
+    and the classes below give them their brightness, so retuning the palette never touches code.
+*/
+
+/*
+    The tokens hang off .theme rather than :root, and that is deliberate. :root resolves only if the
+    sheet is attached to the panel's own root; a class travels with whatever element wears it, so a
+    screen hosted inside an editor window, a nested panel or a test harness gets the same palette
+    without anyone remembering where to attach the sheet. SquadScreen adds .theme next to .screen.
+*/
+.theme {
+    /* --- ground ------------------------------------------------------------------------------------ */
+    --pitch: #0C1B1A;
+    --pitch-raised: #122624;
+    --pitch-line: #1E3733;
+
+    /* --- ink --------------------------------------------------------------------------------------- */
+    --chalk: #EAF2EE;
+    --muted: #7C938C;
+
+    /* --- the signature ----------------------------------------------------------------------------- */
+    --accent: #FF2E7E;
+
+    /* The accent under a cursor. NOT a second colour — the same hue, lifted, which is what a state is
+       allowed to be. It exists because `.button:hover` used to repaint EVERY button in --pitch-line, and
+       a pseudo-class outranks a plain class: the primary action went from magenta to dark green under the
+       cursor, reading as disabled at the exact moment it was being pointed at. */
+    --accent-lift: #FF5C97;
+
+    /* --- semantics: the ONLY sanctioned second colours, and only in a result context ---------------- */
+    --win: #2FD48A;
+    --loss: #FF5A4D;
+    --draw: #E7B84B;
+
+    /* --- the brightness ramp (ART_STYLE §4.1) ------------------------------------------------------
+       Value magnitude reads as BRIGHTNESS against the single accent — the job FM does with a second
+       green, done here without one. Only the top band burns accent, which is what keeps it meaning
+       something. The bands themselves are decided in C# so every screen agrees; these are their looks. */
+    --value-elite: #FF2E7E;
+    --value-strong: #EAF2EE;
+    --value-fair: #9DAAA4;
+    --value-weak: #7C938C;
+    --value-negligible: #46564F;
+
+    /* --- size ---------------------------------------------------------------------------------------
+       EVERYTHING HERE IS IN REFERENCE PIXELS, and the reference is a 1080x1920 phone. That is the trap
+       this design system fell into once and must not again: 1080 physical pixels is about 400 logical
+       points, so a 15px font — a perfectly ordinary desktop size — renders at roughly 6pt in the hand
+       and cannot be read. The rule of thumb is that a number which looks right on a monitor is between
+       two and three times too small here.
+
+       So: body text is 30, not 12. A tap target is 110, not 44 — 44 is the guideline in POINTS, and at
+       this reference that is 110 pixels. If these are ever retuned, retune them together: the ramp only
+       reads as a hierarchy while the steps keep their ratios. */
+    --text-headline: 52px;
+    --text-title: 34px;
+    --text-body: 30px;
+    --text-label: 22px;
+    --text-small: 20px;
+
+    --space-xs: 8px;
+    --space-s: 16px;
+    --space-m: 32px;
+    --space-l: 48px;
+    --space-xl: 80px;
+
+    --tap-min: 110px;
+    --row-height: 120px;
+    --slot-width: 165px;
+}
+
+/* ----- ground --------------------------------------------------------------------------------------- */
+
+.screen {
+    flex-grow: 1;
+    background-color: var(--pitch);
+    /* A phone held upright: the screen fills it and lays its regions out top to bottom. */
+    height: 100%;
+    flex-direction: column;
+    padding-top: var(--space-m);
+    padding-bottom: var(--space-m);
+    padding-left: var(--space-m);
+    padding-right: var(--space-m);
+}
+
+/* A card holds its size by default. Only the one marked --grow gives and takes, which is what keeps the
+   header and the actions where the manager left them instead of squashing as the squad changes size. */
+.card {
+    flex-shrink: 0;
+    background-color: var(--pitch-raised);
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
+    padding-top: var(--space-m);
+    padding-bottom: var(--space-m);
+    padding-left: var(--space-m);
+    padding-right: var(--space-m);
+    margin-bottom: var(--space-m);
+}
+
+/* The standing is a tile and a way in: it opens the season screen. Padded to a tap's height rather than a
+   label's, and its glyph says so — a line of muted text that is secretly a button would be a door nobody
+   finds. */
+.header__standing {
+    padding-top: var(--space-xs);
+    padding-bottom: var(--space-xs);
+    min-height: 56px;
+    -unity-text-align: middle-left;
+}
+
+.header__standing:active {
+    color: var(--chalk);
+}
+
+/* The header's bottom line: the shape on the left, the mode toggle on the right. */
+.header__strip {
+    flex-direction: row;
+    align-items: center;
+    margin-top: var(--space-s);
+}
+
+/* ----- lists -----------------------------------------------------------------------------------------
+   A row is a tap target first and a line of data second. 56px clears the 44px minimum with room for the
+   separator, and the separator is a hairline of --pitch-line rather than a box: depth from lines and
+   space, never from shadows (ART_STYLE §5). */
+
+.row {
+    flex-direction: row;
+    align-items: center;
+    height: var(--row-height);
+    flex-shrink: 0;
+    padding-left: var(--space-s);
+    padding-right: var(--space-s);
+    border-bottom-width: 2px;
+    border-bottom-color: var(--pitch-line);
+}
+
+/* Press feedback. A tap with no acknowledgement reads as a tap that did not register — the player
+   presses again, and now the game has heard two.
+
+   NO :hover ON A ROW, and that is a scrolling fix rather than a style choice. A phone has no hover, and
+   on a desktop every row that slides under the pointer during a scroll enters and leaves the hover state
+   — each one starting a 90ms colour transition. A list of twenty doing that at once is the shimmer that
+   reads as the scroll "juddering". Press feedback stays, because a press is a real event; hovering is
+   the pointer standing still while the world moves. */
+.row:active {
+    background-color: rgba(255, 46, 126, 0.14);
+}
+
+.row {
+    transition-property: background-color;
+    transition-duration: 90ms;
+    transition-timing-function: ease-out;
+}
+
+/* A quiet lift for the ordinary buttons, which sit on --pitch-raised. */
+.button:hover {
+    background-color: var(--pitch-line);
+}
+
+/* The primary keeps its hue. Same specificity as the rule above and written after it, so it wins. */
+.button--primary:hover {
+    background-color: var(--accent-lift);
+}
+
+.button:active {
+    scale: 0.97 0.97;
+}
+
+.button {
+    transition-property: background-color, scale;
+    transition-duration: 90ms, 90ms;
+    transition-timing-function: ease-out, ease-out;
+}
+
+/* Fixed height, no wrapping. A name that wrapped would change the row's height, which changes whether a
+   scrollbar is needed, which changes the width, which re-wraps the name — a layout loop that shows up as
+   the list vibrating. Rows in a virtualised or long list must have a height that does not depend on their
+   content. */
+.row__name {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    color: var(--chalk);
+    font-size: var(--text-body);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    -unity-text-align: middle-left;
+}
+
+.row__role {
+    width: 100px;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    -unity-text-align: middle-left;
+}
+
+.row__rating {
+    width: 90px;
+    font-size: var(--text-title);
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+}
+
+/* What playing out of position costs, spelled out beside the number it was taken out of. Muted and small
+   on purpose: the rating is the figure being compared, and this is its footnote. It is NOT red — the
+   semantic colours belong to results (ART_STYLE §2), and a penalty painted like a defeat would make an
+   ordinary tactical compromise read as a disaster. */
+.row__penalty {
+    width: 70px;
+    color: var(--muted);
+    font-size: var(--text-body);
+    -unity-text-align: middle-right;
+}
+
+/* ----- the pitch --------------------------------------------------------------------------------------
+   A tactics board, not a football pitch: no grass, no lines, no green. The shape reads from where the
+   cards SIT, which is the broadcast-graphic way of drawing a formation and keeps the single-accent rule
+   intact — a green pitch would be the second bright colour ART_STYLE forbids. */
+
+/* The board FILLS the space it is given and never scrolls. Bands share the height between them, so a
+   4-4-2 and a 3-5-2 both fit whatever phone they land on — which is what lets the whole mode be
+   gesture-unambiguous: there is nothing here to swipe. */
+.pitch {
+    flex-grow: 1;
+    justify-content: space-around;
+    background-color: var(--pitch);
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
+    padding-top: var(--space-m);
+    padding-bottom: var(--space-m);
+}
+
+/* A band fills the width whatever it holds, so a back four and a front two both look deliberate. */
+/* The pitch under the cards. Proportions are a real 105x68 pitch expressed as percentages of the board,
+   so they hold at any height: the penalty area is 40.3m of 68 wide and 16.5m of 105 deep, the goal area
+   18.3x5.5, the centre circle 18.3 across. Everything is centred with translate rather than with a
+   hand-computed left, so a changed width stays centred without a second number to keep in step.
+
+   They are drawn in --pitch-line, the same quiet ink the card borders use, and they sit BEHIND opaque
+   cards. That is the whole discipline here: the lines are texture, not information. If a marking ever
+   competes with a rating for attention, it is too bright, because the rating is what the manager came
+   for and the pitch is what tells him where he is standing. */
+.pitch__markings {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+
+    /* Dimmed as ONE layer rather than by giving the markings their own colour token. The cards are
+       opaque and stand on the lines — a goalkeeper inside his own six-yard box, strikers on the edge of
+       theirs — so the lines are constantly interrupted. At the same weight as the card borders those
+       interruptions read as BROKEN; a step back and they read as the cards being nearer. One knob, and
+       the palette keeps exactly the three greens it had. */
+    opacity: 0.45;
+}
+
+.pitch__area {
+    position: absolute;
+    left: 50%;
+    translate: -50% 0;
+    width: 59.3%;
+    height: 15.7%;
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+}
+
+.pitch__area--near {
+    top: 0;
+}
+
+.pitch__area--far {
+    bottom: 0;
+}
+
+.pitch__goal {
+    position: absolute;
+    left: 50%;
+    translate: -50% 0;
+    width: 26.9%;
+    height: 5.2%;
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+}
+
+.pitch__goal--near {
+    top: 0;
+}
+
+.pitch__goal--far {
+    bottom: 0;
+}
+
+.pitch__halfway {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    background-color: var(--pitch-line);
+}
+
+.pitch__circle {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 26.9%;
+    height: 17.4%;
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-top-left-radius: 50%;
+    border-top-right-radius: 50%;
+    border-bottom-left-radius: 50%;
+    border-bottom-right-radius: 50%;
+}
+
+.pitch__spot {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 10px;
+    height: 10px;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+    background-color: var(--pitch-line);
+}
+
+.pitch__band {
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    flex-shrink: 1;
+}
+
+.slot {
+    width: var(--slot-width);
+    min-height: var(--tap-min);
+    align-items: center;
+    justify-content: center;
+    background-color: var(--pitch-raised);
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    padding-top: var(--space-xs);
+    padding-bottom: var(--space-xs);
+    transition-property: background-color, scale;
+    transition-duration: 90ms, 90ms;
+    transition-timing-function: ease-out, ease-out;
+}
+
+.slot:hover {
+    background-color: var(--pitch-line);
+}
+
+.slot:active {
+    scale: 0.96 0.96;
+}
+
+/* Picked up. The accent border is the only thing on the board that burns the signature colour, which is
+   what makes "this one is in your hand" unmissable at a glance. */
+.slot--selected {
+    border-left-color: var(--accent);
+    border-right-color: var(--accent);
+    border-top-color: var(--accent);
+    border-bottom-color: var(--accent);
+    background-color: rgba(255, 46, 126, 0.12);
+}
+
+.slot__role {
+    color: var(--muted);
+    font-size: var(--text-small);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+}
+
+.slot__name {
+    color: var(--chalk);
+    font-size: var(--text-label);
+    -unity-text-align: middle-center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 100%;
+}
+
+.slot__rating {
+    font-size: var(--text-title);
+    -unity-font-style: bold;
+}
+
+/* The cost of standing here, on the tile. The rating above it is ALREADY the charged number — this says
+   where the missing points went, so a weaker-looking side can be accounted for rather than merely felt. */
+.slot__penalty {
+    color: var(--muted);
+    font-size: var(--text-small);
+}
+
+/* Out of position, on a tile — the same two tiers and the same names the rows use (.row--samline /
+   .row--misfit), so a fit means one thing whichever surface the manager happens to be looking at. A
+   compromise on the same line gets a quiet edge; anything further gets the edge and a dimming, so a
+   genuinely wrong tile is visible from across the board without a second bright colour entering the
+   palette. */
+.slot--samline {
+    border-left-color: var(--pitch-line);
+    border-left-width: 5px;
+}
+
+.slot--misfit {
+    border-left-color: var(--muted);
+    border-left-width: 5px;
+    opacity: 0.8;
+}
+
+/* The card in your hand while you drag. Positioned absolutely against the panel so it draws over
+   everything, and deliberately unmistakable: this is the element that tells the manager the gesture
+   was heard at all. */
+.slot--ghost {
+    position: absolute;
+    background-color: var(--accent);
+    border-left-color: var(--accent);
+    border-right-color: var(--accent);
+    border-top-color: var(--accent);
+    border-bottom-color: var(--accent);
+    opacity: 0.92;
+}
+
+.slot--ghost .slot__name {
+    color: var(--pitch);
+    -unity-font-style: bold;
+}
+
+/* The slot a dragged card came from: emptied-looking, so the board shows where it will go back to. */
+.slot--source {
+    opacity: 0.35;
+}
+
+/* ----- the phone layout -------------------------------------------------------------------------------
+   Fixed regions, one scroller. The board must not scroll, because a thing you DRAG on cannot also be a
+   thing you swipe on — the same gesture in the same place meaning two things is confusing however it is
+   arbitrated. The bench is the only part that can outgrow the screen, so it is the only part that
+   scrolls, and the actions stay pinned where a thumb reaches. */
+
+.card--grow {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 220px;
+    /* The scroller inside needs a parent that can be smaller than its content, or it never scrolls. */
+    overflow: hidden;
+}
+
+.bench-scroll {
+    flex-grow: 1;
+}
+
+/* The drag layer. Absolutely positioned over everything and transparent to touch, so the card in your
+   hand never blocks the slot you are aiming at, and never affects the layout it floats above. */
+.overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* ----- the page --------------------------------------------------------------------------------------
+   One scroller for the whole screen. The scrollbar is a hairline rather than a control: on a phone the
+   drag IS the scroll, and a chrome-heavy bar spends attention on something nobody presses. */
+
+.page {
+    flex-grow: 1;
+}
+
+.bench-scroll .unity-scroller--vertical,
+.page .unity-scroller--vertical {
+    width: 10px;
+}
+
+.bench-scroll .unity-scroller--vertical .unity-base-slider__dragger,
+.page .unity-scroller--vertical .unity-base-slider__dragger {
+    background-color: var(--pitch-line);
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+.bench-scroll .unity-scroller--vertical .unity-base-slider__tracker,
+.page .unity-scroller--vertical .unity-base-slider__tracker {
+    background-color: rgba(0, 0, 0, 0);
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+}
+
+.bench-scroll .unity-scroller__low-button,
+.bench-scroll .unity-scroller__high-button,
+.page .unity-scroller__low-button,
+.page .unity-scroller__high-button {
+    display: none;
+}
+
+/* ----- the sheet -------------------------------------------------------------------------------------
+   A bottom sheet: the phone answer to "who plays here". It covers the screen, dims what is behind, and
+   scrolls freely — with nothing to drag out of it, the list can simply be a list. */
+
+.sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.sheet__scrim {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(6, 14, 13, 0.82);
+}
+
+.sheet__panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 70%;
+    background-color: var(--pitch-raised);
+    border-top-color: var(--accent);
+    border-top-width: 4px;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    padding-left: var(--space-m);
+    padding-right: var(--space-m);
+    padding-top: var(--space-m);
+    padding-bottom: var(--space-l);
+}
+
+.sheet__scroll {
+    flex-grow: 1;
+}
+
+/* The week's report is the payoff, not a picker, so it takes nearly the whole screen. Same sheet, same
+   way out, more room — one modal vocabulary rather than two.
+
+   A DEFINITE height, not a max. The picker's panel is sized by its content, which is right for a list
+   that may be two rows long. The report pins its action beneath a scroller, and a scroller that fills its
+   parent cannot also tell that parent how tall to be: content-height and flex-grow resolve each other to
+   zero, which is exactly what the panel collapsed to when this was still a max-height. */
+.sheet__panel--tall {
+    height: 92%;
+
+    /* The base panel caps itself at 70% for the picker, and a max-height beats a height — without this
+       line the report silently rendered at 70% while the rule above claimed 92%. */
+    max-height: 92%;
+}
+
+/* ----- the page: what a tall sheet holds ----------------------------------------------------------------
+   A scroller and, beneath it and never inside it, the one action that leads out. The match report and the
+   season screen are both this shape; the shape is written once. */
+
+.page {
+    flex-grow: 1;
+    flex-shrink: 1;
+    /* The scroller inside needs a parent that can be smaller than its content, or it never scrolls. */
+    overflow: hidden;
+}
+
+.page__scroll {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.page__body {
+    padding-top: var(--space-m);
+    padding-bottom: var(--space-m);
+}
+
+/* Pinned under the scroller, never inside it. */
+.page__action {
+    flex-shrink: 0;
+    margin-top: var(--space-s);
+    margin-bottom: var(--space-m);
+}
+
+/* ----- the match report (ART_STYLE 06) ----------------------------------------------------------------
+   A score bug, the afternoon's beats, the setup that produced them, the rest of the division. The only
+   colour it spends is on the scoreline, where win/loss/draw is what the colour MEANS. */
+
+.report__bug {
+    align-items: center;
+}
+
+.report__score {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    margin-top: var(--space-s);
+}
+
+/* The clubs take equal halves and the score sits between them, so a long name pushes nothing off centre
+   and the score column stays where the eye already went looking for it. */
+.report__club {
+    flex-grow: 1;
+    flex-basis: 0;
+    flex-shrink: 1;
+    color: var(--chalk);
+    font-size: var(--text-title);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.report__goals {
+    font-size: var(--text-headline);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    padding-left: var(--space-s);
+    padding-right: var(--space-s);
+}
+
+.report__shots {
+    flex-direction: row;
+    width: 100%;
+    margin-top: var(--space-xs);
+}
+
+.report__shot-count {
+    flex-grow: 1;
+    flex-basis: 0;
+    color: var(--muted);
+    font-size: var(--text-small);
+    -unity-text-align: middle-center;
+}
+
+/* ----- the feed --------------------------------------------------------------------------------------- */
+
+.report__beat {
+    flex-direction: row;
+    align-items: flex-start;
+    padding-top: var(--space-s);
+    padding-bottom: var(--space-s);
+}
+
+/* Between beats, never above the first one. Unity's USS carries only the interaction pseudo-classes, so
+   there is no :first-child to express this and the screen adds the class from the second row down. */
+.report__beat--divided {
+    border-top-color: var(--pitch-line);
+    border-top-width: 2px;
+}
+
+/* A goal against is still the afternoon, so it is drawn — one step back, not in a colour that calls it a
+   disaster. Loss red belongs to the scoreline, which already said so. */
+.report__beat--theirs .report__headline {
+    color: var(--muted);
+}
+
+/* The one accent on this screen besides the button: the beats that touched somebody's career. They are
+   what makes the screen a story rather than a log, and the edge is how ART_STYLE marks "this one". */
+.report__beat--story {
+    border-left-color: var(--accent);
+    border-left-width: 4px;
+    padding-left: var(--space-s);
+}
+
+.report__minute {
+    width: 100px;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+}
+
+.report__beat-body {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.report__headline {
+    color: var(--chalk);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    white-space: normal;
+}
+
+.report__story {
+    color: var(--chalk);
+    font-size: var(--text-body);
+    white-space: normal;
+    margin-top: var(--space-xs);
+}
+
+.report__tag {
+    color: var(--muted);
+    font-size: var(--text-small);
+    letter-spacing: 2px;
+    margin-top: var(--space-xs);
+}
+
+/* ----- the setup -------------------------------------------------------------------------------------- */
+
+.report__shape {
+    color: var(--chalk);
+    font-size: var(--text-title);
+    -unity-font-style: bold;
+    margin-top: var(--space-xs);
+}
+
+.report__axes {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: var(--space-s);
+}
+
+.report__axis {
+    width: 50%;
+    margin-top: var(--space-s);
+}
+
+.report__axis-name {
+    color: var(--muted);
+    font-size: var(--text-small);
+    letter-spacing: 2px;
+}
+
+.report__axis-value {
+    color: var(--chalk);
+    font-size: var(--text-body);
+    white-space: normal;
+}
+
+/* ----- elsewhere -------------------------------------------------------------------------------------- */
+
+.report__other {
+    flex-direction: row;
+    align-items: center;
+    min-height: 64px;
+}
+
+.report__other-home {
+    flex-grow: 1;
+    flex-basis: 0;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-text-align: middle-right;
+}
+
+/* Fixed width so every score in the column lines up under the one above it — the round reads as a list of
+   results rather than as a ragged paragraph. */
+.report__other-score {
+    width: 120px;
+    flex-shrink: 0;
+    color: var(--chalk);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.report__other-away {
+    flex-grow: 1;
+    flex-basis: 0;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-text-align: middle-left;
+}
+
+/* ----- type ------------------------------------------------------------------------------------------
+   Hierarchy is built from size and weight, not from spending colour (ART_STYLE §3). */
+
+.headline {
+    color: var(--chalk);
+    font-size: var(--text-headline);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+}
+
+.label {
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+}
+
+.body {
+    color: var(--chalk);
+    font-size: var(--text-body);
+    white-space: normal;
+}
+
+/* Numbers are tabular so columns line up down a squad list. */
+.numeric {
+    color: var(--chalk);
+    font-size: var(--text-body);
+    -unity-text-align: middle-right;
+}
+
+/* FIT, on a row. One class per tier, and the same four everywhere a row appears — a sheet of candidates
+   and the eleven itself differ only in whether the natural mark is applied at all (marking all eleven
+   would wash the list in accent and say nothing).
+
+   The wash marks IMPORTANCE, never value — the same rule the role-key row follows (ART_STYLE §4.1/2), so
+   brightness stays the only thing that means "how good". Nothing here is red: the semantic colours belong
+   to results (ART_STYLE §2), and a tactical compromise painted like a defeat would read as a disaster. */
+.row--natural {
+    background-color: rgba(255, 46, 126, 0.09);
+    border-left-color: var(--accent);
+    border-left-width: 5px;
+}
+
+.row--samline {
+    border-left-color: var(--pitch-line);
+    border-left-width: 5px;
+}
+
+.row--misfit {
+    border-left-color: var(--muted);
+    border-left-width: 5px;
+    opacity: 0.75;
+}
+
+/* The one pairing the game refuses to pick for you — a keeper out of goal, an outfielder in it. Dimmed
+   hard rather than reddened, so it reads as "not really an option" instead of "danger". */
+.row--wrong {
+    opacity: 0.45;
+}
+
+/* ----- the brightness ramp -------------------------------------------------------------------------- */
+
+.value--elite {
+    color: var(--value-elite);
+    -unity-font-style: bold;
+}
+
+.value--strong {
+    color: var(--value-strong);
+    -unity-font-style: bold;
+}
+
+.value--fair {
+    color: var(--value-fair);
+}
+
+.value--weak {
+    color: var(--value-weak);
+}
+
+.value--negligible {
+    color: var(--value-negligible);
+}
+
+/* ----- role emphasis (ART_STYLE §4.1/2) ---------------------------------------------------------------
+   A row the role is scored on is WASHED, not recoloured: importance is marked, never value. */
+
+.row--key {
+    background-color: rgba(255, 46, 126, 0.09);
+    border-left-color: var(--accent);
+    border-left-width: 5px;
+}
+
+/* ----- touch ------------------------------------------------------------------------------------------ */
+
+.tappable {
+    min-height: var(--tap-min);
+    justify-content: center;
+}
+
+.button {
+    min-height: var(--tap-min);
+    background-color: var(--pitch-raised);
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    color: var(--chalk);
+    font-size: var(--text-body);
+    padding-left: var(--space-m);
+    padding-right: var(--space-m);
+}
+
+.button--primary {
+    background-color: var(--accent);
+    color: var(--pitch);
+    -unity-font-style: bold;
+}
+
+/* ----- the season (GDD §8: table, fixture, target) ------------------------------------------------------
+   Who is next, the table with the board's two numbers drawn through it, and those numbers said out loud.
+   No colour is spent here: a league position is not a result, and the one accent goes to the row that is
+   yours. */
+
+.season__venue {
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    margin-top: var(--space-xs);
+}
+
+/* A table row is a tile (UI_REFERENCES §2): a number and a name, read at a glance. Shorter than a squad
+   row because nothing here is tapped yet, and twenty of them have to fit a phone. */
+.table__row {
+    flex-direction: row;
+    align-items: center;
+    min-height: 72px;
+    flex-shrink: 0;
+    border-bottom-width: 2px;
+    border-bottom-color: var(--pitch-line);
+}
+
+/* The heads are all one weight and one size, whatever the column beneath them does — a head set in the
+   points column's display size would read as the biggest number on the table. */
+.table__head {
+    min-height: 48px;
+}
+
+.table__head .table__pts {
+    color: var(--muted);
+    font-size: var(--text-label);
+}
+
+/* Yours. A tint of the accent under the row and the name in chalk — not a border on the left, which would
+   push its numbers out of the columns the other rows keep. */
+.table__row--ours {
+    background-color: rgba(255, 46, 126, 0.12);
+}
+
+.table__row--ours .table__club {
+    -unity-font-style: bold;
+}
+
+.table__row--ours .table__stat {
+    color: var(--chalk);
+}
+
+.table__pos {
+    width: 60px;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+/* Fixed height, no wrapping — the same rule as .row__name, for the same layout-loop reason. */
+.table__club {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    color: var(--chalk);
+    font-size: var(--text-body);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    -unity-text-align: middle-left;
+}
+
+/* Fixed widths so every figure sits under the one above it: a table is read down its columns. */
+.table__stat {
+    width: 64px;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-text-align: middle-right;
+}
+
+.table__pts {
+    width: 96px;
+    flex-shrink: 0;
+    color: var(--chalk);
+    font-size: var(--text-title);
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+}
+
+/* The board's numbers, drawn through the table. A heavier rule than the hairline between rows, in chalk
+   rather than in a semantic colour: a line is a fact about the target, not a result. The caption sits on
+   the right, small, and on the ZONE'S side of the line — above a line that closes the promotion places,
+   below a line that opens the drop — so it never reads as the heading of the wrong rows. */
+.table__line {
+    flex-shrink: 0;
+    align-items: flex-end;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+.table__line--closes {
+    border-bottom-width: 3px;
+    border-bottom-color: var(--chalk);
+}
+
+.table__line--opens {
+    border-top-width: 3px;
+    border-top-color: var(--chalk);
+}
+
+.table__line-caption {
+    color: var(--muted);
+    font-size: var(--text-small);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    padding-right: var(--space-xs);
+}
+
+/* ----- results: the one place a second colour is allowed --------------------------------------------- */
+
+.result--win {
+    color: var(--win);
+}
+
+.result--loss {
+    color: var(--loss);
+}
+
+.result--draw {
+    color: var(--draw);
+}

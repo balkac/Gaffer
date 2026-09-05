@@ -21,76 +21,137 @@ namespace Gaffer.Tests
                 .Generate(idBase, new GenerationContext(), new SplitMix64RandomNumberGenerator(seed));
         }
 
-        private static int[] IdsOf(IReadOnlyList<Player> players)
+        private static int[] IdsOf(IReadOnlyList<SlottedPlayer> sheet)
         {
-            var ids = new int[players.Count];
-            for (int i = 0; i < players.Count; i++)
+            var ids = new int[sheet.Count];
+            for (int i = 0; i < sheet.Count; i++)
             {
-                ids[i] = players[i].Id.Value;
+                ids[i] = sheet[i].Player.Id.Value;
             }
 
             return ids;
         }
 
-        private static int CountAt(IReadOnlyList<Player> players, Position position)
+        [Test]
+        public void SelectBest_FillsEverySlotOnce()
         {
-            int count = 0;
-            foreach (Player player in players)
+            IReadOnlyList<SlottedPlayer> sheet = new LineupSelector().SelectBest(GeneratedSquad(), Formation.F433);
+
+            Assert.That(sheet.Count, Is.EqualTo(11));
+            var seen = new HashSet<int>();
+            for (int i = 0; i < sheet.Count; i++)
             {
-                if (player.Position == position)
-                {
-                    count++;
-                }
+                Assert.That(sheet[i].Slot, Is.EqualTo(i), "Picks come back in slot order, and every pick names its slot.");
+                Assert.That(sheet[i].Role, Is.EqualTo(Formation.F433.Slots[i]));
+                Assert.That(seen.Add(sheet[i].Player.Id.Value), Is.True, "The same player was picked twice.");
             }
-
-            return count;
         }
 
         [Test]
-        public void SelectBest_FillsElevenInTheFormationShape()
+        public void SelectBest_NeverPutsAnOutfielderInGoal()
         {
-            IReadOnlyList<Player> eleven = new LineupSelector().SelectBest(GeneratedSquad(), Formation.F433);
-
-            Assert.That(eleven.Count, Is.EqualTo(11));
-            Assert.That(CountAt(eleven, Position.Goalkeeper), Is.EqualTo(1));
-            Assert.That(CountAt(eleven, Position.Defender), Is.EqualTo(4));
-            Assert.That(CountAt(eleven, Position.Midfielder), Is.EqualTo(3));
-            Assert.That(CountAt(eleven, Position.Forward), Is.EqualTo(3));
-        }
-
-        [Test]
-        public void SelectBest_FillsEachSlotWithItsExactRole()
-        {
+            // The penalty alone does not stop this: a good striker at 60% still out-rates a poor keeper, so
+            // ranking on rating with no ban would auto-pick him between the posts. The auto-pick refuses the
+            // pairing outright; a manager who wants it must ask for it.
             Squad squad = GeneratedSquad();
-            IReadOnlyList<Player> eleven = new LineupSelector().SelectBest(squad, Formation.F433);
+            IReadOnlyList<SlottedPlayer> sheet = new LineupSelector().SelectBest(squad, Formation.F442);
 
-            // The generated squad has at least one of every role a 4-3-3 asks for, so each slot is an exact
-            // match: the winger slots field wingers, the striker slot a striker — roles matter in selection.
-            Dictionary<PlayerRole, int> wanted = RoleCounts(Formation.F433.Slots);
-            var got = new List<PlayerRole>(eleven.Count);
-            foreach (Player player in eleven)
+            Assert.That(sheet[0].Role, Is.EqualTo(PlayerRole.Goalkeeper));
+            Assert.That(sheet[0].Player.Role, Is.EqualTo(PlayerRole.Goalkeeper));
+            for (int i = 1; i < sheet.Count; i++)
             {
-                got.Add(player.Role);
-            }
-
-            Dictionary<PlayerRole, int> filled = RoleCounts(got);
-            foreach (KeyValuePair<PlayerRole, int> pair in wanted)
-            {
-                filled.TryGetValue(pair.Key, out int actual);
-                Assert.That(actual, Is.EqualTo(pair.Value), $"Formation wanted {pair.Value}× {pair.Key}, eleven has {actual}.");
+                Assert.That(sheet[i].Player.Role, Is.Not.EqualTo(PlayerRole.Goalkeeper),
+                    "A keeper was picked in an outfield slot.");
             }
         }
 
-        private static Dictionary<PlayerRole, int> RoleCounts(IReadOnlyList<PlayerRole> roles)
+        [Test]
+        public void SelectBest_MuchBetterPlayerOnTheSameLine_TakesTheSlotFromItsNatural()
         {
-            var counts = new Dictionary<PlayerRole, int>();
-            foreach (PlayerRole role in roles)
-            {
-                counts.TryGetValue(role, out int n);
-                counts[role] = n + 1;
-            }
+            // The rule this replaced tried an exact role first and never looked past it, so a 40-rated
+            // natural right-midfielder always beat a 95-rated central midfielder. Being on the wrong side of
+            // the same line costs about a tenth of a player, and a tenth of 95 is not 55.
+            Squad squad = SquadOf(
+                Outfielder(1, PlayerRole.RightMidfield, 40),
+                Outfielder(2, PlayerRole.CentralMidfield, 95));
 
-            return counts;
+            SlottedPlayer pick = PickAt(squad, PlayerRole.RightMidfield);
+
+            Assert.That(pick.Player.Id.Value, Is.EqualTo(2));
+            Assert.That(pick.Fit, Is.EqualTo(PositionalFit.SameLine));
+        }
+
+        [Test]
+        public void SelectBest_MarginallyBetterPlayerOffTheLine_LosesToItsNatural()
+        {
+            // The other half of the same rule, and the half that makes it a decision rather than a
+            // free-for-all: 72 charged for a line out of place is worse than 70 in the right one.
+            Squad squad = SquadOf(
+                Outfielder(1, PlayerRole.CentralMidfield, 70),
+                Outfielder(2, PlayerRole.CentreBack, 72));
+
+            SlottedPlayer pick = PickAt(squad, PlayerRole.CentralMidfield);
+
+            Assert.That(pick.Player.Id.Value, Is.EqualTo(1));
+            Assert.That(pick.Fit, Is.EqualTo(PositionalFit.Natural));
+        }
+
+        // The first slot of a one-slot formation, so a preference can be read off a two-player squad without
+        // the rest of an eleven getting in the way.
+        private static SlottedPlayer PickAt(Squad squad, PlayerRole slot)
+        {
+            var formation = new Formation("test", new[] { slot });
+            IReadOnlyList<SlottedPlayer> sheet = new LineupSelector().SelectBest(squad, formation);
+            Assert.That(sheet.Count, Is.EqualTo(1));
+            return sheet[0];
+        }
+
+        private static Squad SquadOf(params Player[] players)
+        {
+            return new Squad(players);
+        }
+
+        // Flat attributes, so the role rating is exactly the number given (the weights sum to 1 per role)
+        // and a preference is arithmetic rather than a guess about which attribute a role reads.
+        private static Player Outfielder(int id, PlayerRole role, byte rating)
+        {
+            return new Player(new PlayerId(id), "P" + id, "England", role, 25, Uniform(rating), 75);
+        }
+
+        private static Attributes Uniform(byte stat)
+        {
+            return new Attributes
+            {
+                Finishing = stat,
+                Technique = stat,
+                FirstTouch = stat,
+                Dribbling = stat,
+                Passing = stat,
+                Crossing = stat,
+                Heading = stat,
+                LongShots = stat,
+                Marking = stat,
+                Tackling = stat,
+                Penalties = stat,
+                FreeKicks = stat,
+                Corners = stat,
+                LongThrows = stat,
+                Pace = stat,
+                Acceleration = stat,
+                Stamina = stat,
+                Strength = stat,
+                Agility = stat,
+                Jumping = stat,
+                Balance = stat,
+                Positioning = stat,
+                Reflexes = stat,
+                Handling = stat,
+                AerialReach = stat,
+                CommandOfArea = stat,
+                OneOnOnes = stat,
+                Kicking = stat,
+                GkPositioning = stat,
+            };
         }
 
         [Test]

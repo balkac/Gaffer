@@ -24,6 +24,7 @@ namespace Gaffer.Application.Run
             Formation formation,
             Tactics tactics,
             IReadOnlyList<Player> slots,
+            IReadOnlyList<SlottedPlayer> sheet,
             IReadOnlyList<Player> starters,
             IReadOnlyList<Player> bench,
             bool isComplete,
@@ -33,6 +34,7 @@ namespace Gaffer.Application.Run
             Formation = formation;
             Tactics = tactics;
             Slots = slots;
+            Sheet = sheet;
             Starters = starters;
             Bench = bench;
             IsComplete = isComplete;
@@ -49,6 +51,16 @@ namespace Gaffer.Application.Run
         /// <c>null</c> where the slot is empty. A snapshot — later commands do not change it.
         /// </summary>
         public IReadOnlyList<Player> Slots { get; }
+
+        /// <summary>
+        /// The filled slots as the MATCH sees them: who stands where, and which role that slot asks for.
+        /// The same sheet the strength above was derived from, so a view can show what a man is worth in
+        /// the position he is actually in — including what standing there costs him
+        /// (<see cref="SlottedPlayer.Fit"/>). Without it a screen has a list of players and a list of
+        /// roles and has to pair them by index itself, which is the pairing that breaks the moment a slot
+        /// is empty.
+        /// </summary>
+        public IReadOnlyList<SlottedPlayer> Sheet { get; }
 
         /// <summary>The players actually fielded, in slot order (the non-empty <see cref="Slots"/>).</summary>
         public IReadOnlyList<Player> Starters { get; }

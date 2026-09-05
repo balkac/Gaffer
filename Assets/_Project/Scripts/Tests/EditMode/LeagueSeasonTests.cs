@@ -112,6 +112,18 @@ namespace Gaffer.Tests
             var tweaked = new ClubId(0);
             withTweak.SetTactics(tweaked, new Tactics(Mentality.VeryAttacking, Tempo.Intense, Pressing.Press, Approach.Possession));
 
+            // The run-in is switched off in BOTH seasons, and it is the isolation this test claims that
+            // requires it. Late in a season a fixture's meaning is read off the table (MatchContextBuilder:
+            // two contenders in May are playing a decider, two clubs in the drop a six-pointer), so club 0
+            // taking three points it did not take before can move a third club across the contender line and
+            // change a match club 0 is not in. That coupling is deliberate and correct — a league where the
+            // table means nothing is not a league — but it is a different property from the one asserted
+            // here, which is that per-fixture seeding keeps unrelated fixtures byte-identical. Left on, this
+            // test passes or fails on whether any fixture happens to be sitting on a boundary.
+            var neutral = new MatchContextBuilder(RivalryTable.None, new MatchContextSettings(runInRounds: 0));
+            withDefault.SetMatchContextBuilder(neutral);
+            withTweak.SetMatchContextBuilder(neutral);
+
             PlayWholeSeason(withDefault, seed);
             PlayWholeSeason(withTweak, seed);
 
