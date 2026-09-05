@@ -45,11 +45,32 @@ namespace Gaffer.Presentation
         public const string MatchJournal = "ui.match.journal";
         public const string MatchQuiet = "ui.match.quiet";
 
+        // ----- season -------------------------------------------------------------------------------------
+
+        public const string SeasonNext = "ui.season.next";
+        public const string SeasonHome = "ui.season.home";
+        public const string SeasonAway = "ui.season.away";
+        public const string SeasonOver = "ui.season.over";
+        public const string SeasonTable = "ui.season.table";
+        public const string SeasonPlayed = "ui.season.played";
+        public const string SeasonWon = "ui.season.won";
+        public const string SeasonDrawn = "ui.season.drawn";
+        public const string SeasonLost = "ui.season.lost";
+        public const string SeasonGoalDifference = "ui.season.goal_difference";
+        public const string SeasonPoints = "ui.season.points";
+        public const string SeasonPromotion = "ui.season.promotion";
+        public const string SeasonRelegation = "ui.season.relegation";
+        public const string SeasonTarget = "ui.season.target";
+        public const string SeasonJob = "ui.season.job";
+        public const string SeasonTargetUp = "ui.season.target_up";
+        public const string SeasonTargetStay = "ui.season.target_stay";
+
         // ----- actions ------------------------------------------------------------------------------------
 
         public const string ActionAutoPick = "ui.action.auto_pick";
         public const string ActionPlayWeek = "ui.action.play_week";
         public const string ActionContinue = "ui.action.continue";
+        public const string ActionClose = "ui.action.close";
 
         // ----- messages -----------------------------------------------------------------------------------
 
@@ -61,7 +82,10 @@ namespace Gaffer.Presentation
             SquadAttack, SquadMidfield, SquadDefence, ViewPitch, ViewList, PickerWho, PickerWhere,
             MatchGoal, MatchShots, MatchElsewhere, MatchSetup,
             MatchMentality, MatchTempo, MatchPressing, MatchApproach, MatchJournal, MatchQuiet,
-            ActionAutoPick, ActionPlayWeek, ActionContinue,
+            SeasonNext, SeasonHome, SeasonAway, SeasonOver, SeasonTable,
+            SeasonPlayed, SeasonWon, SeasonDrawn, SeasonLost, SeasonGoalDifference, SeasonPoints,
+            SeasonPromotion, SeasonRelegation, SeasonTarget, SeasonJob, SeasonTargetUp, SeasonTargetStay,
+            ActionAutoPick, ActionPlayWeek, ActionContinue, ActionClose,
             MessageNoFixture,
         };
 

@@ -49,6 +49,28 @@ namespace Gaffer.Tests
         }
 
         [Test]
+        public void Of_AFoldedStory_DoesNotRepeatTheMinuteOrTheScorerTheRowAlreadyNames()
+        {
+            // Found on the device: the row said "41' · GOAL · Pauquet" and the line under it began "41' —
+            // Pauquet ...". The journey log's line stands alone and has to; the report's does not.
+            RunSession session = StartRun();
+            PlayerId scorer = FirstPlayer(session);
+            string name = session.Squad.Players[0].Name;
+
+            MatchResult match = Played(session, 1, 0, Goal(41, TeamSide.Home, scorer));
+            List<MatchBeat> beats = MatchBeats.Of(
+                Week(match, Moment(CareerMomentKind.FirstGoal, scorer, session.ManagedClub, minute: 41)),
+                match,
+                session,
+                English());
+
+            Assert.That(beats[0].HasStory, Is.True);
+            Assert.That(beats[0].Headline, Does.Contain(name), "the row names the scorer");
+            Assert.That(beats[0].Story, Does.Not.Contain(name), "so the story must not name him again");
+            Assert.That(beats[0].Story, Does.Not.Contain("41"), "nor read the minute again");
+        }
+
+        [Test]
         public void Of_AMomentBelongingToADifferentScorer_IsNotStolenByTheGoalBeforeIt()
         {
             // The rule that is easy to get wrong: matching on minute alone would hand the 68th-minute

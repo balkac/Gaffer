@@ -82,7 +82,10 @@ namespace Gaffer.Presentation.Matchday
                     isGoal: true,
                     isOurs: (played.Side == TeamSide.Home) == weWereHome,
                     headline: Headline(played, scoredFor, session, text),
-                    story: story >= 0 ? MomentLine.For(week.Moments[story], session, text) : null));
+                    // The SHORT form: the row already says the minute and the scorer, and the full line
+                    // read both again one line below. The story says what the goal was and nothing the
+                    // headline has said.
+                    story: story >= 0 ? MomentLine.Under(week.Moments[story], session, text) : null));
             }
 
             for (int i = 0; i < week.Moments.Count; i++)

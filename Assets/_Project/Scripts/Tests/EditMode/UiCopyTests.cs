@@ -54,6 +54,39 @@ namespace Gaffer.Tests
         }
 
         [Test]
+        public void EveryScreenTemplate_IsValidAuthoredContent()
+        {
+            // The season screen is the first interface copy to interpolate a value ("Top {count}"), so the
+            // rules the narrative rows are held to apply here too: every placeholder one the formatter
+            // carries, every brace closed, no suffix hung off a value. Screens resolve through
+            // UiWords.Or, which does not throw — so an invalid template would draw its own braces rather
+            // than fail, and only this test would say so.
+            StringTable table = GameStrings.Default;
+            var problems = new List<string>();
+
+            for (int i = 0; i < UiTextKeys.All.Count; i++)
+            {
+                string key = UiTextKeys.All[i];
+                foreach (string locale in Locales.Shipped)
+                {
+                    string template = table.Find(key, locale);
+                    if (string.IsNullOrEmpty(template) || template.IndexOf('{') < 0)
+                    {
+                        continue;
+                    }
+
+                    Gaffer.Common.Result validated = TextTemplate.Validate(template);
+                    if (validated.IsFailure)
+                    {
+                        problems.Add($"{key} ({locale}): {validated.Error}");
+                    }
+                }
+            }
+
+            Assert.That(problems, Is.Empty, string.Join(" | ", problems));
+        }
+
+        [Test]
         public void EveryRoleAbbreviation_FitsTheColumnItIsDrawnIn()
         {
             // `.row__role` is a fixed 100px column; the label does not reflow, it clips. Three characters

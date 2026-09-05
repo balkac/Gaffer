@@ -225,6 +225,14 @@ namespace Gaffer.Application.Season
 
         public IReadOnlyList<MatchResult> PlayedResults => _playedResults;
 
+        /// <summary>The fixtures of one round, in the order they are played; empty for a round this season
+        /// has not got. A render-time query, like the table: the schedule is fixed at construction and
+        /// this only reads it.</summary>
+        public IReadOnlyList<Fixture> FixturesOf(int round)
+        {
+            return _fixturesByRound.TryGetValue(round, out List<Fixture> fixtures) ? fixtures : Array.Empty<Fixture>();
+        }
+
         /// <summary>Rebuilds a season part-way through from its saved result history (save/load) on an
         /// injected simulator, so a resumed season is wired exactly like a fresh one. A null
         /// <paramref name="simulator"/> carries the same meaning as on the constructor: the rebuilt season

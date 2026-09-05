@@ -51,6 +51,19 @@ namespace Gaffer.Presentation.Matchday
         }
 
         /// <summary>
+        /// The line as it reads UNDER the goal that produced it: the short form when the kind has one, the
+        /// full line otherwise. The row above already carries the minute and the scorer, so the short form
+        /// says only what the goal was — see <see cref="MomentTextKeys.Folded"/>.
+        /// </summary>
+        public static string Under(CareerMoment moment, RunSession session, LocalizedStrings text)
+        {
+            string folded = MomentTextKeys.Folded(moment.Kind);
+            return folded == null
+                ? For(moment, session, text)
+                : text.Or(folded, ArgumentsFor(moment, session));
+        }
+
+        /// <summary>
         /// The journey's own name first. A moment can outlive its subject's time at the club — a sale, a
         /// retirement — and by then the squad no longer knows who he was. Asking the roster first is what
         /// printed "(left the club)" in the Gate B probe before the journey started carrying a name.

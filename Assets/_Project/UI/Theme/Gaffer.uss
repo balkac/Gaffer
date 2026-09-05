@@ -118,6 +118,20 @@
     margin-bottom: var(--space-m);
 }
 
+/* The standing is a tile and a way in: it opens the season screen. Padded to a tap's height rather than a
+   label's, and its glyph says so — a line of muted text that is secretly a button would be a door nobody
+   finds. */
+.header__standing {
+    padding-top: var(--space-xs);
+    padding-bottom: var(--space-xs);
+    min-height: 56px;
+    -unity-text-align: middle-left;
+}
+
+.header__standing:active {
+    color: var(--chalk);
+}
+
 /* The header's bottom line: the shape on the left, the mode toggle on the right. */
 .header__strip {
     flex-direction: row;
@@ -611,33 +625,37 @@
     max-height: 92%;
 }
 
-/* ----- the match report (ART_STYLE 06) ----------------------------------------------------------------
-   A score bug, the afternoon's beats, the setup that produced them, the rest of the division. The only
-   colour it spends is on the scoreline, where win/loss/draw is what the colour MEANS. */
+/* ----- the page: what a tall sheet holds ----------------------------------------------------------------
+   A scroller and, beneath it and never inside it, the one action that leads out. The match report and the
+   season screen are both this shape; the shape is written once. */
 
-.report {
+.page {
     flex-grow: 1;
     flex-shrink: 1;
     /* The scroller inside needs a parent that can be smaller than its content, or it never scrolls. */
     overflow: hidden;
 }
 
-.report__scroll {
+.page__scroll {
     flex-grow: 1;
     flex-shrink: 1;
 }
 
-.report__body {
+.page__body {
     padding-top: var(--space-m);
     padding-bottom: var(--space-m);
 }
 
 /* Pinned under the scroller, never inside it. */
-.report__action {
+.page__action {
     flex-shrink: 0;
     margin-top: var(--space-s);
     margin-bottom: var(--space-m);
 }
+
+/* ----- the match report (ART_STYLE 06) ----------------------------------------------------------------
+   A score bug, the afternoon's beats, the setup that produced them, the rest of the division. The only
+   colour it spends is on the scoreline, where win/loss/draw is what the colour MEANS. */
 
 .report__bug {
     align-items: center;
@@ -937,6 +955,123 @@
     background-color: var(--accent);
     color: var(--pitch);
     -unity-font-style: bold;
+}
+
+/* ----- the season (GDD §8: table, fixture, target) ------------------------------------------------------
+   Who is next, the table with the board's two numbers drawn through it, and those numbers said out loud.
+   No colour is spent here: a league position is not a result, and the one accent goes to the row that is
+   yours. */
+
+.season__venue {
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    margin-top: var(--space-xs);
+}
+
+/* A table row is a tile (UI_REFERENCES §2): a number and a name, read at a glance. Shorter than a squad
+   row because nothing here is tapped yet, and twenty of them have to fit a phone. */
+.table__row {
+    flex-direction: row;
+    align-items: center;
+    min-height: 72px;
+    flex-shrink: 0;
+    border-bottom-width: 2px;
+    border-bottom-color: var(--pitch-line);
+}
+
+/* The heads are all one weight and one size, whatever the column beneath them does — a head set in the
+   points column's display size would read as the biggest number on the table. */
+.table__head {
+    min-height: 48px;
+}
+
+.table__head .table__pts {
+    color: var(--muted);
+    font-size: var(--text-label);
+}
+
+/* Yours. A tint of the accent under the row and the name in chalk — not a border on the left, which would
+   push its numbers out of the columns the other rows keep. */
+.table__row--ours {
+    background-color: rgba(255, 46, 126, 0.12);
+}
+
+.table__row--ours .table__club {
+    -unity-font-style: bold;
+}
+
+.table__row--ours .table__stat {
+    color: var(--chalk);
+}
+
+.table__pos {
+    width: 60px;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+/* Fixed height, no wrapping — the same rule as .row__name, for the same layout-loop reason. */
+.table__club {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    color: var(--chalk);
+    font-size: var(--text-body);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    -unity-text-align: middle-left;
+}
+
+/* Fixed widths so every figure sits under the one above it: a table is read down its columns. */
+.table__stat {
+    width: 64px;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-text-align: middle-right;
+}
+
+.table__pts {
+    width: 96px;
+    flex-shrink: 0;
+    color: var(--chalk);
+    font-size: var(--text-title);
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+}
+
+/* The board's numbers, drawn through the table. A heavier rule than the hairline between rows, in chalk
+   rather than in a semantic colour: a line is a fact about the target, not a result. The caption sits on
+   the right, small, and on the ZONE'S side of the line — above a line that closes the promotion places,
+   below a line that opens the drop — so it never reads as the heading of the wrong rows. */
+.table__line {
+    flex-shrink: 0;
+    align-items: flex-end;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+.table__line--closes {
+    border-bottom-width: 3px;
+    border-bottom-color: var(--chalk);
+}
+
+.table__line--opens {
+    border-top-width: 3px;
+    border-top-color: var(--chalk);
+}
+
+.table__line-caption {
+    color: var(--muted);
+    font-size: var(--text-small);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    padding-right: var(--space-xs);
 }
 
 /* ----- results: the one place a second colour is allowed --------------------------------------------- */

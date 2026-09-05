@@ -45,6 +45,7 @@
     <Compile Include="../Assets/_Project/Scripts/Presentation/UiWords.cs" />
     <Compile Include="../Assets/_Project/Scripts/Presentation/Matchday/MomentLine.cs" />
     <Compile Include="../Assets/_Project/Scripts/Presentation/Matchday/MatchBeats.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Presentation/Season/TableZones.cs" />
     <Compile Include="../Assets/_Project/Scripts/Tests/EditMode/**/*.cs" />
   </ItemGroup>
 

@@ -47,9 +47,9 @@ namespace Gaffer.Presentation.Matchday
         public VisualElement Build(WeekOutcome week)
         {
             var root = new VisualElement();
-            root.AddToClassList("report");
+            root.AddToClassList("page");
 
-            _scroll.AddToClassList("report__scroll");
+            _scroll.AddToClassList("page__scroll");
             _scroll.touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped;
             _scroll.verticalScrollerVisibility = ScrollerVisibility.Hidden;
             new DragToScroll(_scroll);
@@ -66,7 +66,7 @@ namespace Gaffer.Presentation.Matchday
         private VisualElement BuildBody(WeekOutcome week)
         {
             var body = new VisualElement();
-            body.AddToClassList("report__body");
+            body.AddToClassList("page__body");
 
             if (week.ManagedMatch == null)
             {
@@ -336,7 +336,7 @@ namespace Gaffer.Presentation.Matchday
             var button = new Button(() => _onContinue?.Invoke()) { text = _text.Or(UiTextKeys.ActionContinue) };
             button.AddToClassList("button");
             button.AddToClassList("button--primary");
-            button.AddToClassList("report__action");
+            button.AddToClassList("page__action");
             return button;
         }
 

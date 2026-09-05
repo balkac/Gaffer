@@ -6,6 +6,7 @@ using Gaffer.Common.Localization;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
 using Gaffer.Presentation.Matchday;
+using Gaffer.Presentation.Season;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -71,10 +72,13 @@ namespace Gaffer.Presentation.Squad
         private readonly ScrollView _listScroll = new ScrollView(ScrollViewMode.Vertical);
         private readonly VisualElement _picker = new VisualElement();
 
-        // The week's report. A sheet like the picker rather than a screen of its own, because there is no
-        // navigation shell yet — and when there is one, this is the thing that moves, not MatchScreen.
-        private readonly VisualElement _report = new VisualElement();
-        private readonly VisualElement _reportPanel = new VisualElement();
+        // The tall sheet: where the week's report and the season screen stand. A sheet like the picker
+        // rather than screens of their own, because there is no navigation shell yet — and when there is
+        // one, THIS is the thing that moves; MatchScreen and SeasonScreen stay as they are. One host for
+        // both because they are the same shape (a page with its own scroller and a pinned way out) and
+        // never open together.
+        private readonly VisualElement _tall = new VisualElement();
+        private readonly VisualElement _tallPanel = new VisualElement();
         private readonly ScrollView _pickerScroll = new ScrollView(ScrollViewMode.Vertical);
         private readonly VisualElement _pickerList = new VisualElement();
         private int _pickerSlot = -1;
@@ -129,7 +133,7 @@ namespace Gaffer.Presentation.Squad
             // as a zero-width, colourless nothing. That is exactly what "I cannot see what I am dragging"
             // was.
             _root.Add(BuildPicker());
-            _root.Add(BuildReport());
+            _root.Add(BuildTallSheet());
 
             _overlay.AddToClassList("overlay");
             _overlay.pickingMode = PickingMode.Ignore;
@@ -151,9 +155,9 @@ namespace Gaffer.Presentation.Squad
         {
             _clubName.text = _session.ManagedClubName;
             string week = Say(UiTextKeys.SquadWeek) + " " + _session.PlayedRounds + "/" + _session.RoundCount;
-            _standing.text = _session.TablePosition > 0
+            _standing.text = (_session.TablePosition > 0
                 ? Say(UiTextKeys.SquadPosition) + " " + _session.TablePosition + "  ·  " + week
-                : week;
+                : week) + "  ›";
 
             TeamStrength strength = lineup.Strength;
             _shape.text = lineup.Formation.Name
@@ -264,6 +268,13 @@ namespace Gaffer.Presentation.Squad
             _clubName.AddToClassList("headline");
             _standing.AddToClassList("label");
             _shape.AddToClassList("body");
+
+            // The standing is a TILE (UI_REFERENCES §2): the summary you read at a glance, and the way into
+            // the season screen that carries the detail. Tapping "Position 3 · Week 12/38" opens the table
+            // it was read off — no third button beside "play the week", which is the action this screen
+            // exists for.
+            _standing.AddToClassList("header__standing");
+            _standing.RegisterCallback<ClickEvent>(_ => OpenSeason());
 
             card.Add(_clubName);
             card.Add(_standing);
@@ -753,40 +764,54 @@ namespace Gaffer.Presentation.Squad
 
         private void ShowReport(WeekOutcome week)
         {
-            // The report brings its own scroller and its own pinned action, so the sheet only lends it a
-            // panel to stand in. Rebuilt per week rather than refilled: it is shown once and a week is an
-            // immutable record.
-            _reportPanel.Clear();
-            _reportPanel.Add(new MatchScreen(_session, _text, CloseReport).Build(week));
-            _report.style.display = DisplayStyle.Flex;
-            _report.BringToFront();
+            // Rebuilt per week rather than refilled: it is shown once and a week is an immutable record.
+            ShowTall(new MatchScreen(_session, _text, CloseTall).Build(week));
         }
 
-        private void CloseReport()
+        private void OpenSeason()
         {
-            _report.style.display = DisplayStyle.None;
+            // Rebuilt on every opening: the table is a render-time query and small, and a diff of it would
+            // be a second model of the league.
+            ShowTall(new SeasonScreen(_session, _text, CloseTall).Build());
+        }
 
-            // Redrawn on the way out, not on the way in: the week that was just played changed the squad
-            // underneath the board, and the manager returns to the board expecting it to be current.
+        // The page brings its own scroller and its own pinned action, so the sheet only lends it a panel
+        // to stand in.
+        private void ShowTall(VisualElement page)
+        {
+            _tallPanel.Clear();
+            _tallPanel.Add(page);
+            _tall.style.display = DisplayStyle.Flex;
+            _tall.BringToFront();
+        }
+
+        private void CloseTall()
+        {
+            _tall.style.display = DisplayStyle.None;
+
+            // Redrawn on the way out, not on the way in: a week played behind the report changed the squad
+            // underneath the board, and the manager returns to the board expecting it to be current. After
+            // the season screen nothing changed and the redraw is cheap — one rule for the way out beats
+            // two the caller has to pick between.
             ShowPitch(true);
             Draw(_session.Lineup());
         }
 
-        private VisualElement BuildReport()
+        private VisualElement BuildTallSheet()
         {
-            _report.AddToClassList("sheet");
-            _report.style.display = DisplayStyle.None;
+            _tall.AddToClassList("sheet");
+            _tall.style.display = DisplayStyle.None;
 
             var scrim = new VisualElement();
             scrim.AddToClassList("sheet__scrim");
-            scrim.RegisterCallback<ClickEvent>(_ => CloseReport());
-            _report.Add(scrim);
+            scrim.RegisterCallback<ClickEvent>(_ => CloseTall());
+            _tall.Add(scrim);
 
-            _reportPanel.AddToClassList("sheet__panel");
-            _reportPanel.AddToClassList("sheet__panel--tall");
-            _report.Add(_reportPanel);
+            _tallPanel.AddToClassList("sheet__panel");
+            _tallPanel.AddToClassList("sheet__panel--tall");
+            _tall.Add(_tallPanel);
 
-            return _report;
+            return _tall;
         }
 
         private void Apply(Result<LineupOutcome> result)

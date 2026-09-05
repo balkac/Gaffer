@@ -268,6 +268,30 @@ namespace Gaffer.Application.Run
             return _season.Table.Ordered();
         }
 
+        /// <summary>
+        /// The managed club's next fixture, or null once the season is played out (or, in a schedule that
+        /// rests a club, in a round it sits out). A render-time query like <see cref="Standings"/>: the
+        /// season screen asks who is next, and the answer is read off the schedule rather than kept.
+        /// </summary>
+        public Fixture? NextFixture()
+        {
+            if (_season.IsComplete)
+            {
+                return null;
+            }
+
+            IReadOnlyList<Fixture> round = _season.FixturesOf(_season.CurrentRound);
+            for (int i = 0; i < round.Count; i++)
+            {
+                if (round[i].Home == _managedClub || round[i].Away == _managedClub)
+                {
+                    return round[i];
+                }
+            }
+
+            return null;
+        }
+
         /// <summary>Everything a view draws about the eleven, derived once here.</summary>
         public LineupOutcome Lineup()
         {

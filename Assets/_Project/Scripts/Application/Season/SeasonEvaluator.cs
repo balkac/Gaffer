@@ -12,8 +12,17 @@ namespace Gaffer.Application.Season
     {
         public SeasonVerdict Evaluate(LeagueTable finalTable, ClubId managedClub, BoardTarget target)
         {
-            int position = FindPosition(finalTable, managedClub);
+            return Judge(FindPosition(finalTable, managedClub), target);
+        }
 
+        /// <summary>
+        /// What finishing in a given 1-based position would earn against the target. The rule itself, in
+        /// one place: the season screen paints the table's zones with it, so what the table shows as
+        /// "promotion" is by construction what the board would call promotion — a screen that re-derived
+        /// the two comparisons would be the one place they could drift apart.
+        /// </summary>
+        public static SeasonVerdict Judge(int position, BoardTarget target)
+        {
             if (position <= target.PromotionPosition)
             {
                 return SeasonVerdict.Promoted;

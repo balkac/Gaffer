@@ -179,6 +179,71 @@ namespace Gaffer.Infrastructure.Localization
                         "ui.action.continue",
                         "Continue",
                         "Devam et"),
+                    Row(
+                        "ui.action.close",
+                        "Close",
+                        "Kapat"),
+
+                    // --- the season (Faz 7) ----------------------------------------------------------
+                    // A league table's column heads are the one place a single letter IS the word: P W D
+                    // L is how every English table has read for a century, and O G B M is how every
+                    // Turkish one has. Spelling them out would be the less legible choice. The zone labels
+                    // sit on the lines the board's two numbers draw through the table.
+                    Row(
+                        "ui.season.next",
+                        "NEXT",
+                        "SIRADAKİ"),
+                    Row(
+                        "ui.season.home",
+                        "HOME",
+                        "İÇ SAHA"),
+                    Row(
+                        "ui.season.away",
+                        "AWAY",
+                        "DEPLASMAN"),
+                    Row(
+                        "ui.season.over",
+                        "SEASON OVER",
+                        "SEZON BİTTİ"),
+                    Row(
+                        "ui.season.table",
+                        "TABLE",
+                        "PUAN DURUMU"),
+                    Row("ui.season.played", "P", "O"),
+                    Row("ui.season.won", "W", "G"),
+                    Row("ui.season.drawn", "D", "B"),
+                    Row("ui.season.lost", "L", "M"),
+                    Row("ui.season.goal_difference", "GD", "AV"),
+                    Row("ui.season.points", "PTS", "P"),
+                    Row(
+                        "ui.season.promotion",
+                        "PROMOTION",
+                        "TERFİ"),
+                    Row(
+                        "ui.season.relegation",
+                        "RELEGATION",
+                        "KÜME DÜŞME"),
+                    Row(
+                        "ui.season.target",
+                        "BOARD TARGET",
+                        "YÖNETİMİN HEDEFİ"),
+                    // The second number is the one that ends the run. Turkish football talks about a
+                    // manager's job as his SEAT — "koltuk" — and that is the word, not a rendering of "job".
+                    Row(
+                        "ui.season.job",
+                        "KEEP THE JOB",
+                        "KOLTUK"),
+                    // The two numbers the board judges a season by, as a manager would say them. The
+                    // count is rendered at the edge, so the Turkish ordinal's own full stop sits in the
+                    // template rather than being wished onto the number.
+                    Row(
+                        "ui.season.target_up",
+                        "Top {count}",
+                        "İlk {count}"),
+                    Row(
+                        "ui.season.target_stay",
+                        "{count} or above",
+                        "En kötü {count}. sıra"),
 
                     // --- the tactical axes, by name --------------------------------------------------
                     // One row per setting on the four axes the simulation actually reads. They are named
@@ -279,6 +344,45 @@ namespace Gaffer.Infrastructure.Localization
                         "moment.retirement",
                         "{player} hung up his boots.",
                         "{player} kariyerini noktaladı."),
+
+                    // --- the same moments, read under the goal that made them --------------------------
+                    // The match report draws a recognised moment UNDER its goal, and that row already says
+                    // "41' · GOAL · Pauquet". The lines above were written for the journey log, where they
+                    // stand alone and must carry the minute and the name themselves — under a goal they
+                    // read both twice. These say only what the goal WAS. No minute, no name (a test holds
+                    // that), and no second sentence. Only the kinds a goal can produce have one; the rest
+                    // never fold and keep their full line (MomentTextKeys.Folded).
+                    //
+                    // A hat-trick and a brace are raised at the FIRST of the goals, so the line under it
+                    // says so rather than announcing a feat the feed has not shown yet.
+                    Row(
+                        "moment.first_goal.folded",
+                        "His first goal for the club.",
+                        "Kulüpteki ilk golü."),
+                    Row(
+                        "moment.big_match_goal.folded",
+                        "On the day it mattered.",
+                        "Büyük maçta geldi."),
+                    Row(
+                        "moment.derby_goal.folded",
+                        "A derby goal.",
+                        "Derbi golü."),
+                    Row(
+                        "moment.title_decider_goal.folded",
+                        "With the title on the line.",
+                        "Şampiyonluk yolunda."),
+                    Row(
+                        "moment.relegation_goal.folded",
+                        "In a relegation six-pointer.",
+                        "Küme düşme mücadelesinde."),
+                    Row(
+                        "moment.brace.folded",
+                        "The first of his two.",
+                        "İki golün ilki."),
+                    Row(
+                        "moment.hattrick.folded",
+                        "The first of his hat-trick.",
+                        "Hat-trick'in ilk golü."),
 
                     // --- transfer-request ------------------------------------------------------------
                     // He is good enough that someone came in for him and the window is open. Refusing
