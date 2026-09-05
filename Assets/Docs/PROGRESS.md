@@ -6,6 +6,26 @@
 
 ---
 
+## Kabuk ve transfer ekranı · 2026-09-05 (Faz 7, 5 ekranın 4.'sü)
+
+**Sahibinin isteği: "UI/UX güzel olsun, ne nerede nereye ne zaman basacağım güzel anlatılsın."** Ekran bu cümleye göre üç soruya cevap verecek biçimde kuruldu ve dört karar soruldu, dördü de öneriyle aynı çıktı: alt sekme barı **şimdi**, scout doğruluğu **denge değeri** (SO'dan), satış **MARKET | KADRON segmenti**, bütçe aktarımı **sonraki dilim**.
+
+**Kabuk geldi.** `GameShell` üç sayfa (Kadro · Sezon · Market) ve altta 44pt bir sekme barı; dördüncü sekme (menajer) Faz 6'yla gelir. Sayfalar **gösterildiğinde** yeniden çizilir, "ne değişti" bilinmez (#4). Tek bir sheet kabuğa ait ve **sekme barını da örter** — sayfa içindeki bir sheet sekmeleri canlı bırakırdı, yani yan kapısı olan bir modal. Ekranlar kabuğa yalnız `IScreenHost` üzerinden konuşur: sekme göster, sheet kaldır/indir, ve sürükleme hayaleti + seçim yaprağı için tek katman. Maç raporu ve sezon sayfası artık `SquadScreen`'in içinde sheet değil; rapor kabuğun sheet'inde, sezon kendi sekmesinde; başlıktaki sıra karosu sekmeye kısayol olarak kaldı. `SeasonScreen`'in scroller'ı alan olmaktan çıktı — her Build'de yeniden kurulduğu için eski scroller gövde biriktirirdi, gözle çıkmadan kod okunurken yakalandı.
+
+**Transfer ekranı: NE ZAMAN → NE → NEDEN OLMAZ.** Üstte durum kartı: pencere (AÇIK · YAZ / KIŞ / KAPALI) ve kapalıysa **ne zaman açılacağı** ("19. haftadan sonra açılır." — `TransferWindow.NextOpening`, `At()`'in yanında ki ikisi ayrı düşmesin; testli), yanında nakit ve maaş boşluğu. Ortada segment ve filtre pillleri (HEPSİ / KL / SAV / ORT / HÜC + "Bütçeme uygun"; filtre sağ üstte, FM konvansiyonu; hat bazında, çünkü dört pill telefona sığar, on iki sığmaz). Altta `ListView` (2.000 satır sanal, her satır 120px hedef, etiketler `PickingMode.Ignore`): isim · mevki · yaş · bonservis · maaş | görünen puan (parlaklık bandı). **Alamayacağın satır dokunmadan önce soluk**; kırmızı değil, çünkü bir bonservis bir sonuç değil (ART_STYLE §2).
+
+**Oyuncu kartı (karo → kart, UI_REFERENCES §2).** Kim (isim, mevki, yaş) · gözlemci raporu · para · **tek düğme.** Rapor ART_STYLE §4.1'i çiziyor: potansiyel ve rol-anahtarı özellikler 1–99 hattında **bant** olarak; bandın genişliği bilginin kendisi, yanındaki sayı orta noktanın parlaklığını giyer. Para kartı düğmeye basmadan önce cevap verir: "Kasada €8.5M kalır." ya da "€1.6M nakit eksik." (`Affordability`; çekirdeğin iki reddiyle **testle** hizalı — marketin her oyuncusunda `TransferService.Sign` ile aynı cevabı verdiği doğrulanıyor). Pencere kapalıysa **düğme yok**, yerine ne zaman açılacağı; her zaman reddeden bir düğme okuyucuya düğme okumamayı öğretir. Onay eylemin yerinde (§4.4): imza kartı kendi makbuzuna dönüşür — "İmzalandı.", ücret, maaş, kalan nakit — tek çıkış "Tamam". Satış tarafında kart "İlk 11'inde oynuyor." der, kadro 11'e inecekse düğmeyi düşürür ve sebebini yazar (`TransferService.MinSquadSize` public oldu, sayı aynalanmadı). **Kendi oyuncunun raporu tam doğrulukla** okunur: gözlemci maskesi aday içindir, her gün antrenman yaptırdığın adamı bulanık çizen kart bir dokunuş ötedeki tahtayla çelişirdi; bant sıfır genişlikteyken tek sayı yazılır.
+
+**Çekirdeğe eklenenler (hepsi okuma).** `ScoutingSettings.BaseAccuracy` (0.5; `ScoutingBalanceSO`'da alan, `GameRoot`'a `_scouting` bağlandı) ve `RunSession.Observe(player)` overload'u — shipping kodda scout doğruluğu için **hiç değer yoktu**, editörde slider vardı. `TransferWindow.NextOpening`. Presentation'a framework'süz üç dosya: `UiMoney` (€1.2M / €850k, ondalık işareti **locale'den** — Türkçe €1,2M), `Affordability`, `MarketList` (hat filtresi + görünen puana göre sıralama, id ile kararlı). Özellik kısaltmaları iki dilde yazıldı (29 × 2; İngilizce FM kodları, Türkçe BİT/MRK/HIZ), `UiTextKeys.All` enum'dan türetiyor; guard'lar: ≤3 karakter ve locale içinde tekil. UI kopya uzunluk guard'ı **cümleleri** muaf tutuyor (nokta ile biten kopya kartta sarılır; etiket sarılmaz).
+
+**Gözle bulunanlar.** İlk çekimde segment ve HEPSİ pill'i başlangıçta yanmıyordu — kontroller başlık gibi okunuyordu; başlangıç durumu açıkça yazıldı. Ve eval ile sheet kapatmaya çalışırken yanlış scrim'e tıklandı: ağaçta iki `.sheet__scrim` var (kadronun seçim yaprağı önce), görünen olan seçilmeli — CLAUDE.md'ye not.
+
+**Sayılar.** dotnet 599 → 609 (+2 alım gücü, +3 liste, +2 para, +1 pencere, +2 kısaltma guard'ı); Unity kapısı 611. Ekranda doğrulanan akış: market → kart → imza → makbuz → kasa düştü → hafta oynandı → pencere kapandı → kart düğmesiz, eksik nakit ve açılış haftası yazılı.
+
+**Sırada.** Menajer/meta ekranı (Faz 6 ertelendiği için içeriği ince) · bütçe aktarımı sheet'i · taktik ekranı (anahtarlar hazır, ekran yok) · dram kartının kabuğa girişi (bekleyen dram bugün ekranda görünmüyor; `AdvanceWeek` reddediyor, sebep `ShowMessage` ile yazılıyor).
+
+---
+
 ## Sezon ekranı, ve golün altındaki satırın kendi kopyası · 2026-09-05 (Faz 7, 5 ekranın 3.'sü)
 
 **Önce bekleyen iş kapandı.** 30 Ağustos'un maç raporu dilimi çalışma ağacında duruyordu; Unity kapısı açık Editor üzerinden (`run_tests`, pipeline) koşuldu — 592/592 — ve iki commit atıldı (`923c44d` feat, `4d718c0` docs). Sonra sahibine dört karar soruldu ve dördü de öneriyle aynı çıktı: kısa ek cümle, tablo + hedef + sıradaki maç, başlıktaki sıra satırından açılış, yerel merge.
@@ -475,8 +495,8 @@ Asıl sayı bunun altında: **gelir modeli yok** (karar #18) ve maaşlar aynı t
 
 ## Nasıl koşulur (hatırlatma)
 
-- **Testler (hızlı kapı):** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj` — **599 yeşil**, saniyeler. Yalnız framework'süz katmanlar derlenir; `Infrastructure`'ın çoğu, `Composition`, `Presentation`, `Editor` bu köprüde **yok**.
-- **Unity CLI (dördüncü kapı):** `~/.unity/bin/unity test --mode EditMode --output /tmp/gaffer-editmode.xml --non-interactive --no-banner --timeout 1800` — **601 yeşil**, ~4 dk. Editor açıkken aynı kapı `~/.unity/bin/unity command run_tests --mode EditMode` ile açık Editor'de koşar (Library kilidi yok, ~2 dk). Gerçek Editor'de batch mod; koşmadan önce **her assembly'yi derler**, yani asmdef referansları + yukarıdaki kör katmanlar buradan geçer. Editor projeyi açık tutmamalı (`Library` kilidi).
+- **Testler (hızlı kapı):** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj` — **609 yeşil**, saniyeler. Yalnız framework'süz katmanlar derlenir; `Infrastructure`'ın çoğu, `Composition`, `Presentation`, `Editor` bu köprüde **yok**.
+- **Unity CLI (dördüncü kapı):** `~/.unity/bin/unity test --mode EditMode --output /tmp/gaffer-editmode.xml --non-interactive --no-banner --timeout 1800` — **611 yeşil**, ~4 dk. Editor açıkken aynı kapı `~/.unity/bin/unity command run_tests --mode EditMode` ile açık Editor'de koşar (Library kilidi yok, ~2 dk). Gerçek Editor'de batch mod; koşmadan önce **her assembly'yi derler**, yani asmdef referansları + yukarıdaki kör katmanlar buradan geçer. Editor projeyi açık tutmamalı (`Library` kilidi).
 - **Biçim:** `PATH="$HOME/.dotnet:$PATH" dotnet format tests/Gaffer.Tests.csproj --verify-no-changes` — temiz olmalı (`CONVENTIONS.md` mekanik kuralları "tool-enforced" sayıyor).
 - **Harness:** Unity → menü **`Gaffer > Season Harness`** → Run
 - **Management (birleşik demo):** Unity → menü **`Gaffer > Management`** → Start Season → Advance Week (nakit erir) + Summer/Winter'da Sign/Sell (canlı kadro)
