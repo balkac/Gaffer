@@ -169,7 +169,9 @@ namespace Gaffer.Application.Transfers
     /// </summary>
     public static class TransferService
     {
-        private const int MinSquadSize = 11;
+        /// <summary>The floor a sale cannot take the squad below: the eleven itself. Public so a screen can
+        /// say so BEFORE the tap rather than mirroring the number.</summary>
+        public const int MinSquadSize = 11;
 
         public static long Fee(Player player)
         {

@@ -526,13 +526,9 @@
     bottom: 0;
 }
 
-/* ----- the page --------------------------------------------------------------------------------------
-   One scroller for the whole screen. The scrollbar is a hairline rather than a control: on a phone the
-   drag IS the scroll, and a chrome-heavy bar spends attention on something nobody presses. */
-
-.page {
-    flex-grow: 1;
-}
+/* ----- scrollers ---------------------------------------------------------------------------------------
+   Where a bar shows at all it is a hairline rather than a control: on a phone the drag IS the scroll, and
+   a chrome-heavy bar spends attention on something nobody presses. */
 
 .bench-scroll .unity-scroller--vertical,
 .page .unity-scroller--vertical {
@@ -566,6 +562,321 @@
 .page .unity-scroller__low-button,
 .page .unity-scroller__high-button {
     display: none;
+}
+
+/* ----- the shell ---------------------------------------------------------------------------------------
+   Three pages under one tab bar, and the bar under the thumb. The pages fill what the bar leaves; only the
+   shown one is laid out. The bar is a raised surface with a hairline above it, so the page reads as ending
+   where the bar begins — depth from a line, not a shadow (ART_STYLE). */
+
+.shell {
+    flex-grow: 1;
+    height: 100%;
+    flex-direction: column;
+    background-color: var(--pitch);
+}
+
+.shell__pages {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.tabbar {
+    flex-direction: row;
+    flex-shrink: 0;
+    height: var(--tap-min);
+    background-color: var(--pitch-raised);
+    border-top-width: 2px;
+    border-top-color: var(--pitch-line);
+}
+
+/* A tab is a label you can press: no box, no fill, and the only thing that changes when it is the one you
+   are on is that it lights up and a line sits over it. The accent is spent on that one tab and nowhere
+   else on the bar. */
+.tab {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
+    background-color: rgba(0, 0, 0, 0);
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    border-top-width: 4px;
+    border-top-color: rgba(0, 0, 0, 0);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    -unity-text-align: middle-center;
+}
+
+.tab:hover {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.tab:active {
+    scale: 0.97 0.97;
+}
+
+.tab--active {
+    color: var(--accent);
+    border-top-color: var(--accent);
+}
+
+/* ----- the market (GDD §8: pool, offers, scout reports) -----------------------------------------------
+   The status card says WHEN, the tiles say WHAT, the card behind a tile says WHY NOT. No colour is spent
+   here beyond the accent's usual places — a fee is not a result. */
+
+/* Open reads in chalk, closed in the muted ink the label already wears: the state is told by weight, and
+   a closed window is not a defeat. */
+.market__window--open {
+    color: var(--chalk);
+}
+
+.market__opens {
+    color: var(--muted);
+    font-size: var(--text-body);
+    white-space: normal;
+    margin-top: var(--space-xs);
+}
+
+/* Label over value, values in a row: CASH €2.1M beside WAGE ROOM €56k/wk. The same shape the report's
+   setup card uses, named for what it is so the season and the market can share it. */
+.kv-row {
+    flex-direction: row;
+    margin-top: var(--space-s);
+}
+
+.kv {
+    flex-grow: 1;
+    flex-basis: 0;
+}
+
+.kv__label {
+    color: var(--muted);
+    font-size: var(--text-small);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+}
+
+.kv__value {
+    color: var(--chalk);
+    font-size: var(--text-title);
+    -unity-font-style: bold;
+    margin-top: 4px;
+}
+
+/* Two lists, one row of two labels with a line under the one you are on. Not tabs — tabs are the bar's —
+   and not buttons: a segment is a question with two answers. */
+.segment {
+    flex-direction: row;
+    flex-shrink: 0;
+    margin-bottom: var(--space-s);
+}
+
+.segment__button {
+    flex-grow: 1;
+    flex-basis: 0;
+    height: 72px;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    background-color: rgba(0, 0, 0, 0);
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 3px;
+    border-bottom-color: var(--pitch-line);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+}
+
+.segment__button:hover {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.segment__button--active {
+    color: var(--chalk);
+    border-bottom-color: var(--accent);
+}
+
+/* Filters: a row of pills, one lit. They wrap on a narrow phone rather than clip. The lit chip borrows the
+   accent for its edge only — a filled chip would compete with the primary button below. */
+.chips {
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    margin-bottom: var(--space-s);
+}
+
+.chip {
+    height: 64px;
+    min-width: var(--tap-min);
+    margin-left: 0;
+    margin-top: 0;
+    margin-bottom: var(--space-xs);
+    margin-right: var(--space-xs);
+    padding-left: var(--space-s);
+    padding-right: var(--space-s);
+    background-color: rgba(0, 0, 0, 0);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-top-left-radius: 32px;
+    border-top-right-radius: 32px;
+    border-bottom-left-radius: 32px;
+    border-bottom-right-radius: 32px;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+}
+
+.chip:hover {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.chip--active {
+    color: var(--chalk);
+    border-left-color: var(--accent);
+    border-right-color: var(--accent);
+    border-top-color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+/* The list card gives its whole height to the ListView; the ListView's own scroller is hidden, the drag is
+   the scroll. Padding is dropped so rows run edge to edge and the recycled rows keep one width. */
+.market-list {
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: var(--space-s);
+}
+
+.market-list__view {
+    flex-grow: 1;
+}
+
+.market-list__empty {
+    color: var(--muted);
+    padding-left: var(--space-m);
+    padding-top: var(--space-m);
+}
+
+/* A market row: two lines of text on the left, the rating on the right. Fixed height like every row, so
+   the ListView can recycle by height. */
+.market-row__text {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.market-row__text .row__name {
+    flex-grow: 0;
+}
+
+.market-row__sub {
+    color: var(--muted);
+    font-size: var(--text-label);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 4px;
+}
+
+/* Out of reach. Dimmed as a whole rather than painted red: a fee the club cannot pay is not a defeat, and
+   the semantic colours are for results (ART_STYLE §2). The card says by how much. */
+.row--dim .row__name,
+.row--dim .row__rating {
+    opacity: 0.45;
+}
+
+/* ----- the scout's range (ART_STYLE §4.1) --------------------------------------------------------------
+   A band on a 1–99 track: where the truth might be. The band is the accent at a whisper; the numbers beside
+   it take the brightness of their midpoint. */
+.range {
+    flex-direction: row;
+    align-items: center;
+    min-height: 56px;
+    flex-shrink: 0;
+}
+
+.range__label {
+    width: 100px;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+}
+
+.range__label--wide {
+    width: 240px;
+}
+
+.range__track {
+    flex-grow: 1;
+    height: 12px;
+    background-color: var(--pitch-line);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    overflow: hidden;
+}
+
+.range__band {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background-color: rgba(255, 46, 126, 0.55);
+}
+
+.range__value {
+    width: 130px;
+    flex-shrink: 0;
+    font-size: var(--text-body);
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+}
+
+/* A card's notes: what the money card says before the button — one sentence per line, wrapping. */
+.card__note {
+    color: var(--chalk);
+    margin-top: var(--space-s);
+}
+
+/* The core's own refusal, in the rare case the card's pre-check and the core disagree. Hidden until then. */
+.card__refusal {
+    color: var(--muted);
+    margin-top: var(--space-s);
+}
+
+.page__action-slot {
+    flex-shrink: 0;
 }
 
 /* ----- the sheet -------------------------------------------------------------------------------------

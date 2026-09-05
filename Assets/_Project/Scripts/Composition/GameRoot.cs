@@ -4,7 +4,7 @@ using Gaffer.Common.Localization;
 using Gaffer.Infrastructure.Localization;
 using Gaffer.Infrastructure.Configuration;
 using Gaffer.Presentation;
-using Gaffer.Presentation.Squad;
+using Gaffer.Presentation.Shell;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -60,6 +60,7 @@ namespace Gaffer.Composition
         [SerializeField] private SimulationBalanceSO _simulation;
         [SerializeField] private DevelopmentBalanceSO _development;
         [SerializeField] private EconomyBalanceSO _economy;
+        [SerializeField] private ScoutingBalanceSO _scouting;
 
         private void Start()
         {
@@ -95,7 +96,7 @@ namespace Gaffer.Composition
                     + "onto the Theme field, or the screen will draw in Unity's default runtime look.");
             }
 
-            new SquadScreen(started.Value, root, BuildText()).Build();
+            new GameShell(started.Value, root, BuildText()).Build();
         }
 
         // The words, bound to one locale. Composition's job precisely: Presentation may not see the
@@ -133,7 +134,8 @@ namespace Gaffer.Composition
                 positionalFit: _simulation != null ? _simulation.ToPositionalFitSettings() : null,
                 scorer: _simulation != null ? _simulation.ToScorerWeights() : null,
                 development: _development != null ? _development.ToSettings() : null,
-                economy: _economy != null ? _economy.ToSettings() : null);
+                economy: _economy != null ? _economy.ToSettings() : null,
+                scouting: _scouting != null ? _scouting.ToSettings() : null);
         }
 
         /// <summary>
