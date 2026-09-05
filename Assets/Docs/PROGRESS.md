@@ -6,6 +6,24 @@
 
 ---
 
+## Sezon ekranı, ve golün altındaki satırın kendi kopyası · 2026-09-05 (Faz 7, 5 ekranın 3.'sü)
+
+**Önce bekleyen iş kapandı.** 30 Ağustos'un maç raporu dilimi çalışma ağacında duruyordu; Unity kapısı açık Editor üzerinden (`run_tests`, pipeline) koşuldu — 592/592 — ve iki commit atıldı (`923c44d` feat, `4d718c0` docs). Sonra sahibine dört karar soruldu ve dördü de öneriyle aynı çıktı: kısa ek cümle, tablo + hedef + sıradaki maç, başlıktaki sıra satırından açılış, yerel merge.
+
+**Katlanmış satır artık kendi kopyasını okuyor.** Rapordaki hikâye satırı dakikayı ve ismi iki kez yazıyordu (30 Ağustos'un açık maddesi). Çözüm ikinci bir kopya kaydı: `MomentTextKeys.Folded(kind)` → `moment.<tür>.folded`, yalnız **golde doğan** türler için (first_goal, big_match_goal, derby_goal, title_decider_goal, relegation_goal, brace, hattrick); diğerleri null döner ve tam satırlarını korur. `MomentLine.Under` bu ikisini seçer, `MatchBeats` hikâyeyi onunla yazar. İki şey kod okunurken değişti: **(1)** ilk öneride goal_milestone da vardı — `MilestoneRule` anı `NoMinute` ile üretiyor, yani hiç katlanmıyor, kısa formu olmasının anlamı yok, çıkarıldı; **(2)** hat-trick ve brace `FirstGoalMinute` ile üretiliyor, yani üç golün **ilkinin** altında duruyor — "That completes his hat-trick." yanlış olurdu, satır "The first of his hat-trick." / "Hat-trick'in ilk golü." oldu. Üç guard: dakika yazan her tam satırın kısa formu var; hiçbir kısa form `{minute}` veya `{player}` içermiyor (varoluş sebebi bu); `MatchBeats` testi hikâyede golcünün adının ve dakikanın geçmediğini tutuyor. Ekranda doğrulandı: 2. hafta, "41' · GOAL · Dimitri Pauquet" ve altında "His first goal for the club."
+
+**Sezon ekranı (GDD §8: puan durumu, fikstür, hedef).** Üç kart: sıradaki rakip (iç saha/deplasman), tablo, yönetimin hedefi. Çekirdeğe iki sorgu eklendi — `LeagueSeason.FixturesOf(round)` ve `RunSession.NextFixture()` — ikisi de render-time okuma, durum tutmaz. Hedef çizgileri için `SeasonEvaluator`'ın iki karşılaştırması `Judge(position, target)` olarak dışa açıldı ve `Evaluate` onu çağırıyor; `Presentation.Season.TableZones` bölgeyi **ona sorar**, yeniden türetmez — böylece tablonun "terfi" dediği yer, sezon sonunda kurulun terfi diyeceği yerle aynı tanımdan gelir. Çizginin **nereye** çizildiği ise burada karar verilir ve bu off-by-one'ın yaşadığı kural: 4 testle kilitli (son satırın altına çizilmez, iki sayı çakışırsa tek çizgi).
+
+**Gözle bulunan iki kusur, aynı görüntüde.** İlk çekimde **(1)** "PTS" başlığı puan sütununun display boyutunu giymişti — tablodaki en büyük sayı gibi okunuyordu; başlık satırına kendi kuralı verildi. **(2)** PROMOTION etiketi çizginin **altında** duruyordu, yani 3. sıranın başlığı gibi okunuyordu. Kural: etiket bölgenin **kendi tarafında** — terfi etiketi çizginin üstünde bölgeyi kapatır, küme etiketi çizginin altında bölgeyi açar (`table__line--closes/--opens`).
+
+**Ekranın yeri ve ortaklaşan kabuk.** Başlıktaki "Sıra 8 · Hafta 0/38 ›" satırı artık bir karo (UI_REFERENCES §2): dokununca sezon ekranı açılır; aksiyon satırına üçüncü düğme konmadı. Rapor ile sezon ekranı aynı şekilde olduğu için (`kendi scroller'ı + altına sabitlenmiş tek çıkış`) `.report`'un kabuk sınıfları `.page*` oldu ve `SquadScreen` ikisini tek "tall sheet" üzerinden gösteriyor. Kabuk geldiğinde taşınacak şey hâlâ bu host.
+
+**Yöntem notu — Play Mode'da sheet'i terminalden açmak.** `capture_game_view` yalnız görüneni çeker; sezon ekranı bir dokunuşun arkasında. Çözüm `eval`: `UQueryExtensions.Q(root, null, "header__standing")` ile elemanı bul, `ClickEvent.GetPooled()` gönder. İki tuzak ölçüldü: **(a)** eval'da `using` yok, `root.Q(...)` derlenmez — uzantı metodu tam adıyla çağrılır; **(b)** `ClickEvent` bir `Button`'ı **tetiklemez** (hafta 0/38'de kaldı) — `Button` için `NavigationSubmitEvent` gerekir. Bununla "hikâye çıkana kadar hafta oyna" döngüsü tek eval'da koştu (2. haftada buldu). Adımlar CLAUDE.md'ye eklendi.
+
+**Sayılar.** dotnet köprüsü 590 → 599 (+3 kopya guard'ı, +1 beat, +4 bölge, +1 UI şablon doğrulaması). Unity kapısı 601.
+
+---
+
 ## Maç anlatısı ekranı · 2026-08-30 (Faz 7, 5 ekranın 2.'si)
 
 **Kapsam kararı, sim'e bakılarak.** Ekranı tasarlamadan önce sim'in ne ürettiğine bakıldı ve belirleyici şey çıktı: **`MatchEventKind` enum'unun tek değeri var, `Goal`.** ART_STYLE §06'nın feed'i sarı kart, oyuncu değişikliği, kaçan fırsat (xG'li) ve trait aktivasyonu da istiyor — hiçbiri simde yok. Sahibinin kararı: **bugün üretileni tam biçimde göster, sim genişletmesi ayrı bir dilim.** Uydurulmadı; NON-NEGOTIABLE #7 gereği olmayan olay gösterilmiyor, çünkü kartı uyduran bir feed'e gol konusunda da güvenilmez.
@@ -457,8 +475,8 @@ Asıl sayı bunun altında: **gelir modeli yok** (karar #18) ve maaşlar aynı t
 
 ## Nasıl koşulur (hatırlatma)
 
-- **Testler (hızlı kapı):** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj` — **582 yeşil**, saniyeler. Yalnız framework'süz katmanlar derlenir; `Infrastructure`'ın çoğu, `Composition`, `Presentation`, `Editor` bu köprüde **yok**.
-- **Unity CLI (dördüncü kapı):** `~/.unity/bin/unity test --mode EditMode --output /tmp/gaffer-editmode.xml --non-interactive --no-banner --timeout 1800` — **584 yeşil**, ~4 dk. Gerçek Editor'de batch mod; koşmadan önce **her assembly'yi derler**, yani asmdef referansları + yukarıdaki kör katmanlar buradan geçer. Editor projeyi açık tutmamalı (`Library` kilidi).
+- **Testler (hızlı kapı):** `PATH="$HOME/.dotnet:$PATH" dotnet test tests/Gaffer.Tests.csproj` — **599 yeşil**, saniyeler. Yalnız framework'süz katmanlar derlenir; `Infrastructure`'ın çoğu, `Composition`, `Presentation`, `Editor` bu köprüde **yok**.
+- **Unity CLI (dördüncü kapı):** `~/.unity/bin/unity test --mode EditMode --output /tmp/gaffer-editmode.xml --non-interactive --no-banner --timeout 1800` — **601 yeşil**, ~4 dk. Editor açıkken aynı kapı `~/.unity/bin/unity command run_tests --mode EditMode` ile açık Editor'de koşar (Library kilidi yok, ~2 dk). Gerçek Editor'de batch mod; koşmadan önce **her assembly'yi derler**, yani asmdef referansları + yukarıdaki kör katmanlar buradan geçer. Editor projeyi açık tutmamalı (`Library` kilidi).
 - **Biçim:** `PATH="$HOME/.dotnet:$PATH" dotnet format tests/Gaffer.Tests.csproj --verify-no-changes` — temiz olmalı (`CONVENTIONS.md` mekanik kuralları "tool-enforced" sayıyor).
 - **Harness:** Unity → menü **`Gaffer > Season Harness`** → Run
 - **Management (birleşik demo):** Unity → menü **`Gaffer > Management`** → Start Season → Advance Week (nakit erir) + Summer/Winter'da Sign/Sell (canlı kadro)
