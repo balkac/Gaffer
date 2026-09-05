@@ -6,6 +6,34 @@
 
 ---
 
+## Maç anlatısı ekranı · 2026-08-30 (Faz 7, 5 ekranın 2.'si)
+
+**Kapsam kararı, sim'e bakılarak.** Ekranı tasarlamadan önce sim'in ne ürettiğine bakıldı ve belirleyici şey çıktı: **`MatchEventKind` enum'unun tek değeri var, `Goal`.** ART_STYLE §06'nın feed'i sarı kart, oyuncu değişikliği, kaçan fırsat (xG'li) ve trait aktivasyonu da istiyor — hiçbiri simde yok. Sahibinin kararı: **bugün üretileni tam biçimde göster, sim genişletmesi ayrı bir dilim.** Uydurulmadı; NON-NEGOTIABLE #7 gereği olmayan olay gösterilmiyor, çünkü kartı uyduran bir feed'e gol konusunda da güvenilmez.
+
+**Ne var.** Score bug (hafta, kulüpler, skor, şut sayıları), dakikalı beat feed'i, kurulan düzen (dizilim + dört eksen), haftanın diğer sonuçları, devam düğmesi. Skor **sonuca göre** renkleniyor — `result--win/loss/draw`, ekranın renk harcadığı tek yer, ve ART_STYLE bu renkleri tam olarak sonuç için ayırıyor.
+
+**İmza olan kısım çalışıyor.** Faz 5'in tanıdığı kariyer anları feed'e giriyor ve bir gol ile onun yarattığı an **tek satır** oluyor (mock'un şekli): golün altında hikâye, yanında accent kenar, altında "günlüğe yazıldı" etiketi. 2. haftada gerçek bir örnek yakalandı ve ekran görüntüsüyle doğrulandı.
+
+**Mantık ekrandan ayrıldı.** Hangi beat'ler var, hangi sırada, ve hangi anın hangi gole ait olduğu `MatchBeats`'te — framework'süz, köprüde, 6 testle kilitli. Sebep: bu iki kural **sessizce** yanlış olur. Yanlış gole iliştirilen bir hikâye kusursuz okunan bir cümlede yanlış oyuncuyu anar, ve yanlış sıralanmış bir feed yine feed'e benzer. İkisi de exception atmaz. Eşleşme bu yüzden dakika **ve** golcü üzerinden yapılıyor, ve bir an bir kez harcanıyor.
+
+**Yol boyunca ortaklaştırılanlar.** `HarnessMoments`'ın Gate B'de kanıtlanmış an→cümle mantığı `Presentation.Matchday.MomentLine`'a taşındı; harness artık ona bağlanıyor. Ayrım bilinçli: **argümanlar** ortak (hangi isim, kulüp, dakika, sayı), **eksik anahtarda ne yapılacağı** değil — pencere gürültülü bir geliştirici işareti çizer, ekran anahtarın kendisini gösterir. Ayrıca "kelime yoksa anahtarı göster" politikası dört yerde tekrarlanıyordu (`SquadScreen`, rapor, beat listesi, an satırı); tek bir `UiWords.Or`'a indi.
+
+**Taktik eksenlerinin adları geldi.** `TacticsTextKeys` çekirdekte anahtar üretiyor (kelime değil, #8), 14 satır kopya iki dilde yazıldı, ve `UiTextKeys.All` bunları da enum'dan türetiyor — yani yeni bir eksen değeri eklenince guard kopyasını ister. Taktik ekranı bunları hazır bulacak.
+
+**Gözle bulunan, henüz çözülmemiş.** Katlanmış hikâye satırı dakikayı ve ismi **iki kez** yazıyor: satır "41' · GOAL · Dimitri Pauquet" diyor, altındaki cümle "41' — Dimitri Pauquet kulüpteki ilk golünü attı." Sebep yapısal — bu kopya *yolculuk günlüğü* için, tek başına duran bir cümle olarak yazılmış; raporda ise bağlamı satır sağlıyor. ART_STYLE'ın mock'unda alt satır ne dakikayı ne ismi tekrar ediyor. Ucuz bir düzeltmesi yok: rapor için ikinci bir kopya kaydı gerekiyor (gol türleri için ~6 satır × 2 dil), ve bu sahibinin ses kararı.
+
+**Sahibinin bulduğu üç kusur — aynı gün, ölçülerek düzeltildi.**
+
+1. **Continue bazen basılamıyordu.** Ölçüm: kariyer anı taşıyan bir haftada düğme `y=2181..2291`, ekran `2109` — tamamen görünümün dışında, ve scrollbar gizli olduğu için kaydırılabildiğine dair görsel ipucu da yok. Sebebi utanç verici biçimde yazılıydı: `SquadScreen`'in kendi yorumu *"Header ve aksiyonlar sabitlenir, böylece 'haftayı oyna' hep başparmağın altındadır"* diyor, ben raporda düğmeyi scroller'ın **içine** koymuştum. Rapor artık kendi scroller'ını taşıyor ve çıkışı onun altına sabitliyor → `y=1919..2029`, ekranda.
+
+2. **Panel sıfıra çöktü — düzeltmenin kendi regresyonu.** Sabitlemenin ilk hâlinde panel yüksekliğini *içeriğinden* alıyordu, içerik ise `flex-grow` ile "bana ne verirsen onu doldururum" diyordu; iki iddia birbirini sıfırda çözdü ve ekran kayboldu. Panele kesin yükseklik verildi. Ardından ikinci bir sessizlik çıktı: taban `.sheet__panel`'ın `max-height: 70%`'i, `height: 92%`'i kırpıyordu — kural 92 diyor, ekran 70 çiziyordu. İkisi de yazıldı.
+
+3. **Hover rengi primary düğmeyi bozuyordu.** `.button:hover` **bütün** düğmeleri `--pitch-line`'a boyuyordu, ve bir pseudo-sınıf düz bir sınıftan üstün olduğu için `.button--primary`'yi de eziyordu. Ölçüm: `FF2E7E → 1E3733` — accent düğme imlecin altında parlak magentadan koyu yeşile dönüyor, yani tam işaret edildiği anda devre dışı gibi okunuyordu. Artık `FF2E7E → FF5C97` (`--accent-lift`): ikinci bir renk değil, aynı tonun bir durumu.
+
+**Ekranın yeri geçici.** Rapor `SquadScreen`'in içinde bir sheet olarak açılıyor, çünkü navigasyon kabuğu yok. Kabuk geldiğinde taşınacak olan `SquadScreen`'deki bağlantı; `MatchScreen` olduğu gibi kalır.
+
+---
+
 ## Tahta artık bir saha · 2026-08-30
 
 **Sorun, ancak görülünce anlaşıldı.** Ekran görüntüsü alınabilir olur olmaz çıkan ikinci bulgu: `ART_STYLE` "matchday broadcast graphics" diyor ama tahtada tek bir saha çizgisi yoktu — koyu bir dikdörtgen üzerinde kart ızgarası. Dört sıra kart, ona bakan göze *nerede* durduklarını söylemiyordu.
