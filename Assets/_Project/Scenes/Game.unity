@@ -149,7 +149,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ea38c7a8f6ca4e74bbcc3857afc7f677, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Gaffer.Composition::Gaffer.Composition.GameRoot
-  _seed: 20260816
+  _seed: 
   _clubs: 20
   _managedClubIndex: 7
   _marketSize: 2000
@@ -161,6 +161,7 @@ MonoBehaviour:
   _simulation: {fileID: 0}
   _development: {fileID: 0}
   _economy: {fileID: 0}
+  _scouting: {fileID: 0}
 --- !u!114 &769802703
 MonoBehaviour:
   m_ObjectHideFlags: 0

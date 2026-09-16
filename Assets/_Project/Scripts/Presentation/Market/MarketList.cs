@@ -55,10 +55,57 @@ namespace Gaffer.Presentation.Market
             players.Sort(ByRatingDescending);
         }
 
+        /// <summary>
+        /// The list in the order asked for. Youngest first and cheapest first both fall back to best first
+        /// among equals, and every order ends on id, so the same list comes out of any starting order.
+        /// The fee is asked of the caller because pricing belongs to the run's economy, not to a list.
+        /// </summary>
+        public static void Sort(List<Player> players, MarketSort order, Func<Player, long> fee)
+        {
+            switch (order)
+            {
+                case MarketSort.Age:
+                    players.Sort(CompareByAge);
+                    break;
+                case MarketSort.Fee:
+                    players.Sort((left, right) =>
+                    {
+                        int byFee = fee(left).CompareTo(fee(right));
+                        return byFee != 0 ? byFee : CompareByRating(left, right);
+                    });
+                    break;
+                default:
+                    players.Sort(ByRatingDescending);
+                    break;
+            }
+        }
+
+        /// <summary>Whether a player's age falls in the band; <see cref="AgeBand.All"/> takes everyone.</summary>
+        public static bool InAgeBand(Player player, AgeBand band)
+        {
+            switch (band)
+            {
+                case AgeBand.Under22:
+                    return player.Age <= 21;
+                case AgeBand.Prime:
+                    return player.Age >= 22 && player.Age <= 28;
+                case AgeBand.Veteran:
+                    return player.Age >= 29;
+                default:
+                    return true;
+            }
+        }
+
         private static int CompareByRating(Player left, Player right)
         {
             int byRating = PlayerRatings.ForRole(right).CompareTo(PlayerRatings.ForRole(left));
             return byRating != 0 ? byRating : left.Id.Value.CompareTo(right.Id.Value);
+        }
+
+        private static int CompareByAge(Player left, Player right)
+        {
+            int byAge = left.Age.CompareTo(right.Age);
+            return byAge != 0 ? byAge : CompareByRating(left, right);
         }
     }
 }

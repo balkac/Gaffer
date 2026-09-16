@@ -49,6 +49,9 @@
     <Compile Include="../Assets/_Project/Scripts/Presentation/UiMoney.cs" />
     <Compile Include="../Assets/_Project/Scripts/Presentation/Market/Affordability.cs" />
     <Compile Include="../Assets/_Project/Scripts/Presentation/Market/MarketList.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Presentation/Market/MarketSort.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Presentation/Market/AgeBand.cs" />
+    <Compile Include="../Assets/_Project/Scripts/Presentation/Drama/DramaLines.cs" />
     <Compile Include="../Assets/_Project/Scripts/Tests/EditMode/**/*.cs" />
   </ItemGroup>
 

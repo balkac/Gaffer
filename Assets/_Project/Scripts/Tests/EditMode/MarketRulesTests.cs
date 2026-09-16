@@ -150,6 +150,71 @@ namespace Gaffer.Tests
             }
         }
 
+        [Test]
+        public void Sort_ByAge_IsYoungestFirst_AndBestAmongEquals()
+        {
+            RunSession session = StartRun();
+            var players = new List<Player>(session.GetMarket());
+
+            MarketList.Sort(players, MarketSort.Age, session.FeeOf);
+
+            for (int i = 1; i < players.Count; i++)
+            {
+                Assert.That(players[i - 1].Age, Is.LessThanOrEqualTo(players[i].Age));
+                if (players[i - 1].Age == players[i].Age)
+                {
+                    Assert.That(PlayerRatings.ForRole(players[i - 1]), Is.GreaterThanOrEqualTo(PlayerRatings.ForRole(players[i])),
+                        "two men of one age: the better one first");
+                }
+            }
+        }
+
+        [Test]
+        public void Sort_ByFee_IsCheapestFirst()
+        {
+            RunSession session = StartRun();
+            var players = new List<Player>(session.GetMarket());
+
+            MarketList.Sort(players, MarketSort.Fee, session.FeeOf);
+
+            for (int i = 1; i < players.Count; i++)
+            {
+                Assert.That(session.FeeOf(players[i - 1]), Is.LessThanOrEqualTo(session.FeeOf(players[i])));
+            }
+        }
+
+        [Test]
+        public void InAgeBand_EdgesFallWhereTheTradeDrawsThem()
+        {
+            RunSession session = StartRun();
+            IReadOnlyList<Player> market = session.GetMarket();
+            var seen = new HashSet<AgeBand>();
+
+            for (int i = 0; i < market.Count; i++)
+            {
+                Player player = market[i];
+                Assert.That(MarketList.InAgeBand(player, AgeBand.All), Is.True);
+
+                int bands = 0;
+                foreach (AgeBand band in new[] { AgeBand.Under22, AgeBand.Prime, AgeBand.Veteran })
+                {
+                    if (MarketList.InAgeBand(player, band))
+                    {
+                        bands++;
+                        seen.Add(band);
+                        bool expected = band == AgeBand.Under22 ? player.Age <= 21
+                            : band == AgeBand.Prime ? player.Age >= 22 && player.Age <= 28
+                            : player.Age >= 29;
+                        Assert.That(expected, Is.True, player.Age + " in " + band);
+                    }
+                }
+
+                Assert.That(bands, Is.EqualTo(1), "every age is in exactly one band, so the three chips partition the list");
+            }
+
+            Assert.That(seen.Count, Is.EqualTo(3), "the sample must reach all three bands to mean anything");
+        }
+
         // ----- Money ------------------------------------------------------------------------------------
 
         [Test]

@@ -863,6 +863,21 @@
     -unity-text-align: middle-right;
 }
 
+/* The row that leads to a profile at the head of a picker: an action dressed as a row, so it takes the
+   same tap and the same height as the choices under it, and reads as a label because it is not one of
+   them. */
+.row--profile .row__name {
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+}
+
+/* The filter sheet: a heading over each group of chips, with room beneath it. */
+.filters__eyebrow {
+    margin-bottom: var(--space-s);
+}
+
 /* A card's notes: what the money card says before the button — one sentence per line, wrapping. */
 .card__note {
     color: var(--chalk);
@@ -1397,4 +1412,180 @@
 
 .result--draw {
     color: var(--draw);
+}
+
+/* ----- the drama card (GDD §4.7) ------------------------------------------------------------------------
+   A decision on the sheet: what happened, and two or three answers with what each will cost written
+   under it. Each answer is one tap target — the lines are part of the choice, not a footnote beside it.
+   Colour is spent only on consequences, where gain/cost is what the colour MEANS (ART_STYLE §2); the
+   story and the labels stay chalk. */
+
+.drama__head {
+    margin-bottom: var(--space-s);
+}
+
+.drama__title {
+    white-space: normal;
+    margin-top: var(--space-xs);
+}
+
+.drama__story {
+    margin-bottom: var(--space-m);
+}
+
+.choice {
+    flex-shrink: 0;
+    background-color: var(--pitch-raised);
+    border-left-color: var(--pitch-line);
+    border-right-color: var(--pitch-line);
+    border-top-color: var(--pitch-line);
+    border-bottom-color: var(--pitch-line);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
+    padding-top: var(--space-s);
+    padding-bottom: var(--space-s);
+    padding-left: var(--space-m);
+    padding-right: var(--space-m);
+    margin-bottom: var(--space-s);
+    transition-property: background-color, scale;
+    transition-duration: 90ms, 90ms;
+    transition-timing-function: ease-out, ease-out;
+}
+
+/* A quiet lift, like a button: this IS one, shaped like a card because it carries three lines. */
+.choice:hover {
+    background-color: var(--pitch-line);
+}
+
+.choice:active {
+    scale: 0.97 0.97;
+}
+
+.choice__label {
+    color: var(--chalk);
+    font-size: var(--text-body);
+    -unity-font-style: bold;
+    white-space: normal;
+    margin-bottom: var(--space-xs);
+}
+
+/* What the answer does, one line per effect, in the label's shadow. */
+.choice__line {
+    font-size: var(--text-label);
+    white-space: normal;
+    margin-top: var(--space-xs);
+}
+
+.choice__line--quiet {
+    color: var(--muted);
+}
+
+.choice__line--gain {
+    color: var(--win);
+}
+
+.choice__line--cost {
+    color: var(--loss);
+}
+
+.drama__note {
+    color: var(--muted);
+    font-size: var(--text-label);
+    white-space: normal;
+    margin-top: var(--space-s);
+}
+
+/* ----- morale on the roster ---------------------------------------------------------------------------
+   The drama layer where it goes on living: a signed number on the row and on the tile, blank at zero.
+   Coloured, because a wound and a lift are consequences of a result the manager chose, not a tactical
+   footnote like the penalty — the same two tones the card wrote them in. */
+
+.row__morale {
+    width: 70px;
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+}
+
+.row__morale--up {
+    color: var(--win);
+}
+
+.row__morale--down {
+    color: var(--loss);
+}
+
+.slot__morale {
+    font-size: var(--text-small);
+    -unity-font-style: bold;
+}
+
+.slot__morale--up {
+    color: var(--win);
+}
+
+.slot__morale--down {
+    color: var(--loss);
+}
+
+/* ----- the door: main menu ----------------------------------------------------------------------------
+   The name of the game, the run you left, a way to start another. Centred, because there is nothing to
+   scan here — two decisions and a title. */
+
+.menu {
+    flex-grow: 1;
+    height: 100%;
+    justify-content: center;
+    background-color: var(--pitch);
+    padding-left: var(--space-l);
+    padding-right: var(--space-l);
+}
+
+.menu__title {
+    color: var(--chalk);
+    font-size: 96px;
+    -unity-font-style: bold;
+    letter-spacing: 8px;
+    -unity-text-align: middle-center;
+    margin-bottom: var(--space-xl);
+}
+
+.menu__run {
+    -unity-text-align: middle-center;
+    margin-bottom: var(--space-s);
+}
+
+.menu__button {
+    margin-top: var(--space-s);
+}
+
+/* ----- settings ----------------------------------------------------------------------------------------
+   Two verbs on a card. The status line under them is where a save says what it saved and where leaving
+   says what it costs. */
+
+.settings__card {
+    margin-top: var(--space-m);
+}
+
+.settings__run {
+    font-size: var(--text-title);
+    white-space: normal;
+    margin-bottom: var(--space-m);
+}
+
+.settings__button {
+    margin-top: var(--space-s);
+}
+
+.settings__status {
+    color: var(--muted);
+    font-size: var(--text-label);
+    white-space: normal;
+    margin-top: var(--space-m);
 }

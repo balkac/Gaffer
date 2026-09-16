@@ -5,7 +5,9 @@ using Gaffer.Common;
 using Gaffer.Common.Localization;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
+using Gaffer.Presentation.Market;
 using Gaffer.Presentation.Matchday;
+using Gaffer.Presentation.Drama;
 using Gaffer.Presentation.Shell;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -175,7 +177,7 @@ namespace Gaffer.Presentation.Squad
             // role is the only honest number to show him.
             FillSheet(_eleven, _sheet);
             FillList(_bench, _benched, OnBenchTapped);
-            _pitch.Draw(lineup.Formation, lineup.Slots, _session.PositionalFit);
+            _pitch.Draw(lineup.Formation, lineup.Slots, _session.PositionalFit, _session.MoralePointsOf);
         }
 
         private static void Refill(List<Player> into, IReadOnlyList<Player> from)
@@ -355,7 +357,20 @@ namespace Gaffer.Presentation.Squad
             double value = PlayerRatings.ForSlot(player, entry.Role, _session.PositionalFit);
             SetRating(rating, value);
             SetPenalty(penalty, PlayerRatings.ForRole(player), value);
+            SetMorale((Label)element[4], player.Id);
             MarkFit(element, entry.Fit, markNatural: false);
+        }
+
+        // Signed, or blank: a roster that printed "0" on twenty men would teach the reader to stop looking
+        // at the column, and the one "−4" on it is the whole point. Both classes are cleared before the
+        // right one is set, for the reused-row reason SetRating states.
+        private void SetMorale(Label morale, PlayerId player)
+        {
+            double points = _session.MoralePointsOf(player);
+            bool live = System.Math.Abs(points) >= 0.05;
+            morale.text = live ? DramaLines.Points(points) : string.Empty;
+            morale.EnableInClassList("row__morale--up", live && points > 0.0);
+            morale.EnableInClassList("row__morale--down", live && points < 0.0);
         }
 
         // The drop, in the manager's own units, beside the number it was taken out of. Written only when
@@ -398,9 +413,19 @@ namespace Gaffer.Presentation.Squad
         private void OpenPlayerPicker(int slot)
         {
             _pickerSlot = slot;
+            IReadOnlyList<Player> lineupSlots = _session.Lineup().Slots;
             PlayerRole wanted = slot >= 0 && slot < _slotRoles.Count ? _slotRoles[slot] : default;
+            Player occupant = slot >= 0 && slot < lineupSlots.Count ? lineupSlots[slot] : null;
             OpenSheet(Say(UiTextKeys.PickerWho), list =>
             {
+                // The man standing here, first: the tap that asks "who plays here" is also the only tap
+                // the board has, so it is where "who IS this" has to be answered too. A row rather than a
+                // second gesture, so the gesture vocabulary stays at one meaning (UI_REFERENCES §3).
+                if (occupant != null)
+                {
+                    list.Add(ProfileRow(occupant));
+                }
+
                 for (int i = 0; i < _benched.Count; i++)
                 {
                     int index = i;
@@ -433,6 +458,7 @@ namespace Gaffer.Presentation.Squad
             double value = PlayerRatings.ForSlot(player, slotRole, _session.PositionalFit);
             SetRating(rating, value);
             SetPenalty(penalty, PlayerRatings.ForRole(player), value);
+            SetMorale((Label)element[4], player.Id);
         }
 
         /// <summary>
@@ -452,6 +478,11 @@ namespace Gaffer.Presentation.Squad
 
             OpenSheet(Say(UiTextKeys.PickerWhere), list =>
             {
+                if (candidate != null)
+                {
+                    list.Add(ProfileRow(candidate));
+                }
+
                 IReadOnlyList<PlayerRole> slots = lineup.Formation.Slots;
                 for (int i = 0; i < slots.Count; i++)
                 {
@@ -475,6 +506,31 @@ namespace Gaffer.Presentation.Squad
         /// he has already picked does not, because highlighting all eleven would wash the list in accent and
         /// say nothing. Both mark the bad fits identically, so one class means one thing everywhere.</para>
         /// </summary>
+        // "See his profile · Name". The picker closes and the card rises on the shell's sheet, because a
+        // profile over a picker over a board is two modals deep and the picker had already served its turn.
+        private VisualElement ProfileRow(Player player)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("row");
+            row.AddToClassList("row--profile");
+            row.RegisterCallback<ClickEvent>(_ =>
+            {
+                CloseSheet();
+                _host.ShowSheet(new PlayerCard(_session, _text, _host).BuildProfile(player));
+            });
+
+            var words = new Label(Say(UiTextKeys.SquadProfile) + "  ·  " + player.Name);
+            words.AddToClassList("row__name");
+            words.pickingMode = PickingMode.Ignore;
+            row.Add(words);
+
+            var chevron = new Label("›");
+            chevron.AddToClassList("row__role");
+            chevron.pickingMode = PickingMode.Ignore;
+            row.Add(chevron);
+            return row;
+        }
+
         private static void MarkFit(VisualElement row, PositionalFit fit, bool markNatural)
         {
             switch (fit)
@@ -656,6 +712,14 @@ namespace Gaffer.Presentation.Squad
             penalty.pickingMode = PickingMode.Ignore;
             row.Add(penalty);
 
+            // Child [4]: live morale from the drama layer, signed, blank at zero. Always built, for the
+            // same column reason as the penalty. This is where a decision goes on being visible after the
+            // card has closed — the playtest's "I cannot see that it touched the next weeks".
+            var morale = new Label();
+            morale.AddToClassList("row__morale");
+            morale.pickingMode = PickingMode.Ignore;
+            row.Add(morale);
+
             return row;
         }
 
@@ -682,6 +746,7 @@ namespace Gaffer.Presentation.Squad
             // row carries whatever the last player left on it otherwise, and the bug shows up as one row in
             // a scrolled list wearing somebody else's brightness.
             SetRating(rating, PlayerRatings.ForRole(player));
+            SetMorale((Label)element[4], player.Id);
         }
 
         private VisualElement BuildActions()
@@ -749,6 +814,35 @@ namespace Gaffer.Presentation.Squad
 
         private void OnAdvanceWeek()
         {
+            // A drama is a decision, not a notification: the core refuses the week while one waits, and
+            // the screen's answer to that refusal is the card itself rather than the sentence about it.
+            // This is also how a resumed run with a decision open, or a card dismissed to look at the
+            // squad first, gets back to the question.
+            if (_session.PendingDrama != null)
+            {
+                ShowDrama();
+                return;
+            }
+
+            // Season over: the same button rolls the league on a year — like FM, straight through, no
+            // summary in between (the owner's call, 2026-09-16). The board redraws with the aged, retired
+            // and replenished squad, and the first week of the new season is the NEXT tap: a manager whose
+            // keeper just retired picks his eleven before the whistle, not after it.
+            if (_session.IsSeasonComplete)
+            {
+                Result<SeasonRollover> next = _session.StartNextSeason();
+                if (next.IsFailure)
+                {
+                    ShowMessage(next.Error);
+                    return;
+                }
+
+                ShowMessage(string.Empty);
+                _host.RunChanged();
+                Draw(next.Value.Lineup);
+                return;
+            }
+
             Result<WeekOutcome> week = _session.AdvanceWeek();
             if (week.IsFailure)
             {
@@ -760,6 +854,7 @@ namespace Gaffer.Presentation.Squad
             // is told "Fairwood 2-1 Ashcombe" has been given the score of a match he had no part in; the
             // report is where the decision and the afternoon meet.
             ShowMessage(string.Empty);
+            _host.RunChanged();
             ShowReport(week.Value);
         }
 
@@ -773,8 +868,40 @@ namespace Gaffer.Presentation.Squad
 
         private void CloseReport()
         {
+            // The week's story, after the week's score: a drama the round raised follows the report in
+            // the same sheet, so the manager meets the question before he is back on the board with a
+            // Play button that refuses him.
+            if (_session.PendingDrama != null)
+            {
+                ShowDrama();
+                return;
+            }
+
             // Back to the board on the way out: the week changed the squad, and the manager returns to it
             // expecting it to be current. The shell redraws the page as the sheet closes.
+            ShowPitch(true);
+            _host.CloseSheet();
+        }
+
+        /// <summary>Raises the decision card if a drama is waiting — the shell asks on start-up, so a run
+        /// resumed with a question open opens on the question.</summary>
+        public void ShowDramaIfPending()
+        {
+            if (_session.PendingDrama != null)
+            {
+                ShowDrama();
+            }
+        }
+
+        private void ShowDrama()
+        {
+            _host.ShowSheet(new DramaCard(_session, _text, _host, CloseDrama).Build(_session.PendingDrama));
+        }
+
+        private void CloseDrama()
+        {
+            // Same way out as the report: an answer can sell a man or re-pick the eleven, and the board is
+            // where that has to be seen.
             ShowPitch(true);
             _host.CloseSheet();
         }
@@ -795,6 +922,7 @@ namespace Gaffer.Presentation.Squad
             }
 
             ShowMessage(string.Empty);
+            _host.RunChanged();
             Draw(result.Value);
         }
 
