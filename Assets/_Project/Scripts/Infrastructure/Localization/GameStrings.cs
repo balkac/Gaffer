@@ -108,6 +108,60 @@ namespace Gaffer.Infrastructure.Localization
                         "No fixture this week.",
                         "Bu hafta maç yok."),
 
+                    // --- the drama card ----------------------------------------------------------------
+                    // The decision moment's chrome, and the lines DramaLines writes under each choice:
+                    // what it will cost and what it did. One number per row, in {count}; a line needing
+                    // two (points AND weeks) is two rows joined by the rule. Names stay atomic, so the
+                    // Turkish is written so the name never needs a case ending ("{player}: moral +3",
+                    // not "{player}'ın morali"). Money arrives already written in the locale's mark.
+                    Row("ui.drama.eyebrow", "DECISION", "KARAR"),
+                    Row("ui.drama.aftermath", "WHAT HAPPENED", "NE OLDU"),
+                    Row(
+                        "ui.drama.nothing",
+                        "Nothing changes. You live with it.",
+                        "Hiçbir şey değişmez. Bununla yaşarsın."),
+                    Row(
+                        "ui.drama.nothing_moved",
+                        "Nothing moved. You lived with it.",
+                        "Hiçbir şey değişmedi. Bununla yaşadın."),
+                    Row("ui.drama.whole_squad", "Whole squad", "Tüm kadro"),
+                    Row("ui.drama.someone", "A player", "Bir oyuncu"),
+                    Row("ui.drama.players_count", "{count} players", "{count} oyuncu"),
+                    // "Ali Kaya: morale +3". The colon keeps the name atomic in both languages.
+                    Row("ui.drama.morale", "{player}: morale {count}", "{player}: moral {count}"),
+                    Row("ui.drama.weeks", "{count} weeks", "{count} hafta"),
+                    Row("ui.drama.one_week", "1 week", "1 hafta"),
+                    // The amount is signed by the rule ("+€250k", "−€250k"), so the word before it is neutral.
+                    Row("ui.drama.cash", "Cash {count}", "Kasa {count}"),
+                    // The percent sign sits where each language puts it.
+                    Row("ui.drama.cash_share", "{count}% of the bank", "kasanın %{count} kadarı"),
+                    Row("ui.drama.in_the_bank", "{count} in the bank", "kasada {count} var"),
+                    Row("ui.drama.wage_fine", "{player}: one week of wage", "{player}: bir haftalık maaş"),
+                    Row(
+                        "ui.drama.sale",
+                        "{player} leaves, sold at his fee: {count}.",
+                        "{player} gider, bonservisi {count} kasaya girer."),
+                    Row(
+                        "ui.drama.sold",
+                        "{player} is out of the squad, sold for {count}, and back on the market.",
+                        "{player} kadrodan çıktı, {count} bonservisle satıldı ve piyasaya döndü."),
+                    // The heir is picked when the choice is made, so the preview cannot name him.
+                    Row(
+                        "ui.drama.heir_preview",
+                        "A team-mate inherits {count}. You learn who when you decide.",
+                        "Bir takım arkadaşı {count} devralır. Kim olduğunu karar verince öğrenirsin."),
+                    Row(
+                        "ui.drama.heir",
+                        "{player} is the heir and carries {count} from now on.",
+                        "{player} varis oldu, artık {count} taşıyor."),
+                    Row(
+                        "ui.drama.on_roster",
+                        "Morale shows on the roster until it fades.",
+                        "Moral, solana dek kadroda görünür."),
+                    // A kind the rule has no words for — shown by name rather than dropped, so a new
+                    // effect cannot ship as one line fewer than the choice has.
+                    Row("ui.drama.unknown_effect", "No words yet for {count}.", "{count} için henüz kelime yok."),
+
                     // --- what a position is CALLED, in three characters ------------------------------
                     // The tiles on the board and every row in the sheet are labelled with these, so they
                     // are read more often than any other string in the game and are the only ones whose
@@ -235,6 +289,26 @@ namespace Gaffer.Infrastructure.Localization
                         "ui.action.done",
                         "Done",
                         "Tamam"),
+                    Row("ui.action.save", "Save", "Kaydet"),
+
+                    // --- the door: main menu and settings ------------------------------------------------
+                    // Saving is manual, like FM's, with a silent autosave when the app goes to the
+                    // background (owner, 2026-09-16). "Run" stays "run" in Turkish: it is the game's own
+                    // word for one attempt at the job, and the design docs use it untranslated.
+                    Row("ui.menu.title", "GAFFER", "GAFFER"),
+                    Row("ui.menu.continue", "Continue", "Devam et"),
+                    Row("ui.menu.new_run", "New run", "Yeni run"),
+                    Row("ui.menu.confirm_new", "Tap again to start over.", "Baştan başlamak için tekrar dokun."),
+                    // "{club} · season 2": the season number sits after the noun in English and before it
+                    // in Turkish, and the club stays atomic in both.
+                    Row("ui.menu.run_line", "{club} · season {count}", "{club} · {count}. sezon"),
+                    Row("ui.settings.title", "SETTINGS", "AYARLAR"),
+                    Row("ui.settings.saved", "Saved.", "Kaydedildi."),
+                    Row("ui.settings.menu", "Main menu", "Ana menü"),
+                    Row(
+                        "ui.settings.unsaved",
+                        "Unsaved progress will be lost. Tap again to leave.",
+                        "Kaydedilmemiş ilerleme gider. Çıkmak için tekrar dokun."),
 
                     // --- the shell ---------------------------------------------------------------------
                     // Three tabs, one word each. Turkish says TRANSFER for the market because that is the
@@ -243,6 +317,8 @@ namespace Gaffer.Infrastructure.Localization
                     Row("ui.nav.squad", "SQUAD", "KADRO"),
                     Row("ui.nav.season", "SEASON", "SEZON"),
                     Row("ui.nav.market", "MARKET", "TRANSFER"),
+                    // The fourth tab: Save and Main menu today, the manager's own page from Faz 6.
+                    Row("ui.nav.menu", "MENU", "MENÜ"),
 
                     // --- the market (Faz 7) ----------------------------------------------------------
                     // The status line says WHEN a deal can be done before anything else is read; the card
@@ -488,6 +564,20 @@ namespace Gaffer.Infrastructure.Localization
                         "moment.hattrick.folded",
                         "The first of his hat-trick.",
                         "Hat-trick'in ilk golü."),
+
+                    // --- what a trait is CALLED --------------------------------------------------------
+                    // The catalog names traits by key (TraitCatalog); these are the words. A screen meets
+                    // one the day a drama passes a trait to an heir, and the card says what he inherits.
+                    // Short, because they are drawn as a value inside a sentence, never as the sentence.
+                    Row("trait.derby_beast.name", "Derby beast", "Derbi canavarı"),
+                    Row("trait.big_game_bottler.name", "Big-game bottler", "Büyük maç korkağı"),
+                    Row("trait.showman.name", "Showman", "Şovmen"),
+                    Row("trait.dressing_room_leader.name", "Dressing-room leader", "Soyunma odası lideri"),
+                    Row("trait.training_dodger.name", "Training dodger", "Antrenman kaçkını"),
+                    Row("trait.model_professional.name", "Model professional", "Örnek profesyonel"),
+                    Row("trait.glass_man.name", "Glass man", "Cam adam"),
+                    Row("trait.loyal.name", "Loyal", "Sadık"),
+                    Row("trait.press_magnet.name", "Press magnet", "Basın mıknatısı"),
 
                     // --- transfer-request ------------------------------------------------------------
                     // He is good enough that someone came in for him and the window is open. Refusing

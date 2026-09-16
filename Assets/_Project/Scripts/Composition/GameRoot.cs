@@ -1,10 +1,15 @@
+using System.IO;
 using Gaffer.Application.Run;
+using Gaffer.Application.Serialization;
 using Gaffer.Common;
 using Gaffer.Common.Localization;
 using Gaffer.Infrastructure.Localization;
 using Gaffer.Infrastructure.Configuration;
+using Gaffer.Infrastructure.Persistence;
 using Gaffer.Presentation;
+using Gaffer.Presentation.Menu;
 using Gaffer.Presentation.Shell;
+using Gaffer.UserData;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -26,8 +31,17 @@ namespace Gaffer.Composition
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     [DisallowMultipleComponent]
-    public sealed class GameRoot : MonoBehaviour
+    public sealed class GameRoot : MonoBehaviour, IRunPersistence
     {
+        // The same file the editor's Management window reads and writes, on purpose: a run the owner is
+        // playing on the phone can be opened in the dev window, and the other way round.
+        private static string SavePath => Path.Combine(UnityEngine.Application.persistentDataPath, "gaffer-run.json");
+
+        private VisualElement _root;
+        private LocalizedStrings _text;
+        private RunSession _session;
+        private GameShell _shell;
+
         [Header("The world this run is generated from")]
         [Tooltip("Leave EMPTY for a fresh run every time you press Play (the seed drawn is logged, so any run can be replayed by typing it here). Type a number to pin the world: same seed, same season, every time.")]
         [SerializeField] private string _seed = string.Empty;
@@ -71,6 +85,40 @@ namespace Gaffer.Composition
                 return;
             }
 
+            // The sheet is attached HERE rather than inside the screen: which stylesheet is in force is a
+            // wiring fact, and Presentation deciding it for itself would make the look impossible to swap
+            // from the composition root (ARCHITECTURE §6).
+            _root = document.rootVisualElement;
+            if (_theme != null)
+            {
+                _root.styleSheets.Add(_theme);
+            }
+            else
+            {
+                // Loud, because the failure is silent otherwise: everything still draws, just in Unity's
+                // default theme, which reads as "the art is wrong" rather than "the sheet is missing".
+                Debug.LogError("GameRoot: no theme stylesheet assigned. Drag Assets/_Project/UI/Theme/Gaffer.uss "
+                    + "onto the Theme field, or the screen will draw in Unity's default runtime look.");
+            }
+
+            _text = BuildText();
+
+            // The door first (owner, 2026-09-16): the saved run, if there is one, is resumed here and
+            // offered as Continue; New run is always on the menu. Nothing starts until the manager says.
+            _session = LoadSavedRun();
+            ShowMenu();
+        }
+
+        // ----- The door -----------------------------------------------------------------------------------
+
+        private void ShowMenu()
+        {
+            _shell = null;
+            new MainMenuScreen(_text, _session, onContinue: () => Play(_session), onNewRun: NewRun).Build(_root);
+        }
+
+        private void NewRun()
+        {
             RunSetup setup = BuildSetup();
 
             // Said out loud on every start, because a run that surprised you is only worth anything if it
@@ -87,23 +135,99 @@ namespace Gaffer.Composition
                 return;
             }
 
-            // The sheet is attached HERE rather than inside the screen: which stylesheet is in force is a
-            // wiring fact, and Presentation deciding it for itself would make the look impossible to swap
-            // from the composition root (ARCHITECTURE §6).
-            VisualElement root = document.rootVisualElement;
-            if (_theme != null)
+            Play(started.Value);
+        }
+
+        private void Play(RunSession session)
+        {
+            _session = session;
+            _shell = new GameShell(session, _root, _text, this, ShowMenu);
+            _shell.Build();
+        }
+
+        // ----- Saving -------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// The saved run, resumed on a session-fresh continuation seed so the unplayed weeks are not the
+        /// ones the file was heading for (RunSessionFactory.Resume states the trade). Null when there is
+        /// no file, and null — with the reason logged — when the file cannot be read or resumed: a corrupt
+        /// save is an expected failure with a defined fallback, never a game that will not open (UNITY.md §7).
+        /// </summary>
+        private RunSession LoadSavedRun()
+        {
+            if (!File.Exists(SavePath))
             {
-                root.styleSheets.Add(_theme);
-            }
-            else
-            {
-                // Loud, because the failure is silent otherwise: everything still draws, just in Unity's
-                // default theme, which reads as "the art is wrong" rather than "the sheet is missing".
-                Debug.LogError("GameRoot: no theme stylesheet assigned. Drag Assets/_Project/UI/Theme/Gaffer.uss "
-                    + "onto the Theme field, or the screen will draw in Unity's default runtime look.");
+                return null;
             }
 
-            new GameShell(started.Value, root, BuildText()).Build();
+            Result<SeasonSaveData> loaded = Store().Load(SavePath);
+            if (loaded.IsFailure)
+            {
+                Debug.LogWarning("GameRoot: could not read the saved run — " + loaded.Error);
+                return null;
+            }
+
+            Result<RunSession> resumed = RunSessionFactory.Resume(BuildSetup(), BuildBalance(), loaded.Value, ContinuationSeed.Fresh());
+            if (resumed.IsFailure)
+            {
+                Debug.LogWarning("GameRoot: could not resume the saved run — " + resumed.Error);
+                return null;
+            }
+
+            // Both seeds, because they are what a bug report needs: the first rebuilds the world, the
+            // second replays the future this load just rolled.
+            Debug.Log("GameRoot: resumed run (world seed " + resumed.Value.OriginalSeed + ", continuing on " + resumed.Value.Seed + ")");
+            return resumed.Value;
+        }
+
+        /// <summary>The shell's Save, and the autosave's. One file, one protocol (JsonSaveStore).</summary>
+        public Result Save(RunSession session)
+        {
+            Result saved = Store().Save(SavePath, session.Capture());
+
+            // Every write is named in the log — which club, which season, which week — so the file on disk
+            // can always be traced back to the session that wrote it. Added after a run the owner had not
+            // played turned up in the file (2026-09-16, unexplained); the next time, the log will say.
+            Debug.Log(saved.IsSuccess
+                ? "GameRoot: saved " + session.ManagedClubName + " season " + session.SeasonNumber + " week " + session.PlayedRounds + "/" + session.RoundCount
+                : "GameRoot: save failed — " + saved.Error);
+            return saved;
+        }
+
+        // Silent autosave on the way to the background, because a phone can kill a backgrounded app and
+        // the manual save is the owner's chosen contract, not a promise that a killed app keeps its weeks.
+        // Only when something moved: a clean run is already on disk.
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused)
+            {
+                AutoSave();
+            }
+        }
+
+        private void OnApplicationQuit()
+        {
+            AutoSave();
+        }
+
+        private void AutoSave()
+        {
+            if (_shell == null || !_shell.IsDirty)
+            {
+                return;
+            }
+
+            Debug.Log("GameRoot: autosave on " + (UnityEngine.Application.isPlaying ? "pause/quit" : "edit mode"));
+            Result saved = _shell.SaveRun();
+            if (saved.IsFailure)
+            {
+                Debug.LogWarning("GameRoot: autosave failed — " + saved.Error);
+            }
+        }
+
+        private static JsonSaveStore Store()
+        {
+            return new JsonSaveStore(new NewtonsoftJsonSerializer(), new SaveMigrator());
         }
 
         // The words, bound to one locale. Composition's job precisely: Presentation may not see the

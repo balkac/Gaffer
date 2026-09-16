@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Gaffer.Application.Simulation;
 using Gaffer.Domain.Players;
+using Gaffer.Domain.Traits;
 
 namespace Gaffer.Presentation
 {
@@ -71,6 +72,7 @@ namespace Gaffer.Presentation
         public const string NavSquad = "ui.nav.squad";
         public const string NavSeason = "ui.nav.season";
         public const string NavMarket = "ui.nav.market";
+        public const string NavMenu = "ui.nav.menu";
 
         // ----- the market ---------------------------------------------------------------------------------
 
@@ -120,10 +122,49 @@ namespace Gaffer.Presentation
         public const string ActionSign = "ui.action.sign";
         public const string ActionSell = "ui.action.sell";
         public const string ActionDone = "ui.action.done";
+        public const string ActionSave = "ui.action.save";
+
+        // ----- the door: main menu and settings -----------------------------------------------------------
+
+        public const string MenuTitle = "ui.menu.title";
+        public const string MenuContinue = "ui.menu.continue";
+        public const string MenuNewRun = "ui.menu.new_run";
+        public const string MenuConfirmNew = "ui.menu.confirm_new";
+        public const string MenuRunLine = "ui.menu.run_line";
+        public const string SettingsTitle = "ui.settings.title";
+        public const string SettingsSaved = "ui.settings.saved";
+        public const string SettingsMenu = "ui.settings.menu";
+        public const string SettingsUnsaved = "ui.settings.unsaved";
 
         // ----- messages -----------------------------------------------------------------------------------
 
         public const string MessageNoFixture = "ui.message.no_fixture";
+
+        // ----- the drama card -----------------------------------------------------------------------------
+        // The card's chrome and the lines under a choice (DramaLines). Each template carries at most one
+        // number, in {count}; a line that needs two is two rows joined by the rule, not one row with a
+        // suffix hung on a value.
+
+        public const string DramaEyebrow = "ui.drama.eyebrow";
+        public const string DramaAftermath = "ui.drama.aftermath";
+        public const string DramaNothing = "ui.drama.nothing";
+        public const string DramaNothingMoved = "ui.drama.nothing_moved";
+        public const string DramaWholeSquad = "ui.drama.whole_squad";
+        public const string DramaSomeone = "ui.drama.someone";
+        public const string DramaPlayersCount = "ui.drama.players_count";
+        public const string DramaMorale = "ui.drama.morale";
+        public const string DramaWeeks = "ui.drama.weeks";
+        public const string DramaOneWeek = "ui.drama.one_week";
+        public const string DramaCash = "ui.drama.cash";
+        public const string DramaCashShare = "ui.drama.cash_share";
+        public const string DramaInTheBank = "ui.drama.in_the_bank";
+        public const string DramaWageFine = "ui.drama.wage_fine";
+        public const string DramaSale = "ui.drama.sale";
+        public const string DramaSold = "ui.drama.sold";
+        public const string DramaHeirPreview = "ui.drama.heir_preview";
+        public const string DramaHeir = "ui.drama.heir";
+        public const string DramaOnRoster = "ui.drama.on_roster";
+        public const string DramaUnknownEffect = "ui.drama.unknown_effect";
 
         private static readonly string[] ScreenKeys =
         {
@@ -134,7 +175,7 @@ namespace Gaffer.Presentation
             SeasonNext, SeasonHome, SeasonAway, SeasonOver, SeasonTable,
             SeasonPlayed, SeasonWon, SeasonDrawn, SeasonLost, SeasonGoalDifference, SeasonPoints,
             SeasonPromotion, SeasonRelegation, SeasonTarget, SeasonJob, SeasonTargetUp, SeasonTargetStay,
-            NavSquad, NavSeason, NavMarket,
+            NavSquad, NavSeason, NavMarket, NavMenu,
             MarketWindowSummer, MarketWindowWinter, MarketWindowClosed, MarketOpensAfter, MarketOpensSummer,
             MarketCash, MarketWageRoom, MarketPerWeek, MarketSegmentMarket, MarketSegmentSquad,
             MarketFilterAll, MarketFilterAffordable, MarketEmpty, MarketReport, MarketPotential, MarketAge,
@@ -142,8 +183,13 @@ namespace Gaffer.Presentation
             MarketLeavesCash, MarketLeavesWage, MarketSigned, MarketSold, MarketStarter, MarketSquadFloor,
             MarketFilters, MarketSort, MarketSortRating, MarketSortAge, MarketSortFee,
             MarketAgeUnder22, MarketAgePrime, MarketAgeVeteran, MarketPosition,
-            ActionAutoPick, ActionPlayWeek, ActionContinue, ActionClose, ActionSign, ActionSell, ActionDone,
+            ActionAutoPick, ActionPlayWeek, ActionContinue, ActionClose, ActionSign, ActionSell, ActionDone, ActionSave,
+            MenuTitle, MenuContinue, MenuNewRun, MenuConfirmNew, MenuRunLine,
+            SettingsTitle, SettingsSaved, SettingsMenu, SettingsUnsaved,
             MessageNoFixture,
+            DramaEyebrow, DramaAftermath, DramaNothing, DramaNothingMoved, DramaWholeSquad, DramaSomeone,
+            DramaPlayersCount, DramaMorale, DramaWeeks, DramaOneWeek, DramaCash, DramaCashShare, DramaInTheBank,
+            DramaWageFine, DramaSale, DramaSold, DramaHeirPreview, DramaHeir, DramaOnRoster, DramaUnknownEffect,
         };
 
         private static readonly string[] AllKeys = Build();
@@ -194,6 +240,15 @@ namespace Gaffer.Presentation
             foreach (Approach value in (Approach[])Enum.GetValues(typeof(Approach)))
             {
                 keys.Add(TacticsTextKeys.For(value));
+            }
+
+            // A trait's name reaches a screen the day a drama passes one to an heir (the card names what
+            // he inherits), so the catalog's name keys are guarded here like every other word a screen
+            // shows. Derived from the catalog, not listed by hand, for the reason the roles are.
+            IReadOnlyList<Trait> traits = TraitCatalog.Default.Traits;
+            for (int i = 0; i < traits.Count; i++)
+            {
+                keys.Add(traits[i].NameKey);
             }
 
             return keys.ToArray();

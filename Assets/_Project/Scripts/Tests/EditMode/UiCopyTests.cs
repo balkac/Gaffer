@@ -48,7 +48,9 @@ namespace Gaffer.Tests
                     UiTextKeys.All[i].StartsWith("ui.")
                         || UiTextKeys.All[i].StartsWith("role.")
                         || UiTextKeys.All[i].StartsWith("attr.")
-                        || UiTextKeys.All[i].StartsWith("tactics."),
+                        || UiTextKeys.All[i].StartsWith("tactics.")
+                        // A trait's name reaches the drama card the day one passes to an heir.
+                        || UiTextKeys.All[i].StartsWith("trait."),
                     Is.True,
                     UiTextKeys.All[i]);
             }

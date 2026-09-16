@@ -24,5 +24,10 @@ namespace Gaffer.Presentation.Shell
         void CloseSheet();
 
         void Show(ShellTab tab);
+
+        /// <summary>Tells the host the run moved — a week played, an answer given, a man signed, the eleven
+        /// changed. The host is the one thing that knows whether that has been saved yet; a screen never
+        /// saves, it only says.</summary>
+        void RunChanged();
     }
 }

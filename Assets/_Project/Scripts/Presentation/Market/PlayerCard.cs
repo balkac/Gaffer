@@ -325,6 +325,7 @@ namespace Gaffer.Presentation.Market
             }
 
             TransferOutcome outcome = result.Value;
+            _host.RunChanged();
             _body.Clear();
             _body.Add(BuildReceipt(outcome, forSale));
 

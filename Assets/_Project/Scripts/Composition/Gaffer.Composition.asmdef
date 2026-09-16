@@ -6,7 +6,8 @@
         "Gaffer.Domain",
         "Gaffer.Application",
         "Gaffer.Infrastructure",
-        "Gaffer.Presentation"
+        "Gaffer.Presentation",
+        "Gaffer.UserData"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -58,6 +58,7 @@ namespace Gaffer.Presentation.Squad
         // The run's own penalty, handed in with each draw rather than kept as a constant here — a screen
         // that carried its own copy of the number would be a second opinion about what a slot costs.
         private PositionalFitSettings _fit = PositionalFitSettings.Default;
+        private System.Func<PlayerId, double> _moraleOf;
 
         public PitchView(Action<int, int> onSwapRequested, Action<int> onSlotChosen, LocalizedStrings text)
         {
@@ -104,9 +105,12 @@ namespace Gaffer.Presentation.Squad
         /// </summary>
         /// <param name="fit">What being out of position costs, so a card can show what the man in it is
         /// worth THERE rather than what he would be worth at home. Null takes the calibrated default.</param>
-        public void Draw(Formation formation, IReadOnlyList<Player> slots, PositionalFitSettings fit)
+        /// <param name="moraleOf">Live morale points by player, from the drama layer; null draws no
+        /// morale. A lookup rather than the session, so the board stays a view over what it is handed.</param>
+        public void Draw(Formation formation, IReadOnlyList<Player> slots, PositionalFitSettings fit, System.Func<PlayerId, double> moraleOf = null)
         {
             _fit = fit ?? PositionalFitSettings.Default;
+            _moraleOf = moraleOf;
             _root.Clear();
             _slotCards.Clear();
 
@@ -298,6 +302,21 @@ namespace Gaffer.Presentation.Squad
             penalty.AddToClassList("slot__penalty");
             penalty.pickingMode = PickingMode.Ignore;
             card.Add(penalty);
+
+            // Live morale, signed, blank at zero — the drama layer on the board, so a decision's cost is
+            // visible where the eleven is picked and not only in the list. Always built, same height rule
+            // as the penalty above.
+            var morale = new Label();
+            morale.AddToClassList("slot__morale");
+            morale.pickingMode = PickingMode.Ignore;
+            double points = player != null && _moraleOf != null ? _moraleOf(player.Id) : 0.0;
+            if (System.Math.Abs(points) >= 0.05)
+            {
+                morale.text = Gaffer.Presentation.Drama.DramaLines.Points(points);
+                morale.AddToClassList(points > 0.0 ? "slot__morale--up" : "slot__morale--down");
+            }
+
+            card.Add(morale);
 
             PositionalFit slotFit = player != null ? PlayerRoles.FitFor(player.Role, role) : PositionalFit.Natural;
             if (slotFit != PositionalFit.Natural)
