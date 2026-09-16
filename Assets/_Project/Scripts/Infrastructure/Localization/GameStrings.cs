@@ -92,6 +92,10 @@ namespace Gaffer.Infrastructure.Localization
                         "WHERE DOES HE PLAY",
                         "NEREDE OYNASIN"),
                     Row(
+                        "ui.squad.profile",
+                        "See his profile",
+                        "Profilini gör"),
+                    Row(
                         "ui.action.auto_pick",
                         "Auto-pick",
                         "Otomatik seç"),
@@ -272,6 +276,18 @@ namespace Gaffer.Infrastructure.Localization
                     Row("ui.market.sold", "Sold for {count}.", "{count} karşılığında satıldı."),
                     Row("ui.market.starter", "He starts for you.", "İlk 11'inde oynuyor."),
                     Row("ui.market.squad_floor", "The squad is down to {count}. Nobody can leave.", "Kadro {count} kişiye indi. Kimse gidemez."),
+                    // The filter sheet. Sort options are written as the answer a manager wants first —
+                    // "youngest first" — not as the column they sort; the age bands say their edges out
+                    // loud so nobody has to guess where "young" stops.
+                    Row("ui.market.filters", "Filters", "Filtreler"),
+                    Row("ui.market.sort", "SORT", "SIRALA"),
+                    Row("ui.market.sort_rating", "Best first", "En iyi önce"),
+                    Row("ui.market.sort_age", "Youngest first", "En genç önce"),
+                    Row("ui.market.sort_fee", "Cheapest first", "En ucuz önce"),
+                    Row("ui.market.age_under22", "21 and under", "21 ve altı"),
+                    Row("ui.market.age_prime", "22 to 28", "22–28"),
+                    Row("ui.market.age_veteran", "29 and over", "29 ve üstü"),
+                    Row("ui.market.position", "POSITION", "MEVKİ"),
 
                     // --- the season (Faz 7) ----------------------------------------------------------
                     // A league table's column heads are the one place a single letter IS the word: P W D

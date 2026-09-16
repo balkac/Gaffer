@@ -5,6 +5,7 @@ using Gaffer.Common;
 using Gaffer.Common.Localization;
 using Gaffer.Domain.Clubs;
 using Gaffer.Domain.Players;
+using Gaffer.Presentation.Market;
 using Gaffer.Presentation.Matchday;
 using Gaffer.Presentation.Shell;
 using UnityEngine;
@@ -398,9 +399,19 @@ namespace Gaffer.Presentation.Squad
         private void OpenPlayerPicker(int slot)
         {
             _pickerSlot = slot;
+            IReadOnlyList<Player> lineupSlots = _session.Lineup().Slots;
             PlayerRole wanted = slot >= 0 && slot < _slotRoles.Count ? _slotRoles[slot] : default;
+            Player occupant = slot >= 0 && slot < lineupSlots.Count ? lineupSlots[slot] : null;
             OpenSheet(Say(UiTextKeys.PickerWho), list =>
             {
+                // The man standing here, first: the tap that asks "who plays here" is also the only tap
+                // the board has, so it is where "who IS this" has to be answered too. A row rather than a
+                // second gesture, so the gesture vocabulary stays at one meaning (UI_REFERENCES §3).
+                if (occupant != null)
+                {
+                    list.Add(ProfileRow(occupant));
+                }
+
                 for (int i = 0; i < _benched.Count; i++)
                 {
                     int index = i;
@@ -452,6 +463,11 @@ namespace Gaffer.Presentation.Squad
 
             OpenSheet(Say(UiTextKeys.PickerWhere), list =>
             {
+                if (candidate != null)
+                {
+                    list.Add(ProfileRow(candidate));
+                }
+
                 IReadOnlyList<PlayerRole> slots = lineup.Formation.Slots;
                 for (int i = 0; i < slots.Count; i++)
                 {
@@ -475,6 +491,31 @@ namespace Gaffer.Presentation.Squad
         /// he has already picked does not, because highlighting all eleven would wash the list in accent and
         /// say nothing. Both mark the bad fits identically, so one class means one thing everywhere.</para>
         /// </summary>
+        // "See his profile · Name". The picker closes and the card rises on the shell's sheet, because a
+        // profile over a picker over a board is two modals deep and the picker had already served its turn.
+        private VisualElement ProfileRow(Player player)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("row");
+            row.AddToClassList("row--profile");
+            row.RegisterCallback<ClickEvent>(_ =>
+            {
+                CloseSheet();
+                _host.ShowSheet(new PlayerCard(_session, _text, _host).BuildProfile(player));
+            });
+
+            var words = new Label(Say(UiTextKeys.SquadProfile) + "  ·  " + player.Name);
+            words.AddToClassList("row__name");
+            words.pickingMode = PickingMode.Ignore;
+            row.Add(words);
+
+            var chevron = new Label("›");
+            chevron.AddToClassList("row__role");
+            chevron.pickingMode = PickingMode.Ignore;
+            row.Add(chevron);
+            return row;
+        }
+
         private static void MarkFit(VisualElement row, PositionalFit fit, bool markNatural)
         {
             switch (fit)

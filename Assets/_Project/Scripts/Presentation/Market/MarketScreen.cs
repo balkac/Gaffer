@@ -50,6 +50,7 @@ namespace Gaffer.Presentation.Market
         private readonly Button _segmentSquad = new Button();
         private readonly List<Button> _lineChips = new List<Button>(5);
         private readonly Button _affordableChip = new Button();
+        private readonly Button _filtersChip = new Button();
 
         // The pool as shown: sorted once per refresh, then the slice the filters leave. Held and refilled
         // rather than replaced so the ListView keeps one source (PERFORMANCE §8).
@@ -61,6 +62,12 @@ namespace Gaffer.Presentation.Market
         private bool _showingSquad;
         private Position? _line;
         private bool _affordableOnly;
+
+        // The refinements behind the Filters chip. Roles and the line are two answers to one question, so
+        // choosing either clears the other; the sheet and the chip row never disagree about who is shown.
+        private MarketSort _sort = MarketSort.Rating;
+        private AgeBand _age = AgeBand.All;
+        private readonly HashSet<PlayerRole> _roles = new HashSet<PlayerRole>();
 
         public MarketScreen(RunSession session, VisualElement root, IScreenHost host, LocalizedStrings text)
         {
@@ -210,8 +217,134 @@ namespace Gaffer.Presentation.Market
             };
             chips.Add(_affordableChip);
 
+            // The rest — sort, age, exact position — behind one chip, in a sheet: twenty controls on the
+            // page would bury the list they filter. The chip lights when anything in the sheet is set, so
+            // a narrowed list never looks like a small market.
+            _filtersChip.text = _text.Or(UiTextKeys.MarketFilters) + "  ›";
+            _filtersChip.AddToClassList("chip");
+            _filtersChip.clicked += OpenFilters;
+            chips.Add(_filtersChip);
+
             return chips;
         }
+
+        // ----- The filter sheet -----------------------------------------------------------------------------
+
+        private void OpenFilters()
+        {
+            var root = new VisualElement();
+            root.AddToClassList("page");
+
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.AddToClassList("page__scroll");
+            scroll.touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped;
+            scroll.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+            new DragToScroll(scroll);
+
+            var body = new VisualElement();
+            body.AddToClassList("page__body");
+            body.Add(BuildSortCard());
+            body.Add(BuildAgeCard());
+            body.Add(BuildPositionCard());
+            scroll.Add(body);
+            root.Add(scroll);
+
+            // Done lowers the sheet; the shell redraws this page as it does, which is what applies the
+            // choices. Nothing is applied on the way in and lost on the way out.
+            var done = new Button(_host.CloseSheet) { text = _text.Or(UiTextKeys.ActionDone) };
+            done.AddToClassList("button");
+            done.AddToClassList("button--primary");
+            done.AddToClassList("page__action");
+            root.Add(done);
+
+            _host.ShowSheet(root);
+        }
+
+        private VisualElement BuildSortCard()
+        {
+            VisualElement card = Card();
+            card.Add(Eyebrow(UiTextKeys.MarketSort));
+
+            var chips = new VisualElement();
+            chips.AddToClassList("chips");
+            var buttons = new List<Button>(3);
+            AddChoice(chips, buttons, UiTextKeys.MarketSortRating, MarketSort.Rating, () => _sort, v => _sort = v);
+            AddChoice(chips, buttons, UiTextKeys.MarketSortAge, MarketSort.Age, () => _sort, v => _sort = v);
+            AddChoice(chips, buttons, UiTextKeys.MarketSortFee, MarketSort.Fee, () => _sort, v => _sort = v);
+            card.Add(chips);
+            return card;
+        }
+
+        private VisualElement BuildAgeCard()
+        {
+            VisualElement card = Card();
+            card.Add(Eyebrow(UiTextKeys.MarketAge));
+
+            var chips = new VisualElement();
+            chips.AddToClassList("chips");
+            var buttons = new List<Button>(4);
+            AddChoice(chips, buttons, UiTextKeys.MarketFilterAll, AgeBand.All, () => _age, v => _age = v);
+            AddChoice(chips, buttons, UiTextKeys.MarketAgeUnder22, AgeBand.Under22, () => _age, v => _age = v);
+            AddChoice(chips, buttons, UiTextKeys.MarketAgePrime, AgeBand.Prime, () => _age, v => _age = v);
+            AddChoice(chips, buttons, UiTextKeys.MarketAgeVeteran, AgeBand.Veteran, () => _age, v => _age = v);
+            card.Add(chips);
+            return card;
+        }
+
+        // Exact positions, many at once: a manager after a full-back wants both sides. Any role chosen here
+        // clears the line chip on the page, because "defenders" and "right-backs" are not two filters but
+        // one question answered twice.
+        private VisualElement BuildPositionCard()
+        {
+            VisualElement card = Card();
+            card.Add(Eyebrow(UiTextKeys.MarketPosition));
+
+            var chips = new VisualElement();
+            chips.AddToClassList("chips");
+            foreach (PlayerRole role in (PlayerRole[])System.Enum.GetValues(typeof(PlayerRole)))
+            {
+                PlayerRole chosen = role;
+                var chip = new Button { text = _text.Or(PlayerRoles.GetShortLabelKey(role)) };
+                chip.AddToClassList("chip");
+                chip.EnableInClassList("chip--active", _roles.Contains(role));
+                chip.clicked += () =>
+                {
+                    if (!_roles.Remove(chosen))
+                    {
+                        _roles.Add(chosen);
+                        _line = null;
+                    }
+
+                    chip.EnableInClassList("chip--active", _roles.Contains(chosen));
+                };
+                chips.Add(chip);
+            }
+
+            card.Add(chips);
+            return card;
+        }
+
+        // One chip of a single-choice group: pressing it becomes the choice and relights the group.
+        private void AddChoice<T>(VisualElement into, List<Button> group, string key, T value, System.Func<T> read, System.Action<T> write)
+            where T : struct
+        {
+            var chip = new Button { text = _text.Or(key) };
+            chip.AddToClassList("chip");
+            chip.userData = value;
+            chip.EnableInClassList("chip--active", read().Equals(value));
+            chip.clicked += () =>
+            {
+                write(value);
+                for (int i = 0; i < group.Count; i++)
+                {
+                    group[i].EnableInClassList("chip--active", group[i].userData.Equals(value));
+                }
+            };
+            group.Add(chip);
+            into.Add(chip);
+        }
+
+        private bool HasRefinements => _sort != MarketSort.Rating || _age != AgeBand.All || _roles.Count > 0;
 
         private Button LineChip(string key, Position? line)
         {
@@ -225,13 +358,19 @@ namespace Gaffer.Presentation.Market
         private void ChooseLine(Position? line)
         {
             _line = line;
+            _roles.Clear();
+            RelightLineChips();
+            Refilter();
+        }
+
+        private void RelightLineChips()
+        {
+            Position? line = _roles.Count == 0 ? _line : null;
             for (int i = 0; i < _lineChips.Count; i++)
             {
                 var chipLine = (Position?)_lineChips[i].userData;
                 _lineChips[i].EnableInClassList("chip--active", chipLine == line);
             }
-
-            Refilter();
         }
 
         // ----- The list -------------------------------------------------------------------------------------
@@ -275,18 +414,37 @@ namespace Gaffer.Presentation.Market
                 _source.Add(players[i]);
             }
 
-            MarketList.SortByRating(_source);
+            MarketList.Sort(_source, _sort, _session.FeeOf);
             Refilter();
         }
 
         private void Refilter()
         {
-            MarketList.Select(_source, _line, _affordableOnly && !_showingSquad ? IsAffordable : null, _shown);
+            MarketList.Select(_source, _roles.Count == 0 ? _line : null, Keep, _shown);
             _list.RefreshItems();
+            RelightLineChips();
+            _filtersChip.EnableInClassList("chip--active", HasRefinements);
 
             // Said rather than left blank: an empty list under live filters looks like a list that failed
             // to load, and the fix — loosen a chip — is only obvious if the screen owns the emptiness.
             _empty.style.display = _shown.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        // Everything the sheet and the toggle ask of a row, in one place, so the list cannot answer one
+        // filter and forget another.
+        private bool Keep(Player player)
+        {
+            if (_roles.Count > 0 && !_roles.Contains(player.Role))
+            {
+                return false;
+            }
+
+            if (!MarketList.InAgeBand(player, _age))
+            {
+                return false;
+            }
+
+            return !_affordableOnly || _showingSquad || IsAffordable(player);
         }
 
         private bool IsAffordable(Player player)
@@ -396,6 +554,14 @@ namespace Gaffer.Presentation.Market
         private static TextArguments Count(int value)
         {
             return new TextArguments(string.Empty, string.Empty, string.Empty, value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        private Label Eyebrow(string key)
+        {
+            var label = new Label(_text.Or(key));
+            label.AddToClassList("label");
+            label.AddToClassList("filters__eyebrow");
+            return label;
         }
 
         private static VisualElement Card()

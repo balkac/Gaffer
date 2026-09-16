@@ -70,6 +70,49 @@ namespace Gaffer.Presentation.Market
             return root;
         }
 
+        /// <summary>
+        /// The card as a PROFILE: one of the club's own men, read at full accuracy, with what he is worth
+        /// and what he earns — and nothing to do about him, because this is opened from the squad, where
+        /// the question was "who is this" and not "shall I sell him". Close is the only button; the sheet's
+        /// scrim closes it too.
+        /// </summary>
+        public VisualElement BuildProfile(Player player)
+        {
+            var root = new VisualElement();
+            root.AddToClassList("page");
+
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.AddToClassList("page__scroll");
+            scroll.touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped;
+            scroll.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+            new DragToScroll(scroll);
+
+            _body.AddToClassList("page__body");
+            _body.Add(BuildWho(player));
+            _body.Add(BuildReport(player, known: true));
+            _body.Add(BuildWorth(player));
+            scroll.Add(_body);
+            root.Add(scroll);
+
+            _action.AddToClassList("page__action-slot");
+            _action.Add(Primary(_text.Or(UiTextKeys.ActionClose), _host.CloseSheet));
+            root.Add(_action);
+            return root;
+        }
+
+        // What he is worth and what he costs a week — the two numbers a manager wants beside a profile
+        // even when he is not selling, because they are how the squad reads as a balance sheet.
+        private VisualElement BuildWorth(Player player)
+        {
+            VisualElement card = Card();
+            var money = new VisualElement();
+            money.AddToClassList("kv-row");
+            money.Add(Kv(UiTextKeys.MarketFee, _text.Money(_session.FeeOf(player))));
+            money.Add(Kv(UiTextKeys.MarketWage, _text.Money(_session.WeeklyWageOf(player)) + _text.Or(UiTextKeys.MarketPerWeek)));
+            card.Add(money);
+            return card;
+        }
+
         // ----- Who ------------------------------------------------------------------------------------------
 
         private VisualElement BuildWho(Player player)

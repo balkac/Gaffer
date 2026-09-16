@@ -29,8 +29,8 @@ namespace Gaffer.Composition
     public sealed class GameRoot : MonoBehaviour
     {
         [Header("The world this run is generated from")]
-        [Tooltip("Same seed, same world, same season — every time. Change it for a different run.")]
-        [SerializeField] private string _seed = "20260816";
+        [Tooltip("Leave EMPTY for a fresh run every time you press Play (the seed drawn is logged, so any run can be replayed by typing it here). Type a number to pin the world: same seed, same season, every time.")]
+        [SerializeField] private string _seed = string.Empty;
 
         [Range(4, 24)] [SerializeField] private int _clubs = 20;
         [Range(0, 23)] [SerializeField] private int _managedClubIndex = 7;
@@ -71,7 +71,14 @@ namespace Gaffer.Composition
                 return;
             }
 
-            Result<RunSession> started = RunSessionFactory.Start(BuildSetup(), BuildBalance());
+            RunSetup setup = BuildSetup();
+
+            // Said out loud on every start, because a run that surprised you is only worth anything if it
+            // can be played again: the seed is the whole run (NON-NEGOTIABLE #2), and this line is how a
+            // tester gets it back into the Inspector.
+            Debug.Log("GameRoot: run seed " + setup.Seed);
+
+            Result<RunSession> started = RunSessionFactory.Start(setup, BuildBalance());
             if (started.IsFailure)
             {
                 // A run that will not start is a wiring or a settings problem, and the message says which.
@@ -141,13 +148,36 @@ namespace Gaffer.Composition
         /// <summary>
         /// The seed, as a number. Typed as text in the Inspector on purpose: a run seed is a
         /// <c>ulong</c> and Unity has no field for one, so an int field would silently halve the space a
-        /// player can type. Anything unparseable falls back to a fixed seed rather than to a clock —
-        /// nothing in this game may read a clock, or a run would stop being reproducible
-        /// (NON-NEGOTIABLE #2).
+        /// player can type.
+        ///
+        /// <para><b>Empty means a fresh run.</b> The field used to carry a fixed number, and the owner
+        /// found the consequence by playing: every press of Play was the same season — the same fixtures,
+        /// the same scores, the same market — which read as "the matches always end the same". The
+        /// simulation was right; the game simply never started a NEW run. So an empty field draws a seed
+        /// here, at the one place a run is born, and nowhere else does the game touch entropy or a clock:
+        /// once drawn the seed is logged and carried in the save, and the same seed still plays the same
+        /// run (NON-NEGOTIABLE #2 is about what follows FROM a seed, not about where a new one comes from).
+        /// A typed number pins the world for tests and for replaying a reported run. A typed value that is
+        /// not a number is a mistake and falls back to a fixed seed rather than a random one, so the
+        /// mistake shows up as sameness rather than hiding in variety.</para>
         /// </summary>
         private ulong SeedValue()
         {
+            if (string.IsNullOrWhiteSpace(_seed))
+            {
+                return FreshSeed();
+            }
+
             return ulong.TryParse(_seed, out ulong parsed) ? parsed : 20260816UL;
+        }
+
+        // Sixteen bytes of system entropy folded into eight. A GUID is what every platform hands out
+        // cheaply and without a permission prompt; it is not read as a time.
+        private static ulong FreshSeed()
+        {
+            byte[] bytes = System.Guid.NewGuid().ToByteArray();
+            ulong seed = System.BitConverter.ToUInt64(bytes, 0) ^ System.BitConverter.ToUInt64(bytes, 8);
+            return seed == 0UL ? 1UL : seed;
         }
     }
 }

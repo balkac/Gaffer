@@ -863,6 +863,21 @@
     -unity-text-align: middle-right;
 }
 
+/* The row that leads to a profile at the head of a picker: an action dressed as a row, so it takes the
+   same tap and the same height as the choices under it, and reads as a label because it is not one of
+   them. */
+.row--profile .row__name {
+    color: var(--muted);
+    font-size: var(--text-label);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+}
+
+/* The filter sheet: a heading over each group of chips, with room beneath it. */
+.filters__eyebrow {
+    margin-bottom: var(--space-s);
+}
+
 /* A card's notes: what the money card says before the button — one sentence per line, wrapping. */
 .card__note {
     color: var(--chalk);

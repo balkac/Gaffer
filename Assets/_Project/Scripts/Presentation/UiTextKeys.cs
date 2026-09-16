@@ -31,6 +31,7 @@ namespace Gaffer.Presentation
         public const string ViewList = "ui.squad.view_list";
         public const string PickerWho = "ui.squad.picker_who";
         public const string PickerWhere = "ui.squad.picker_where";
+        public const string SquadProfile = "ui.squad.profile";
 
         // ----- match report -------------------------------------------------------------------------------
 
@@ -100,6 +101,15 @@ namespace Gaffer.Presentation
         public const string MarketSold = "ui.market.sold";
         public const string MarketStarter = "ui.market.starter";
         public const string MarketSquadFloor = "ui.market.squad_floor";
+        public const string MarketFilters = "ui.market.filters";
+        public const string MarketSort = "ui.market.sort";
+        public const string MarketSortRating = "ui.market.sort_rating";
+        public const string MarketSortAge = "ui.market.sort_age";
+        public const string MarketSortFee = "ui.market.sort_fee";
+        public const string MarketAgeUnder22 = "ui.market.age_under22";
+        public const string MarketAgePrime = "ui.market.age_prime";
+        public const string MarketAgeVeteran = "ui.market.age_veteran";
+        public const string MarketPosition = "ui.market.position";
 
         // ----- actions ------------------------------------------------------------------------------------
 
@@ -118,7 +128,7 @@ namespace Gaffer.Presentation
         private static readonly string[] ScreenKeys =
         {
             SquadEleven, SquadBench, SquadPosition, SquadWeek,
-            SquadAttack, SquadMidfield, SquadDefence, ViewPitch, ViewList, PickerWho, PickerWhere,
+            SquadAttack, SquadMidfield, SquadDefence, ViewPitch, ViewList, PickerWho, PickerWhere, SquadProfile,
             MatchGoal, MatchShots, MatchElsewhere, MatchSetup,
             MatchMentality, MatchTempo, MatchPressing, MatchApproach, MatchJournal, MatchQuiet,
             SeasonNext, SeasonHome, SeasonAway, SeasonOver, SeasonTable,
@@ -130,6 +140,8 @@ namespace Gaffer.Presentation
             MarketFilterAll, MarketFilterAffordable, MarketEmpty, MarketReport, MarketPotential, MarketAge,
             MarketFee, MarketWage, MarketShortCash, MarketShortWage, MarketShortBoth,
             MarketLeavesCash, MarketLeavesWage, MarketSigned, MarketSold, MarketStarter, MarketSquadFloor,
+            MarketFilters, MarketSort, MarketSortRating, MarketSortAge, MarketSortFee,
+            MarketAgeUnder22, MarketAgePrime, MarketAgeVeteran, MarketPosition,
             ActionAutoPick, ActionPlayWeek, ActionContinue, ActionClose, ActionSign, ActionSell, ActionDone,
             MessageNoFixture,
         };
