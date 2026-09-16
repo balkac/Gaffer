@@ -32,7 +32,7 @@
 | 4 | Karakter + Dram | ✅ Tamam (trait + dram + moral; karar #31) · frekans normalize edildi, kart etki-önizlemesi ve olay kopyası yazıldı, Unity doğrulandı | **L** | |
 | 5 | Hafıza + Anlatı | ✅ Tamam (★ Gate B geçildi 2026-08-13) | M | ★ Gate B |
 | 6 | Meta / Roguelike | ⬜ **Faz 7'den sonraya alındı** (sahibinin kararı 2026-08-16) | M | |
-| 7 | UI + Art + Localization | 🟡 4/5 ekran + kabuk (kadro/taktik, maç raporu, sezon/lig, transfer/scout; alt sekme barı — 2026-09-05); menajer ekranı, dram kartı ve bütçe aktarımı bekliyor | **L** | |
+| 7 | UI + Art + Localization | 🟡 4/5 ekran + kabuk (kadro/taktik, maç raporu, sezon/lig, transfer/scout; alt sekme barı — 2026-09-05) + **dram kartı** (etki önizlemesi, sonuç, roster'da moral rozeti — 2026-09-16) + **kapı: ana menü, kaydet/devam et, sezon geçişi** (2026-09-16); menajer ekranı, taktik ekranı ve bütçe aktarımı bekliyor | **L** | |
 | 8 | MVP Ship | ⬜ | M | ★ Gate C |
 
 > Katman/feature detayları her fazın kendi bölümünde. Güncel gerçekleşen + kararlar: [`PROGRESS.md`](PROGRESS.md).
